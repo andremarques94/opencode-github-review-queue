@@ -19,6 +19,9 @@ export type ReviewPanelProps = {
   update(state: QueueSnapshot): void
 }
 
+// Columns the panel's padding, a row's selection bar, and its right padding take from the title.
+const ROW_INSET = 5
+
 export function ReviewPanel(props: ReviewPanelProps) {
   const [filter, setFilter] = createSignal<QueueFilter>("all")
   const [selected, setSelected] = createSignal(0)
@@ -48,10 +51,16 @@ export function ReviewPanel(props: ReviewPanelProps) {
           selectedKey={current()?.key}
           newKeys={props.state.newKeys}
           drafts={props.state.drafts}
+          width={props.panel.width - ROW_INSET}
           actions={actions}
         />
       </Show>
-      <KeyHints actions={actions} />
+      <KeyHints
+        hints={[
+          { key: "enter", label: "review", run: actions.review },
+          { key: "m", label: "actions", run: actions.menu },
+        ]}
+      />
     </box>
   )
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { type Finding, nextFinding, type ReviewDraft } from "../src/domain/review-draft.js"
-import { findingCard, nextStep } from "../src/server/review/agent/instructions.js"
+import { type Finding, nextFinding, type ReviewDraft, walkthroughOrder } from "../src/domain/review-draft.js"
+import { findingCard, nextStep, presentFinding } from "../src/server/review/agent/instructions.js"
 
 const finding = (id: number, overrides: Partial<Finding> = {}): Finding => ({
   id,
@@ -60,6 +60,26 @@ describe("walkthrough", () => {
     )
     expect(nextStep(draft([finding(1, { decision: "drop" })]))).toMatch(/every finding is decided/)
     expect(nextStep(draft([], { status: "posted" }))).toBeUndefined()
+  })
+
+  it("lists every finding in walkthrough order, decided ones included", () => {
+    const findings = [finding(1, { severity: "nit" }), finding(2, { severity: "blocker", decision: "keep" })]
+
+    expect(walkthroughOrder(draft(findings)).map((entry) => entry.id)).toEqual([2, 1])
+  })
+
+  it("asks for each decision with the question tool, recommendation first", () => {
+    const step = nextStep(draft([finding(1)]))
+
+    expect(step).toMatch(/call the question tool with one question whose header is "Finding #<id>"/)
+    expect(step).toMatch(/Keep, Edit wording, Drop, Explain, Investigate, your recommended option first/)
+    expect(step).toMatch(/Explain and Investigate are not decisions/)
+    expect(step).toMatch(/cancelled because the user decided in the review panel, call review_next_finding/)
+
+    const presented = presentFinding(draft([finding(1), finding(4)]), finding(4))
+    expect(presented).toMatch(/^\*\*Finding #4 \(1 of 2\)/)
+    expect(presented).toMatch(/header is "Finding #4"/)
+    expect(presented).toMatch(/proposed comment exactly as written/)
   })
 
   it("shows one finding with its position and the exact comment", () => {

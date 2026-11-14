@@ -1,4 +1,22 @@
-import { type Finding, findingLocation, pendingFindings, type ReviewDraft } from "../../../domain/review-draft.js"
+import {
+  type Finding,
+  findingLocation,
+  pendingFindings,
+  questionHeader,
+  type ReviewDraft,
+} from "../../../domain/review-draft.js"
+
+const CHOICES = "Keep, Edit wording, Drop, Explain, Investigate"
+
+/**
+ * Typed replies keep working: the question tool always offers a free-form answer. The header lets the review panel
+ * close this question when the user decides the finding there instead.
+ */
+const askChoices = (header: string) =>
+  `call the question tool with one question whose header is "${header}" and whose options are ${CHOICES}, your recommended option first with " (Recommended)" appended`
+
+const CHOICE_RULES =
+  "Explain and Investigate are not decisions: show the result for that finding only, then ask again with the question tool. If the question comes back cancelled because the user decided in the review panel, call review_next_finding and go on; never ask again about a finding that is no longer pending."
 
 export const DEFAULT_GUIDELINES = `## Quality bar
 - Readability beats cleverness. If a line has to be read twice, flag it.
@@ -48,6 +66,9 @@ ${guidelines}
   lines, and startLine for ranges. The tool rejects lines outside the diff; fix the line rather than dropping it.
 - Keep severity, confidence, and evidence out of the comment body; they stay local. Use GitHub \`suggestion\`
   blocks for concrete fixes.
+- The comment body and the evidence are Markdown. To mention a literal fence (three backticks) inside a sentence or a
+  quoted string, wrap it in a double-backtick code span with spaces, or the backticks pair up and garble the rest of
+  the line. Quote test inputs as code blocks rather than as escaped strings with \\n.
 - When investigation is done, call \`review_set_verdict\`: REQUEST_CHANGES if anything must be fixed, COMMENT for
   nitpicks only, APPROVE only if it genuinely meets the bar.${draft.ownPullRequest ? " This is the user's own pull request, so the verdict must be COMMENT." : ""}
 
@@ -55,13 +76,15 @@ ${guidelines}
 Do not describe any finding while investigating or in the overview. After \`review_set_verdict\`, send a short overview:
 provisional verdict, how many findings by severity, and checks run (passed, failed, skipped). Then call
 \`review_next_finding\` and present only the finding it returns: its card with the proposed comment exactly as written
-(that text is what gets posted, so never paraphrase it), a short code quote from the diff, and your recommendation. Ask whether to keep, edit, drop, explain, or investigate it, then end your turn and wait. Never list,
-preview, or summarize other findings; the user decides on them one at a time.
+(that text is what gets posted, so never paraphrase it), a short code quote from the diff, and your recommendation.
+Then ${askChoices("Finding #<id>")}, and wait for the answer. Never list, preview, or summarize other findings; the
+user decides on them one at a time.
 
 - Record the user's decision with \`review_decide\` and any agreed rewording with \`review_update_finding\`, then call
   \`review_next_finding\` for the next one. Never decide on the user's behalf; silence is not approval.
-- When asked to explain or investigate, do it and show the result for that finding only, then ask again. Defend a
-  supported finding when challenged, but drop it if the user insists.
+- ${CHOICE_RULES} Defend a supported finding when challenged, but drop it if the user insists.
+- The user can also keep, drop, or reword findings in the review panel. Those decisions are already recorded:
+  \`review_next_finding\` skips them, so don't record or ask about them again.
 - When \`review_next_finding\` reports that every finding is decided, check that the summary and verdict still fit the
   kept comments. If they mention dropped findings or no longer fit, propose a corrected one and, once the user agrees,
   record it with \`review_set_verdict\`. Then summarize the final review and tell the user to post it from the review
@@ -81,8 +104,14 @@ export function nextStep(draft: ReviewDraft): string | undefined {
     return "Review status: every finding is decided. Check that the summary fits the kept comments, then tell the user to post the review from the review queue panel."
   }
   const decided = draft.findings.length - pending
-  return `Review status: walkthrough, ${decided} of ${draft.findings.length} findings decided. Present exactly one finding per message: call review_next_finding, show only that finding with its proposed comment verbatim, ask the user to keep, edit, drop, explain, or investigate it, and end your turn. Never list or preview other findings.`
+  return `Review status: walkthrough, ${decided} of ${draft.findings.length} findings decided. Present exactly one finding per message: call review_next_finding, show only that finding with its proposed comment verbatim, then ${askChoices("Finding #<id>")}. ${CHOICE_RULES} Never list or preview other findings.`
 }
+
+export function presentFinding(draft: ReviewDraft, finding: Finding): string {
+  return `${findingCard(draft, finding)}\n\nShow this card to the user with its proposed comment exactly as written, since that text is what gets posted; do not paraphrase or shorten it. Add a short code quote and your recommendation, then ${askChoices(questionHeader(finding.id))}. ${CHOICE_RULES} Do not mention any other finding.`
+}
+
+export const askPrompt = (finding: Finding) => `Explain finding #${finding.id}`
 
 export function findingCard(draft: ReviewDraft, finding: Finding): string {
   const position = draft.findings.length - pendingFindings(draft).length + 1

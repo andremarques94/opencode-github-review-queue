@@ -233,4 +233,79 @@ export const dialogStyles = `${badgeStyles}
   font-family: var(--font-family-mono);
   font-size: 12px;
 }
+.grq-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 220px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-weak-base);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset-base);
+  color: var(--text-strong);
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  line-height: 18px;
+  resize: vertical;
+}
+.grq-textarea:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+`
+
+const actionStyles = `
+.grq-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.grq-muted { color: var(--text-weak); font-size: 12px; line-height: 16px; }
+`
+
+export const progressStyles = `${actionStyles}
+.grq-progress { display: flex; flex-direction: column; gap: 10px; min-width: 240px; font-size: 13px; }
+`
+
+export const findingStyles = `${badgeStyles}${actionStyles}
+.grq-findings {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--background-base);
+  color: var(--text-base);
+  font-family: var(--font-family-sans);
+  font-size: 13px;
+}
+.grq-findings-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--border-weaker-base);
+}
+.grq-findings-title { color: var(--text-strong); font-weight: var(--font-weight-medium); }
+.grq-findings-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 8px 12px;
+}
+.grq-finding {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-weaker-base);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset-base);
+}
+.grq-finding[data-decision="drop"] { opacity: 0.6; }
+.grq-finding-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; color: var(--text-weak); font-size: 12px; }
+.grq-finding-location {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-base);
+  font-family: var(--font-family-mono);
+}
+.grq-badge-keep { border-color: var(--border-success-base, var(--border-weak-base)); color: var(--text-success-base, var(--text-base)); }
+.grq-badge-drop { color: var(--text-weaker); }
 `

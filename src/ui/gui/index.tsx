@@ -1,11 +1,24 @@
-import { Command, MenuItem, Panel, type PanelTab, Plugin } from "@opencode/plugin/gui"
+import {
+  Command,
+  ComposerPill,
+  MenuItem,
+  type MountedSession,
+  Panel,
+  type PanelTab,
+  Plugin,
+} from "@opencode/plugin/gui"
+import { createEffect, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { ReviewDraft } from "../../domain/review-draft.js"
 import { emptySnapshot, type QueueSnapshot } from "../../domain/review-queue.js"
 import { createDiscoveryBatcher } from "../../shared/notifications/discovery-batcher.js"
 import { notificationText } from "../../shared/notifications/notification-text.js"
 import { parseOptions } from "../../shared/options.js"
+import { draftForSession, replaceDraft, reviewProgress } from "../../shared/review/draft-status.js"
 import { ReviewQueue } from "../../shared/rpc.js"
+import { createFindingActions, FINDINGS_PANEL } from "./actions/finding-actions.js"
+import { FindingsPanel } from "./components/findings/findings-panel.js"
+import { ProgressMenu } from "./components/findings/progress-menu.js"
 import { ReviewPanel } from "./components/review-panel.js"
 
 export default Plugin.define({
@@ -14,6 +27,8 @@ export default Plugin.define({
       "panel.title": "Review requests",
       "command.open": "Show GitHub review requests",
       "menu.open": "GitHub review requests",
+      "findings.title": "Review findings",
+      "findings.label": "Findings",
     },
   },
   setup(ctx) {
@@ -38,6 +53,29 @@ export default Plugin.define({
       loadDrafts()
     })
     const stopDrafts = rpc().events.on("drafts", (event) => setDrafts("list", event.data.drafts))
+    const reviewDraft = (session: MountedSession) => draftForSession(drafts.list, session.id)
+    // The agent records decisions in the review session's own plugin instance, whose events may not reach this
+    // window, so re-read drafts whenever that session's state, messages, or open questions change.
+    createEffect(() => {
+      const session = ctx.sessions.current()
+      if (!session) {
+        return
+      }
+      const data = session.server.data.session
+      data.status(session.id)
+      data.message.list(session.id).length
+      data.form.list(session.id)?.length
+      if (untrack(() => reviewDraft(session))) {
+        loadDrafts()
+      }
+    })
+    const findingActions = (session: () => MountedSession) =>
+      createFindingActions({
+        context: ctx,
+        session,
+        update: (draft) => setDrafts("list", replaceDraft(drafts.list, draft)),
+        reload: loadDrafts,
+      })
     const openPanel = () => {
       const session = ctx.sessions.current() ?? ctx.sessions.list()[0]
       if (session) {
@@ -107,6 +145,51 @@ export default Plugin.define({
           repositories={repositories}
           state={state}
           update={update}
+        />
+      ),
+    })
+    const findingsTab: PanelTab = {
+      id: FINDINGS_PANEL,
+      title: ctx.t("findings.title"),
+      label: () => (
+        <span class="flex items-center gap-1">
+          <ctx.ui.Icon name="checklist" size="small" />
+          <span>{ctx.t("findings.label")}</span>
+        </span>
+      ),
+      tabbable: true,
+    }
+    ctx.add(Panel, {
+      id: FINDINGS_PANEL,
+      region: "side",
+      list: (input) => (input.open.includes(FINDINGS_PANEL) && reviewDraft(input.session) ? [findingsTab] : []),
+      render: (props) => (
+        <FindingsPanel context={ctx} draft={reviewDraft(props.session)} actions={findingActions(() => props.session)} />
+      ),
+    })
+    // A pill rather than a `session.header` slot: it has a popover for the Post action, shows only in the sessions
+    // `show` picks, and floats over the timeline, so it never competes with the title for room or reflows the screen.
+    ctx.add(ComposerPill, {
+      id: "review",
+      show: (input) => {
+        const draft = reviewDraft(input.session)
+        if (!draft) {
+          return undefined
+        }
+        const progress = reviewProgress(draft)
+        return {
+          label: `Review · ${progress.label}`,
+          icon: "github",
+          ...(progress.tone ? { tone: progress.tone } : {}),
+          title: `${draft.repository}#${draft.number} · ${progress.label}`,
+        }
+      },
+      menu: (input) => (
+        <ProgressMenu
+          context={ctx}
+          draft={reviewDraft(input.session)}
+          actions={findingActions(() => input.session)}
+          close={input.close}
         />
       ),
     })

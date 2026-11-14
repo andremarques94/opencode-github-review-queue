@@ -14,6 +14,7 @@ export function ReviewGroup(props: {
   selectedKey: string | undefined
   newKeys: readonly string[]
   drafts: readonly ReviewDraft[]
+  width: number
   actions: ReviewActions
 }) {
   const theme = usePlugin().theme
@@ -39,6 +40,7 @@ export function ReviewGroup(props: {
             selected={props.selectedKey === item.key}
             isNew={props.newKeys.includes(item.key)}
             review={draftLabel(draftFor(props.drafts, item.key))}
+            width={props.width}
             actions={props.actions}
           />
         )}

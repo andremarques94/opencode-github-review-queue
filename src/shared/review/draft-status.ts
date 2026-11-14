@@ -1,4 +1,5 @@
 import { pendingFindings, postBlocker, type ReviewDraft } from "../../domain/review-draft.js"
+import { VERDICT_LABELS } from "./preview.js"
 
 export function draftLabel(draft: ReviewDraft | undefined): string | undefined {
   if (!draft) {
@@ -34,3 +35,38 @@ export function draftActions(draft: ReviewDraft | undefined): DraftAction[] {
 }
 
 export const draftFor = (drafts: readonly ReviewDraft[], key: string) => drafts.find((draft) => draft.key === key)
+
+export const draftForSession = (drafts: readonly ReviewDraft[], sessionID: string) =>
+  drafts.find((draft) => draft.sessionID === sessionID)
+
+export const replaceDraft = (drafts: readonly ReviewDraft[], next: ReviewDraft) =>
+  drafts.some((draft) => draft.key === next.key)
+    ? drafts.map((draft) => (draft.key === next.key ? next : draft))
+    : [...drafts, next]
+
+export const DECISION_LABELS = { pending: "Pending", keep: "Kept", drop: "Dropped" } as const
+
+export type ReviewProgress = {
+  label: string
+  tone: "warning" | "success" | undefined
+  blocker: string | undefined
+}
+
+export function reviewProgress(draft: ReviewDraft): ReviewProgress {
+  const blocker = postBlocker(draft)
+  switch (draft.status) {
+    case "investigating":
+      return { label: "Investigating", tone: undefined, blocker }
+    case "posted":
+      return { label: "Posted", tone: "success", blocker }
+    case "ready": {
+      const decided = draft.findings.length - pendingFindings(draft).length
+      const verdict = draft.verdict ? ` · ${VERDICT_LABELS[draft.verdict]}` : ""
+      return {
+        label: `${decided} of ${draft.findings.length} decided${verdict}`,
+        tone: blocker ? "warning" : "success",
+        blocker,
+      }
+    }
+  }
+}

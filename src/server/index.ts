@@ -4,12 +4,13 @@ import { ReviewQueue } from "../shared/rpc.js"
 import { openReview, repositoryForDirectory } from "./github/repository.js"
 import { fetchReviewRequests } from "./github/review-requests.js"
 import { nextStep } from "./review/agent/instructions.js"
-import { addReviewTools } from "./review/agent/tools.js"
+import { addReviewTools, hideReviewTools } from "./review/agent/tools.js"
 import { defaultCacheDirectory, expandHome } from "./review/checkout.js"
 import { DraftStore } from "./review/draft-store.js"
 import { Findings } from "./review/findings.js"
 import { rememberModel, reviewModels } from "./review/models.js"
 import { ReviewSessions } from "./review/sessions.js"
+import { triage } from "./review/triage.js"
 import { type PollerEvent, ReviewQueuePoller } from "./review-queue-poller.js"
 
 // Cloning and fetching a large repository can take far longer than one GitHub API call.
@@ -82,6 +83,7 @@ export default Plugin.define({
       }
       return item
     }
+    const panel = triage(current.findings, (input) => ctx.session.prompt(input))
 
     const registration = await ctx.rpc.register(ReviewQueue, {
       snapshot: async () => current.poller.snapshot(),
@@ -118,11 +120,18 @@ export default Plugin.define({
         }),
       postReview: (input, rpcContext) =>
         reported(rpcContext, () => current.reviews.post(input.key, input.allowStale, timeout(rpcContext.signal))),
+      decideFinding: (input, rpcContext) => reported(rpcContext, () => panel.decide(input)),
+      editFinding: (input, rpcContext) => reported(rpcContext, () => panel.edit(input)),
+      askAboutFinding: (input, rpcContext) => reported(rpcContext, () => panel.ask(input)),
     })
     const tools = await ctx.tool.transform((editor) => addReviewTools(editor, current.findings))
     const reminder = await ctx.session.hook("context", async (event) => {
       const draft = await current.drafts.bySession(event.sessionID)
-      const step = draft && nextStep(draft)
+      if (!draft) {
+        hideReviewTools(event.tools)
+        return
+      }
+      const step = nextStep(draft)
       if (step) {
         event.system.push({ type: "text", text: step })
       }

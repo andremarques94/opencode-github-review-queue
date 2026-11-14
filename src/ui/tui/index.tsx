@@ -6,7 +6,10 @@ import { emptySnapshot, type QueueSnapshot } from "../../domain/review-queue.js"
 import { createDiscoveryBatcher } from "../../shared/notifications/discovery-batcher.js"
 import { notificationText } from "../../shared/notifications/notification-text.js"
 import { parseOptions } from "../../shared/options.js"
+import { draftForSession, replaceDraft } from "../../shared/review/draft-status.js"
 import { ReviewQueue } from "../../shared/rpc.js"
+import { FINDINGS_PANEL, FindingsPanel } from "./components/findings/findings-panel.js"
+import { ReviewStatus } from "./components/findings/review-status.js"
 import { ReviewPanel } from "./components/review-panel.js"
 import type { TuiState } from "./state.js"
 
@@ -57,11 +60,39 @@ export default Plugin.define({
       batcher.push(event.data.item)
     })
 
+    const updateDraft = (draft: ReviewDraft) =>
+      updateState((store) => {
+        store.drafts = replaceDraft(store.drafts, draft)
+      })
+    const reviewDraft = (sessionID: string) => draftForSession(state.drafts, sessionID)
+    const inReviewSession = () => {
+      const route = context.ui.router.current()
+      return route.type === "session" && reviewDraft(route.sessionID) !== undefined
+    }
+
     const removePanel = context.ui.slot({
       append: "session.panel",
       render: (panel) => (
-        <Show when={panel.name === "github-review-queue.main"}>
-          <ReviewPanel panel={panel} state={state} update={update} />
+        <>
+          <Show when={panel.name === "github-review-queue.main"}>
+            <ReviewPanel panel={panel} state={state} update={update} />
+          </Show>
+          <Show when={panel.name === FINDINGS_PANEL}>
+            <FindingsPanel
+              panel={panel}
+              draft={reviewDraft(panel.sessionID)}
+              update={updateDraft}
+              reload={loadDrafts}
+            />
+          </Show>
+        </>
+      ),
+    })
+    const removeStatus = context.ui.slot({
+      append: "session.composer.top",
+      render: (input) => (
+        <Show when={reviewDraft(input.sessionID)}>
+          {(draft) => <ReviewStatus sessionID={input.sessionID} draft={draft()} reload={loadDrafts} />}
         </Show>
       ),
     })
@@ -79,8 +110,20 @@ export default Plugin.define({
             context.ui.panel.open("github-review-queue.main")
           },
         },
+        {
+          id: "github-review-queue.findings",
+          title: "Show review findings",
+          group: "GitHub",
+          palette: true,
+          slash: { name: "findings" },
+          enabled: inReviewSession,
+          suggested: inReviewSession,
+          run: () => {
+            context.ui.panel.open(FINDINGS_PANEL)
+          },
+        },
       ],
-      bindings: ["github-review-queue.show"],
+      bindings: ["github-review-queue.show", "github-review-queue.findings"],
     }))
     context.ui.slot({
       append: "home.footer.status",
@@ -93,6 +136,7 @@ export default Plugin.define({
       stopDiscovered()
       batcher.dispose()
       removePanel()
+      removeStatus()
     }
   },
 })

@@ -14,6 +14,7 @@ export function ReviewList(props: {
   selectedKey: string | undefined
   newKeys: readonly string[]
   drafts: readonly ReviewDraft[]
+  width: number
   actions: ReviewActions
 }) {
   let scroll: ScrollBoxRenderable | undefined
@@ -41,6 +42,7 @@ export function ReviewList(props: {
             selectedKey={props.selectedKey}
             newKeys={props.newKeys}
             drafts={props.drafts}
+            width={props.width}
             actions={props.actions}
           />
         )}

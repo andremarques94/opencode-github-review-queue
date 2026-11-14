@@ -4,7 +4,7 @@ import { usePlugin } from "@opencode/plugin/tui"
 import type { MouseEvent } from "@opentui/core"
 import { createSignal, Show } from "solid-js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
-import { ago } from "../../../../shared/presentation.js"
+import { ago, fitLine } from "../../../../shared/presentation.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
 
 const RIGHT_BUTTON = 2
@@ -17,14 +17,25 @@ export function ReviewRow(props: {
   selected: boolean
   isNew: boolean
   review: string | undefined
+  width: number
   actions: ReviewActions
 }) {
   const theme = usePlugin().theme
   const [hovered, setHovered] = createSignal(false)
   const look = () =>
     props.selected
-      ? { background: theme.background.raised.base, bar: theme.text.action.primary.base, wrap: "word" as const }
-      : { background: undefined, bar: theme.text.faint, wrap: "none" as const }
+      ? {
+          background: theme.background.raised.base,
+          bar: theme.text.action.primary.base,
+          wrap: "word" as const,
+          title: props.item.title,
+        }
+      : {
+          background: undefined,
+          bar: theme.text.faint,
+          wrap: "none" as const,
+          title: fitLine(props.item.title, props.width),
+        }
 
   // Dialogs open on release: opened on press, the release would land outside them and close them again.
   let pressedSelected = false
@@ -58,10 +69,10 @@ export function ReviewRow(props: {
         <span style={{ fg: theme.text.action.primary.base }}>{props.isNew ? "●" : " "}</span>
       </text>
       <box flexDirection="column" flexGrow={1} paddingRight={1}>
-        <text fg={theme.text.base} wrapMode={look().wrap} truncate={!props.selected}>
-          {props.item.title}
+        <text fg={theme.text.base} wrapMode={look().wrap}>
+          {look().title}
         </text>
-        <text fg={theme.text.muted} wrapMode="none" truncate>
+        <text fg={theme.text.muted} wrapMode="none">
           #{props.item.number} · @{props.item.author} · {ago(props.item.createdAt)}
           <Show when={props.item.draft}>
             <span style={{ fg: theme.text.feedback.warning.base }}> · draft</span>

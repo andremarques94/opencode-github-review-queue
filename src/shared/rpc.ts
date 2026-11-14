@@ -1,12 +1,14 @@
 import { Rpc } from "@opencode/plugin/rpc"
 import * as v from "valibot"
-import { ReviewDraft } from "../domain/review-draft.js"
+import { FindingFields, ReviewDraft } from "../domain/review-draft.js"
 import { QueueSnapshot } from "../domain/review-queue.js"
 import { ReviewRequest } from "../domain/review-request.js"
 
 const empty = v.strictObject({})
 const byKey = v.strictObject({ key: v.string() })
 const drafts = v.strictObject({ drafts: v.array(ReviewDraft) })
+const draft = v.strictObject({ draft: ReviewDraft })
+const byFinding = { sessionID: v.string(), id: v.number() }
 const errors = { failed: v.undefined() }
 export const ModelRef = v.object({ providerID: v.string(), id: v.string() })
 export type ModelRef = v.InferOutput<typeof ModelRef>
@@ -55,6 +57,17 @@ export const ReviewQueue = Rpc.define({
       ]),
       errors,
     },
+    decideFinding: {
+      input: v.strictObject({ ...byFinding, decision: v.picklist(["keep", "drop"]) }),
+      output: draft,
+      errors,
+    },
+    editFinding: {
+      input: v.strictObject({ ...byFinding, body: FindingFields.body }),
+      output: draft,
+      errors,
+    },
+    askAboutFinding: { input: v.strictObject(byFinding), output: empty, errors },
   },
   events: {
     state: { schema: QueueSnapshot },

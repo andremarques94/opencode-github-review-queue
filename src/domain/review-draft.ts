@@ -82,14 +82,25 @@ export function pendingFindings(draft: ReviewDraft): Finding[] {
 const SEVERITY_RANK: Record<Finding["severity"], number> = { blocker: 0, major: 1, minor: 2, nit: 3 }
 const CONFIDENCE_RANK: Record<Finding["confidence"], number> = { high: 0, medium: 1, low: 2 }
 
-export function nextFinding(draft: ReviewDraft): Finding | undefined {
-  return pendingFindings(draft).sort(
+export function walkthroughOrder(draft: ReviewDraft): Finding[] {
+  return draft.findings.toSorted(
     (a, b) =>
       SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
       CONFIDENCE_RANK[a.confidence] - CONFIDENCE_RANK[b.confidence] ||
       a.id - b.id,
-  )[0]
+  )
 }
+
+export function nextFinding(draft: ReviewDraft): Finding | undefined {
+  return walkthroughOrder(draft).find((finding) => finding.decision === "pending")
+}
+
+const QUESTION_PREFIX = "Finding #"
+
+/** The header of the agent's question about a finding; the panel matches it to close that question. */
+export const questionHeader = (id: number) => `${QUESTION_PREFIX}${id}`
+
+export const isFindingQuestion = (header: string | undefined) => header?.startsWith(QUESTION_PREFIX) === true
 
 export function postBlocker(draft: ReviewDraft, headSha?: string): string | undefined {
   if (draft.status === "posted") {

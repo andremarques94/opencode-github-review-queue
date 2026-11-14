@@ -2,7 +2,20 @@ import type { ToolEditor } from "@opencode/plugin/promise/tool"
 import * as v from "valibot"
 import { type Finding, FindingFields, nextFinding, type ReviewDraft, Verdict } from "../../../domain/review-draft.js"
 import type { Findings } from "../findings.js"
-import { findingCard, nextStep } from "./instructions.js"
+import { nextStep, presentFinding } from "./instructions.js"
+
+const NAMESPACE = "review"
+// Direct tools, because the `context` hook can only hide tools the model calls directly; Code Mode tools are folded
+// into the `execute` tool. It also gives them the `review_*` names the instructions use.
+const REVIEW_TOOL_OPTIONS = { namespace: NAMESPACE, codemode: false } as const
+
+export function hideReviewTools(tools: Record<string, unknown>): void {
+  for (const name of Object.keys(tools)) {
+    if (name.startsWith(`${NAMESPACE}_`)) {
+      delete tools[name]
+    }
+  }
+}
 
 const side = { type: "string", enum: ["LEFT", "RIGHT"] }
 const findingProperties = {
@@ -17,10 +30,17 @@ const findingProperties = {
   body: { type: "string", description: "The exact GitHub comment, in the user's voice." },
 } as const
 
-const AddInput = v.strictObject(FindingFields)
-const UpdateInput = v.strictObject({ id: v.number(), ...v.partial(v.object(FindingFields)).entries })
+// The long fields sit in one nested object because the TUI draws a tool call as its name plus every top-level
+// string, number, and boolean argument; nested objects are left out, so the row stays `review_update_finding [id=2]`.
+const AddInput = v.strictObject({ finding: v.strictObject(FindingFields) })
+const UpdateInput = v.strictObject({
+  id: v.number(),
+  changes: v.strictObject(v.partial(v.object(FindingFields)).entries),
+})
 const DecideInput = v.strictObject({ id: v.number(), decision: v.picklist(["keep", "drop"]) })
-const VerdictInput = v.strictObject({ verdict: Verdict, summary: v.pipe(v.string(), v.nonEmpty()) })
+const VerdictInput = v.strictObject({
+  review: v.strictObject({ verdict: Verdict, summary: v.pipe(v.string(), v.nonEmpty()) }),
+})
 
 function parse<T>(schema: v.GenericSchema<unknown, T>, input: unknown): T {
   const parsed = v.safeParse(schema, input)
@@ -37,7 +57,7 @@ const reply = (text: string, draft: ReviewDraft) => ({ content: [text, nextStep(
 
 export function addReviewTools(editor: ToolEditor, findings: Findings): void {
   editor.namespace({
-    name: "review",
+    name: NAMESPACE,
     description:
       "Record the pull request review draft for the review queue panel. Only available in review sessions the panel started.",
   })
@@ -46,13 +66,20 @@ export function addReviewTools(editor: ToolEditor, findings: Findings): void {
     description: "Add a finding to the review draft. Rejects lines that are not part of the pull request diff.",
     input: {
       type: "object",
-      properties: findingProperties,
-      required: ["path", "line", "side", "severity", "confidence", "evidence", "body"],
+      properties: {
+        finding: {
+          type: "object",
+          properties: findingProperties,
+          required: ["path", "line", "side", "severity", "confidence", "evidence", "body"],
+          additionalProperties: false,
+        },
+      },
+      required: ["finding"],
       additionalProperties: false,
     },
-    options: { namespace: "review" },
+    options: REVIEW_TOOL_OPTIONS,
     execute: async (input, context) => {
-      const finding = await findings.add(context.sessionID, parse(AddInput, input))
+      const finding = await findings.add(context.sessionID, parse(AddInput, input).finding)
       return reply(`Recorded ${describeFinding(finding)}.`, await findings.draftForSession(context.sessionID))
     },
   })
@@ -62,13 +89,21 @@ export function addReviewTools(editor: ToolEditor, findings: Findings): void {
       "Change a finding the user agreed to revise. Changing it puts it back to pending until the user decides again.",
     input: {
       type: "object",
-      properties: { id: { type: "integer" }, ...findingProperties },
-      required: ["id"],
+      properties: {
+        id: { type: "integer" },
+        changes: {
+          type: "object",
+          description: "Only the fields to change.",
+          properties: findingProperties,
+          additionalProperties: false,
+        },
+      },
+      required: ["id", "changes"],
       additionalProperties: false,
     },
-    options: { namespace: "review" },
+    options: REVIEW_TOOL_OPTIONS,
     execute: async (input, context) => {
-      const { id, ...changes } = parse(UpdateInput, input)
+      const { id, changes } = parse(UpdateInput, input)
       const finding = await findings.update(context.sessionID, id, changes)
       return reply(`Updated ${describeFinding(finding)}.`, await findings.draftForSession(context.sessionID))
     },
@@ -82,7 +117,7 @@ export function addReviewTools(editor: ToolEditor, findings: Findings): void {
       required: ["id", "decision"],
       additionalProperties: false,
     },
-    options: { namespace: "review" },
+    options: REVIEW_TOOL_OPTIONS,
     execute: async (input, context) => {
       const { id, decision } = parse(DecideInput, input)
       const finding = await findings.decide(context.sessionID, id, decision)
@@ -95,15 +130,22 @@ export function addReviewTools(editor: ToolEditor, findings: Findings): void {
     input: {
       type: "object",
       properties: {
-        verdict: { type: "string", enum: ["REQUEST_CHANGES", "COMMENT", "APPROVE"] },
-        summary: { type: "string", description: "Main problems and what has to happen before this merges." },
+        review: {
+          type: "object",
+          properties: {
+            verdict: { type: "string", enum: ["REQUEST_CHANGES", "COMMENT", "APPROVE"] },
+            summary: { type: "string", description: "Main problems and what has to happen before this merges." },
+          },
+          required: ["verdict", "summary"],
+          additionalProperties: false,
+        },
       },
-      required: ["verdict", "summary"],
+      required: ["review"],
       additionalProperties: false,
     },
-    options: { namespace: "review" },
+    options: REVIEW_TOOL_OPTIONS,
     execute: async (input, context) => {
-      const { verdict, summary } = parse(VerdictInput, input)
+      const { verdict, summary } = parse(VerdictInput, input).review
       const draft = await findings.setVerdict(context.sessionID, verdict, summary)
       return reply(
         `Verdict ${draft.verdict}. ${draft.findings.length} findings in the draft. Send the overview now without describing any finding.`,
@@ -116,16 +158,14 @@ export function addReviewTools(editor: ToolEditor, findings: Findings): void {
     description:
       "Get the one finding to present next, as a card to show the user. Present only this finding, then wait for the user's decision.",
     input: { type: "object", properties: {}, additionalProperties: false },
-    options: { namespace: "review" },
+    options: REVIEW_TOOL_OPTIONS,
     execute: async (_input, context) => {
       const draft = await findings.draftForSession(context.sessionID)
       const finding = nextFinding(draft)
       if (!finding) {
         return reply("No finding is waiting for a decision.", draft)
       }
-      return {
-        content: `${findingCard(draft, finding)}\n\nShow this card to the user with its proposed comment exactly as written, since that text is what gets posted; do not paraphrase or shorten it. Add a short code quote and your recommendation, ask whether to keep, edit, drop, explain, or investigate it, and end your turn. Do not mention any other finding.`,
-      }
+      return { content: presentFinding(draft, finding) }
     },
   })
   editor.add({
@@ -133,7 +173,7 @@ export function addReviewTools(editor: ToolEditor, findings: Findings): void {
     description:
       "Read the whole review draft to check decisions or the final summary. Never use it to present several findings at once.",
     input: { type: "object", properties: {}, additionalProperties: false },
-    options: { namespace: "review" },
+    options: REVIEW_TOOL_OPTIONS,
     execute: async (_input, context) => {
       const draft = await findings.draftForSession(context.sessionID)
       return reply(JSON.stringify(draft, null, 2), draft)

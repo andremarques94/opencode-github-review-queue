@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { commentableLines, commentProblem } from "../src/domain/pull-request-diff.js"
 import { postBlocker, type ReviewDraft, reviewPayload } from "../src/domain/review-draft.js"
 import { draftActions, draftLabel, resumable } from "../src/shared/review/draft-status.js"
-import { previewText, reviewPreview } from "../src/shared/review/preview.js"
+import { reviewPreview } from "../src/shared/review/preview.js"
 
 const DIFF = `diff --git a/src/app.ts b/src/app.ts
 index 1111111..2222222 100644
@@ -138,6 +138,7 @@ describe("posting rules", () => {
     const kept = draft({ findings: draft().findings.map((finding) => ({ ...finding, decision: "keep" as const })) })
     expect(reviewPreview(kept)).toEqual({
       title: "Post review on acme/api#7?",
+      reference: "acme/api#7",
       verdict: "Request changes",
       summary: "Constants need names.",
       comments: [
@@ -145,16 +146,5 @@ describe("posting rules", () => {
         { location: "src/app.ts:11-12", body: "Dropped one." },
       ],
     })
-  })
-
-  it("keeps the text preview to one short line per comment", () => {
-    const long = draft({
-      findings: draft()
-        .findings.slice(0, 1)
-        .map((finding) => ({ ...finding, body: `${"x".repeat(100)}\nsecond line` })),
-    })
-    expect(previewText(reviewPreview(long))).toBe(
-      `Request changes · 1 inline comment\n\nConstants need names.\n\n• src/app.ts:11  ${"x".repeat(71)}…`,
-    )
   })
 })

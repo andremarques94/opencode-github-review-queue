@@ -6,7 +6,7 @@ import type { QueueSnapshot } from "../../../domain/review-queue.js"
 import type { ReviewRequest } from "../../../domain/review-request.js"
 import { fullReference, type QueueFilter } from "../../../shared/presentation.js"
 import { draftFor, resumable } from "../../../shared/review/draft-status.js"
-import { postReviewFlow, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
+import { postReviewFlow, type ReviewFlowHost, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
 import { errorMessage, ReviewQueue } from "../../../shared/rpc.js"
 import { createFlowHost } from "./flow-host.js"
 import { pullRequestOptions, queueOptions } from "./menu-options.js"
@@ -32,6 +32,31 @@ export type ReviewActions = {
   close(): void
 }
 
+export function attempting(context: ReturnType<typeof usePlugin>) {
+  return async (run: () => Promise<void>, fallback: string) => {
+    try {
+      await run()
+    } catch (error) {
+      context.ui.toast.show({ message: errorMessage(error) ?? fallback, variant: "error" })
+    }
+  }
+}
+
+export async function postDraft(
+  context: ReturnType<typeof usePlugin>,
+  host: ReviewFlowHost,
+  draft: ReviewDraft,
+): Promise<void> {
+  const posted = await postReviewFlow(host, draft)
+  if (!posted) {
+    return
+  }
+  context.ui.toast.show({ message: `Review posted · ${posted.url}`, variant: "success" })
+  if (posted.cleanupWarning) {
+    context.ui.toast.show({ message: posted.cleanupWarning, variant: "warning" })
+  }
+}
+
 export function useReviewActions(input: {
   panel: PanelInput
   update(state: QueueSnapshot): void
@@ -50,13 +75,7 @@ export function useReviewActions(input: {
     return item ? draftFor(input.drafts(), item.key) : undefined
   }
   const host = createFlowHost(context)
-  const attempt = async (run: () => Promise<void>, fallback: string) => {
-    try {
-      await run()
-    } catch (error) {
-      context.ui.toast.show({ message: errorMessage(error) ?? fallback, variant: "error" })
-    }
-  }
+  const attempt = attempting(context)
 
   const actions: ReviewActions = {
     select(key) {
@@ -89,16 +108,8 @@ export function useReviewActions(input: {
     post: () =>
       attempt(async () => {
         const draft = currentDraft()
-        if (!draft) {
-          return
-        }
-        const posted = await postReviewFlow(host, draft)
-        if (!posted) {
-          return
-        }
-        context.ui.toast.show({ message: `Review posted · ${posted.url}`, variant: "success" })
-        if (posted.cleanupWarning) {
-          context.ui.toast.show({ message: posted.cleanupWarning, variant: "warning" })
+        if (draft) {
+          await postDraft(context, host, draft)
         }
       }, "Could not post the review"),
     reset: () =>

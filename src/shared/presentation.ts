@@ -77,3 +77,31 @@ export function refreshLabel(state: QueueSnapshot): string {
 }
 
 export const fullReference = (item: ReviewRequest): string => `${item.repository}#${item.number}`
+
+/** Cuts at the end: OpenTUI's own `truncate` cuts in the middle of the line. */
+export function fitLine(text: string, width: number): string {
+  const line = text.split("\n").find((candidate) => candidate.trim() !== "") ?? ""
+  const characters = Array.from(line.trimEnd())
+  if (characters.length <= width) {
+    return characters.join("")
+  }
+  return `${characters.slice(0, Math.max(0, width - 1)).join("")}…`
+}
+
+const FENCE = "```"
+
+/**
+ * Agents quote test inputs as escaped strings such as `"a:\n```tsx\n…"`, and Markdown pairs those mid-line backticks
+ * into stray code spans. Escaping every fence that does not open its line shows them as written, while real fenced
+ * blocks still render. Only for local text: a posted comment must stay exactly as written.
+ */
+export function escapeInlineFences(markdown: string): string {
+  return markdown
+    .split("\n")
+    .map((line) => {
+      const indent = line.length - line.trimStart().length
+      const opening = line.trimStart().startsWith(FENCE) ? indent + FENCE.length : 0
+      return line.slice(0, opening) + line.slice(opening).replaceAll(FENCE, "\\`\\`\\`")
+    })
+    .join("\n")
+}

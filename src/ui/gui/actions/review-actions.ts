@@ -11,14 +11,8 @@ export type ReviewActions = {
   reset(draft: ReviewDraft): Promise<void>
 }
 
-export function createReviewActions(input: {
-  context: Context
-  server: () => string
-  directory: () => string | undefined
-}): ReviewActions {
-  const { context } = input
-  const host = createFlowHost(context)
-  const attempt = async (run: () => Promise<void>, fallback: string) => {
+export function attempting(context: Context) {
+  return async (run: () => Promise<void>, fallback: string) => {
     try {
       await run()
     } catch (error) {
@@ -30,6 +24,16 @@ export function createReviewActions(input: {
       })
     }
   }
+}
+
+export function createReviewActions(input: {
+  context: Context
+  server: () => string
+  directory: () => string | undefined
+}): ReviewActions {
+  const { context } = input
+  const host = createFlowHost(context)
+  const attempt = attempting(context)
 
   return {
     review: (item, resuming) =>
