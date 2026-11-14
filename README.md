@@ -59,12 +59,16 @@ Run `/reviews` or choose **Show GitHub review requests** from the command palett
 
 - `j` / `k`: move selection
 - `Enter`: open the selected pull request
+- `m`: open the actions menu (open, copy number, reference, or URL)
 - `c`: copy the pull request number
 - `y`: copy `owner/repo#123`
 - `u`: copy the URL
 - `f`: switch between the current repository and all repositories
 - `r`: refresh
 - `Shift+F`: toggle full screen
+
+With mouse support enabled in your terminal, click a request to select it, click it again to open it, and right-click
+it for the actions menu. **All** / **Current** and the footer hints are clickable, and the list scrolls with the wheel.
 
 Clipboard actions use OSC 52 and require terminal support.
 
@@ -130,12 +134,11 @@ path. Run `pnpm build` after changing the Desktop integration.
 
 The source tree is organized by runtime boundary:
 
-- `src/server`: server entry, GitHub adapter, and polling state machine
-- `src/rpc`: shared RPC contract
-- `src/tui`: TUI entry and components
-- `src/gui`: Desktop entry and components
-- `src/domain`: review queue domain types and comparison rules
-- `src/shared`: runtime-neutral options and presentation helpers
+- `src/domain`: review queue types and comparison rules
+- `src/shared`: runtime-neutral options, presentation, notifications, and the RPC contract
+- `src/server`: server entry, polling state machine, and GitHub CLI adapter
+- `src/ui/gui`: Desktop entry and components
+- `src/ui/tui`: TUI entry and components
 
 Releases use Conventional Commits and Release Please. Merging a release PR creates a GitHub release and publishes the
 same version to npm.

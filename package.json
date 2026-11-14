@@ -22,14 +22,15 @@
   "packageManager": "pnpm@12.18.0",
   "exports": {
     ".": "./src/server/index.ts",
-    "./tui": "./src/tui/index.tsx",
+    "./tui": "./src/ui/tui/index.tsx",
     "./gui-experimental": "./dist/gui-experimental.cjs",
-    "./rpc": "./src/rpc/review-queue.ts"
+    "./rpc": "./src/shared/rpc.ts"
   },
   "files": [
     "src",
     "dist",
-    "README.md"
+    "README.md",
+    "tsconfig.json"
   ],
   "scripts": {
     "build": "vite build",
