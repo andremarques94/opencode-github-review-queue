@@ -28,6 +28,8 @@ in the background, with a notification only when something actually needs you.
 - **Notifications that respect you.** New requests are batched into one notification; a request that briefly drops
   out of GitHub's search index does not notify twice.
 - **Keyboard and mouse.** Move, open, copy, filter and refresh, or click and right-click.
+- **Review with a human in the loop.** Start a review from the queue: the plugin checks the pull request out into
+  its own worktree and opens an agent session that drafts findings. You decide on each one, and only you can post.
 - **Stays useful offline.** The last successful queue is shown, marked stale, while GitHub is unreachable.
 - **Polite to the API.** Paginated search, request timeouts, bounded backoff, and GitHub's rate-limit reset time.
 - **No tokens touched.** The GitHub CLI is spawned directly; the plugin reads and stores no credentials.
@@ -69,9 +71,10 @@ Then open the queue with `/reviews`, or **Show GitHub review requests** from the
 | Key       | Action                                                        |
 | --------- | ------------------------------------------------------------- |
 | `j` / `k` | Move the selection                                            |
-| `Enter`   | Open the pull request on GitHub                               |
-| `m`       | Actions menu: open, copy number, reference, or URL            |
-| `c`       | Copy the number                                               |
+| `Enter`   | Start a review of the selected pull request, or resume it     |
+| `o`       | Open the pull request on GitHub                               |
+| `p`       | Post the selected review, after a preview                     |
+| `m`       | Actions menu: open, copy, post, or reset                      |
 | `y`       | Copy `owner/repo#123`                                         |
 | `u`       | Copy the URL                                                  |
 | `f`       | Switch between **Current** and **All**                        |
@@ -79,14 +82,42 @@ Then open the queue with `/reviews`, or **Show GitHub review requests** from the
 | `Shift+F` | Toggle full screen                                            |
 | `Esc`     | Close the panel                                               |
 
-With mouse support enabled in your terminal, click a request to select it, click it again to open it, and right-click
-for the actions menu. **All** / **Current** and the footer hints are clickable, and the wheel scrolls the list.
+With mouse support enabled in your terminal, click a request to select it, click it again to start or resume its
+review, and right-click for the actions menu. **All** / **Current** and the footer hints are clickable, and the wheel scrolls the list.
 Copying uses OSC 52, so it needs a terminal that supports it.
 
 ### Desktop
 
 Open the pinned **Review requests** tab in the side panel, or **Show GitHub review requests** from the command palette.
-Click a row to open it, or use its menu to copy. New requests also raise a toast with a **Show reviews** button.
+Click a row to start or resume its review. Its menu (or a right-click) opens it on GitHub, copies its reference or
+link, and posts or resets its review. New requests also raise a toast with a **Show reviews** button.
+
+### Reviews
+
+**Start review** asks which model should review, listing the enabled chat models of your connected providers with
+your last pick selected, then prepares a local review and opens its session:
+
+1. It finds a local clone of the repository. That is the session's own checkout when it is a clone of the pull
+   request's repository, or a clone the plugin made earlier. Otherwise it asks before making a bare, blobless clone
+   in the cache directory, which later reviews reuse.
+2. It fetches the pull request head into a detached worktree under the cache directory. Your checkout and branch are
+   never touched.
+3. It opens a session in that worktree with the review instructions. The agent investigates, records findings with
+   the `review_*` tools, and walks you through them one at a time. Lines outside the diff are rejected, and file
+   edits are denied in the session.
+
+The row shows where the review stands: _reviewing_, _N to decide_, _ready to post_, or _posted_. **Resume review**
+returns to the same session.
+
+**Post review** shows the verdict, summary, and every retained comment, and posts only after you confirm. It refuses
+while findings are undecided, and asks again if new commits were pushed since the draft. The agent cannot post.
+After posting, the worktree is removed.
+
+**Reset review** deletes the draft and its worktree. The session's chat history and anything already on GitHub
+stay.
+
+The default review guidelines cover readability, naming, dead code, duplication, error handling, tests, and types,
+in a direct tone. Point `reviewGuidelines` at a Markdown file to replace them with your own quality bar and tone.
 
 ### Notifications
 
@@ -104,7 +135,9 @@ Set `"notifications": false` to keep the in-app toasts but silence native ones.
         "intervalMs": 60000,
         "timeoutMs": 20000,
         "maxBackoffMs": 900000,
-        "notifications": true
+        "notifications": true,
+        "cacheDirectory": "~/.cache/opencode-github-review-queue",
+        "reviewGuidelines": "/path/to/review-guidelines.md"
       }
     }
   ]
@@ -117,6 +150,8 @@ Set `"notifications": false` to keep the in-app toasts but silence native ones.
 | `timeoutMs`     | `20000`   | Timeout for each GitHub CLI request                               |
 | `maxBackoffMs`  | `900000`  | Longest delay after transient failures                            |
 | `notifications` | `true`    | Native and terminal-attention notifications                       |
+| `cacheDirectory` | `$XDG_CACHE_HOME/opencode-github-review-queue` | Plugin-made clones and review worktrees; falls back to `~/.cache` |
+| `reviewGuidelines` | built-in | Path to a Markdown file that replaces the review quality bar and tone |
 
 
 ## Development

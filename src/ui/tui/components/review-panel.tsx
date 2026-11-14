@@ -31,6 +31,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
     update: props.update,
     ordered,
     current,
+    drafts: () => props.state.drafts,
     setSelected,
     filter,
     setFilter,
@@ -46,6 +47,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
           grouped={filter() === "all"}
           selectedKey={current()?.key}
           newKeys={props.state.newKeys}
+          drafts={props.state.drafts}
           actions={actions}
         />
       </Show>

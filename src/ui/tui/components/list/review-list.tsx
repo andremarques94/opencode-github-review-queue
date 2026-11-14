@@ -2,6 +2,7 @@
 
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { createEffect, For } from "solid-js"
+import type { ReviewDraft } from "../../../../domain/review-draft.js"
 import type { RepositoryGroup } from "../../../../shared/presentation.js"
 import type { ReviewActions } from "../../review-actions.js"
 import { ReviewGroup } from "./review-group.js"
@@ -12,6 +13,7 @@ export function ReviewList(props: {
   grouped: boolean
   selectedKey: string | undefined
   newKeys: readonly string[]
+  drafts: readonly ReviewDraft[]
   actions: ReviewActions
 }) {
   let scroll: ScrollBoxRenderable | undefined
@@ -38,6 +40,7 @@ export function ReviewList(props: {
             showHeader={props.grouped}
             selectedKey={props.selectedKey}
             newKeys={props.newKeys}
+            drafts={props.drafts}
             actions={props.actions}
           />
         )}

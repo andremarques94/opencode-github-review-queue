@@ -16,6 +16,7 @@ export function ReviewRow(props: {
   index: number
   selected: boolean
   isNew: boolean
+  review: string | undefined
   actions: ReviewActions
 }) {
   const theme = usePlugin().theme
@@ -33,7 +34,7 @@ export function ReviewRow(props: {
       return
     }
     if (wasSelected) {
-      void props.actions.open()
+      void props.actions.review()
     }
   }
 
@@ -59,6 +60,9 @@ export function ReviewRow(props: {
           #{props.item.number} · @{props.item.author} · {ago(props.item.createdAt)}
           <Show when={props.item.draft}>
             <span style={{ fg: theme.text.feedback.warning.base }}> · draft</span>
+          </Show>
+          <Show when={props.review}>
+            {(review) => <span style={{ fg: theme.text.action.primary.base }}> · {review()}</span>}
           </Show>
         </text>
       </box>

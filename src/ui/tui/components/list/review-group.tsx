@@ -2,7 +2,9 @@
 
 import { usePlugin } from "@opencode/plugin/tui"
 import { For, Show } from "solid-js"
+import type { ReviewDraft } from "../../../../domain/review-draft.js"
 import type { RepositoryGroup } from "../../../../shared/presentation.js"
+import { draftFor, draftLabel } from "../../../../shared/review-flow.js"
 import type { ReviewActions } from "../../review-actions.js"
 import { ReviewRow } from "./review-row.js"
 
@@ -11,6 +13,7 @@ export function ReviewGroup(props: {
   showHeader: boolean
   selectedKey: string | undefined
   newKeys: readonly string[]
+  drafts: readonly ReviewDraft[]
   actions: ReviewActions
 }) {
   const theme = usePlugin().theme
@@ -35,6 +38,7 @@ export function ReviewGroup(props: {
             index={index()}
             selected={props.selectedKey === item.key}
             isNew={props.newKeys.includes(item.key)}
+            review={draftLabel(draftFor(props.drafts, item.key))}
             actions={props.actions}
           />
         )}

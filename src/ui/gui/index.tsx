@@ -1,5 +1,6 @@
 import { Command, MenuItem, Panel, type PanelTab, Plugin } from "@opencode/plugin/gui"
 import { createStore } from "solid-js/store"
+import type { ReviewDraft } from "../../domain/review-draft.js"
 import { emptySnapshot, type QueueSnapshot } from "../../domain/review-queue.js"
 import { createDiscoveryBatcher } from "../../shared/notifications/discovery-batcher.js"
 import { notificationText } from "../../shared/notifications/notification-text.js"
@@ -18,6 +19,7 @@ export default Plugin.define({
   setup(ctx) {
     const options = parseOptions(ctx.options)
     const [state, setState] = createStore<QueueSnapshot>(emptySnapshot())
+    const [drafts, setDrafts] = createStore<{ list: ReviewDraft[] }>({ list: [] })
     const repositories = new Map<string, string | undefined>()
     const rpc = () => ctx.client.rpc(ReviewQueue)
     const update = (snapshot: QueueSnapshot) => setState(snapshot)
@@ -25,7 +27,17 @@ export default Plugin.define({
     void rpc()
       .snapshot({})
       .then((snapshot) => update(snapshot))
-    const stopState = rpc().events.on("state", (event) => update(event.data))
+    // Another location (the review session's) may write a draft, so re-read drafts with every queue update too.
+    const loadDrafts = () =>
+      void rpc()
+        .drafts({})
+        .then((result) => setDrafts("list", result.drafts))
+    loadDrafts()
+    const stopState = rpc().events.on("state", (event) => {
+      update(event.data)
+      loadDrafts()
+    })
+    const stopDrafts = rpc().events.on("drafts", (event) => setDrafts("list", event.data.drafts))
     const openPanel = () => {
       const session = ctx.sessions.current() ?? ctx.sessions.list()[0]
       if (session) {
@@ -90,6 +102,8 @@ export default Plugin.define({
         <ReviewPanel
           context={ctx}
           directory={props.session.location?.directory}
+          server={props.session.server.id}
+          drafts={drafts.list}
           repositories={repositories}
           state={state}
           update={update}
@@ -131,6 +145,7 @@ export default Plugin.define({
 
     return () => {
       stopState()
+      stopDrafts()
       stopDiscovered()
       batcher.dispose()
     }

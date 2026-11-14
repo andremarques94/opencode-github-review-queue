@@ -88,6 +88,6 @@ describe("classifyGhError", () => {
   })
 
   it("keeps the first line of an unknown failure", () => {
-    expect(classifyGhError("boom\nstack").detail.message).toBe("GitHub refresh failed: boom")
+    expect(classifyGhError("boom\nstack").detail.message).toBe("GitHub request failed: boom")
   })
 })

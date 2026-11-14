@@ -18,7 +18,8 @@ export function KeyHints(props: { actions: ReviewActions }) {
   return (
     <box flexDirection="row" marginTop={1} marginBottom={1} overflow="hidden">
       <text>{hint("j/k", "move")}</text>
-      {button("enter", "open", props.actions.open)}
+      {button("enter", "review", props.actions.review)}
+      {button("o", "github", props.actions.open)}
       {button("m", "menu", props.actions.menu)}
       {button("f", "scope", props.actions.toggleFilter)}
       {button("r", "refresh", props.actions.refresh)}
