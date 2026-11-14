@@ -70,7 +70,7 @@
     "@commitlint/config-conventional": "21.2.4",
     "@opentui/core": "0.8.4",
     "@opentui/solid": "0.8.4",
-    "@types/node": "24.10.1",
+    "@types/node": "24.19.2",
     "fallow": "3.42.0",
     "husky": "9.1.7",
     "lint-staged": "17.6.0",
