@@ -129,7 +129,8 @@ export const panelStyles = `
   padding: 7px 4px 7px 8px;
   border-radius: var(--radius-md);
 }
-.grq-row:hover { background: var(--surface-raised-base-hover); }
+.grq-row:hover,
+.grq-row:has([aria-expanded="true"]) { background: var(--surface-raised-base-hover); }
 .grq-row:has(.grq-row-main:focus-visible) { box-shadow: inset 0 0 0 2px var(--border-focus); }
 .grq-dot {
   flex-shrink: 0;
@@ -186,7 +187,8 @@ export const panelStyles = `
 }
 .grq-row-actions { flex-shrink: 0; margin-top: -3px; opacity: 0; transition: opacity 120ms; }
 .grq-row:hover .grq-row-actions,
-.grq-row:focus-within .grq-row-actions { opacity: 1; }
+.grq-row:focus-within .grq-row-actions,
+.grq-row-actions:has([aria-expanded="true"]) { opacity: 1; }
 @media (hover: none) { .grq-row-actions { opacity: 1; } }
 
 .grq-empty {

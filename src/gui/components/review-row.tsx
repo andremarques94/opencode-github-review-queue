@@ -34,17 +34,14 @@ export function ReviewRow(props: ReviewRowProps) {
           label="Pull request actions"
           items={[
             { label: "Open on GitHub", icon: "outline-arrow-up-right", onSelect: open },
+            { type: "separator" },
+            { label: "Copy number", icon: "copy", onSelect: () => props.copy(String(props.item.number), "Number") },
             {
-              label: `Copy #${props.item.number}`,
+              label: "Copy reference",
               icon: "copy",
-              onSelect: () => props.copy(String(props.item.number), "PR number"),
+              onSelect: () => props.copy(fullReference(props.item), "Reference"),
             },
-            {
-              label: `Copy ${fullReference(props.item)}`,
-              icon: "copy",
-              onSelect: () => props.copy(fullReference(props.item), "PR reference"),
-            },
-            { label: "Copy URL", icon: "link", onSelect: () => props.copy(props.item.url, "PR URL") },
+            { label: "Copy link", icon: "link", onSelect: () => props.copy(props.item.url, "Link") },
           ]}
         />
       </div>

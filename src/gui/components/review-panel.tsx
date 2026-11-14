@@ -48,7 +48,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
   const copy = (text: string, name: string) => {
     void props.context.system
       .copy(text)
-      .then(() => props.context.toast.show({ variant: "success", title: `${name} copied` }))
+      .then(() => props.context.toast.show({ variant: "success", title: `${name} copied`, description: text }))
   }
 
   return (
