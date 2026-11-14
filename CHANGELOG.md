@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v0.3.0...opencode-github-review-queue-v0.4.0) (2026-11-14)
+
+
+### Features
+
+* triage review findings from the TUI and Desktop ([#22](https://github.com/andremarques94/opencode-github-review-queue/issues/22)) ([028c998](https://github.com/andremarques94/opencode-github-review-queue/commit/028c9983b9e9dc9850bed04b738c1b6e19bfb920))
+
 ## [0.3.0](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v0.2.1...opencode-github-review-queue-v0.3.0) (2026-11-14)
 
 
