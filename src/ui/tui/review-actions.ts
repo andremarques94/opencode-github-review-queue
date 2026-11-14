@@ -196,7 +196,6 @@ export function useReviewActions(input: {
     },
     async menu() {
       const item = input.current()
-      // Every action with its key, so the footer can stay short on narrow panels.
       const choice = await context.ui.dialog.select<() => unknown>({
         title: item ? `#${item.number} ${item.title}` : "Review queue",
         options: [

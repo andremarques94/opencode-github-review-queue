@@ -127,7 +127,6 @@ export class ReviewService {
     }
   }
 
-  /** Deletes the local draft and worktree. The review session and anything already on GitHub are left alone. */
   async reset(key: string, signal: AbortSignal): Promise<void> {
     const draft = await this.store.get(key)
     if (!draft) {

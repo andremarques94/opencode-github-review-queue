@@ -7,7 +7,6 @@ import { ReviewRequest } from "../domain/review-request.js"
 const empty = v.strictObject({})
 const byKey = v.strictObject({ key: v.string() })
 const drafts = v.strictObject({ drafts: v.array(ReviewDraft) })
-/** Failures whose message the UI shows as is, instead of a generic internal error. */
 const errors = { failed: v.undefined() }
 export const ModelRef = v.object({ providerID: v.string(), id: v.string() })
 export type ModelRef = v.InferOutput<typeof ModelRef>

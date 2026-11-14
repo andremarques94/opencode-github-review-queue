@@ -3,7 +3,6 @@ import type { ReviewRequest } from "../domain/review-request.js"
 import { fullReference } from "./presentation.js"
 import type { RpcInput, RpcOutput } from "./rpc.js"
 
-/** What each UI provides so both run the same review workflow. */
 export type SelectOption<T> = { title: string; value: T; description?: string; group?: string }
 
 export type ReviewFlowHost = {
@@ -17,7 +16,7 @@ export type ReviewFlowHost = {
   resetReview(input: RpcInput<"resetReview">): Promise<unknown>
 }
 
-/** The message of a thrown `Error` or of an RPC failure, which arrives as a plain `{ type, message }` object. */
+/** RPC failures arrive as plain `{ type, message }` objects, not `Error`s. */
 export function errorMessage(error: unknown): string | undefined {
   if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
     return error.message
@@ -41,10 +40,8 @@ export function draftLabel(draft: ReviewDraft | undefined): string | undefined {
   }
 }
 
-/** Activating a queue row reopens this draft's session instead of starting a new review. */
 export const resumable = (draft: ReviewDraft | undefined) => draft !== undefined && draft.status !== "posted"
 
-/** A draft's actions in a row's menu; starting or resuming is the row's own action. */
 export type DraftAction =
   | { kind: "post"; label: string; draft: ReviewDraft; blocker: string | undefined }
   | { kind: "reset"; label: string; draft: ReviewDraft }
@@ -64,7 +61,6 @@ export const draftFor = (drafts: readonly ReviewDraft[], key: string) => drafts.
 
 type ModelOption = RpcOutput<"models">["models"][number]
 
-/** Asks which model reviews, preselecting the last pick. Undefined when the user cancels. */
 async function pickModel(host: ReviewFlowHost, item: ReviewRequest): Promise<ModelOption | undefined> {
   const { models, preferred } = await host.models()
   if (models.length === 0) {
@@ -83,10 +79,6 @@ async function pickModel(host: ReviewFlowHost, item: ReviewRequest): Promise<Mod
   })
 }
 
-/**
- * Starts the review session with a model the user picks, or resumes an existing one, asking before the plugin clones
- * a repository. Returns the session ID.
- */
 export async function startReviewFlow(
   host: ReviewFlowHost,
   item: ReviewRequest,
@@ -122,7 +114,6 @@ export async function startReviewFlow(
 
 const VERDICT_LABELS = { REQUEST_CHANGES: "Request changes", COMMENT: "Comment", APPROVE: "Approve" } as const
 
-/** Exactly what posting sends, shaped for a confirmation dialog. */
 export type ReviewPreview = {
   title: string
   verdict: string
@@ -147,7 +138,6 @@ export const commentCount = (count: number) => `${count} inline comment${count =
 
 const PREVIEW_LINE = 72
 
-/** The preview as plain text, one short line per comment, for dialogs that only show text. */
 export function previewText(preview: ReviewPreview): string {
   const shorten = (text: string) => {
     const line = text.split("\n")[0] ?? ""
@@ -159,7 +149,6 @@ export function previewText(preview: ReviewPreview): string {
     .join("\n\n")
 }
 
-/** Shows exactly what will be posted and posts it only after the user confirms. Returns the review URL. */
 export async function postReviewFlow(host: ReviewFlowHost, draft: ReviewDraft): Promise<string | undefined> {
   const blocker = postBlocker(draft)
   if (blocker) {

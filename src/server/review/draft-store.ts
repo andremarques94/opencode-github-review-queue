@@ -13,14 +13,10 @@ const parse = (value: unknown) => {
   return parsed.success ? parsed.output : undefined
 }
 
-/**
- * Drafts live in plugin storage, the only state every OpenCode location shares: the panel's location starts and posts
- * a review while the review session's location records findings. Nothing is cached, so each read sees the others'
- * writes.
- */
+/** Never cached: each OpenCode location runs its own plugin instance, and storage is the only state they share. */
 export class DraftStore {
   private listeners = new Set<(drafts: ReviewDraft[]) => void>()
-  /** Writes run one at a time, so concurrent tool calls never overwrite each other's changes. */
+  /** Serialized so concurrent tool calls never overwrite each other's changes. */
   private writes: Promise<unknown> = Promise.resolve()
 
   constructor(
@@ -44,7 +40,6 @@ export class DraftStore {
     return this.serialize(() => this.save(draft))
   }
 
-  /** Applies `change` to the latest saved draft, after every earlier write has finished. */
   update(key: string, change: (draft: ReviewDraft) => void): Promise<ReviewDraft> {
     return this.serialize(async () => {
       const draft = await this.get(key)

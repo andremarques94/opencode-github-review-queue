@@ -4,7 +4,6 @@ import { ModelRef } from "../../shared/rpc.js"
 
 const PREFERRED_KEY = "review-model"
 
-/** Enabled chat models, labelled with their provider, and the one to preselect: the last pick, else the default. */
 export async function reviewModels(ctx: Pick<Plugin.Context, "model" | "provider" | "storage">) {
   const [models, providers, fallback, saved] = await Promise.all([
     ctx.model.list({ types: ["chat"] }),

@@ -3,7 +3,6 @@
 import { usePlugin } from "@opencode/plugin/tui"
 import type { ReviewActions } from "../review-actions.js"
 
-/** Two hints that fit a narrow panel; the actions menu lists every other key. */
 export function KeyHints(props: { actions: ReviewActions }) {
   const theme = usePlugin().theme
   const hint = (key: string, label: string, run: () => unknown) => (

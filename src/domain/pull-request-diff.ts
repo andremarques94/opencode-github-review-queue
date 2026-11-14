@@ -1,18 +1,30 @@
 export type DiffSide = "LEFT" | "RIGHT"
 
-/** Lines GitHub accepts review comments on, per file: old line numbers on LEFT, new line numbers on RIGHT. */
 export type CommentableLines = ReadonlyMap<string, { LEFT: ReadonlySet<number>; RIGHT: ReadonlySet<number> }>
 
 type FileLines = { LEFT: Set<number>; RIGHT: Set<number> }
 
-const HUNK = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/
+const FILE_HEADER = "diff --git "
+const HUNK_HEADER = "@@ "
+const NO_FILE = "/dev/null"
 
+/** `+++ b/src/app.ts` or `--- a/src/app.ts` → `src/app.ts`; undefined for a created or deleted file's missing side. */
 function pathFrom(header: string | undefined): string | undefined {
-  const path = header?.slice(4).replace(/\t.*$/, "")
-  if (!path || path === "/dev/null") {
+  const path = header?.slice("+++ ".length).split("\t")[0]
+  if (!path || path === NO_FILE) {
     return undefined
   }
-  return path.replace(/^[ab]\//, "")
+  return path.startsWith("a/") || path.startsWith("b/") ? path.slice(2) : path
+}
+
+/** `@@ -12,6 +12,24 @@ …` → the first old and new line numbers of the hunk. */
+function hunkStart(line: string): { old: number; new: number } | undefined {
+  if (!line.startsWith(HUNK_HEADER)) {
+    return undefined
+  }
+  const [, oldRange = "", newRange = ""] = line.split(" ")
+  const start = (range: string) => Number(range.slice(1).split(",")[0])
+  return { old: start(oldRange), new: start(newRange) }
 }
 
 function recordLine(file: FileLines, marker: string | undefined, cursor: { old: number; new: number }): void {
@@ -30,21 +42,18 @@ function recordLine(file: FileLines, marker: string | undefined, cursor: { old: 
   }
 }
 
-/** One `diff --git` section; binary files and sections without hunks have no commentable lines. */
-function parseFile(section: string): [string, FileLines] | undefined {
-  const lines = section.split("\n")
+function parseFile(lines: readonly string[]): [string, FileLines] | undefined {
   const header = lines.findIndex((line) => line.startsWith("+++ "))
   const path = header === -1 ? undefined : (pathFrom(lines[header]) ?? pathFrom(lines[header - 1]))
   if (!path) {
     return undefined
   }
   const file: FileLines = { LEFT: new Set(), RIGHT: new Set() }
-  const cursor = { old: 0, new: 0 }
+  let cursor = { old: 0, new: 0 }
   for (const line of lines.slice(header + 1)) {
-    const hunk = line.match(HUNK)
+    const hunk = hunkStart(line)
     if (hunk) {
-      cursor.old = Number(hunk[1])
-      cursor.new = Number(hunk[2])
+      cursor = hunk
       continue
     }
     recordLine(file, line[0], cursor)
@@ -52,9 +61,21 @@ function parseFile(section: string): [string, FileLines] | undefined {
   return [path, file]
 }
 
+function fileSections(diff: string): string[][] {
+  const sections: string[][] = []
+  for (const line of diff.split("\n")) {
+    if (line.startsWith(FILE_HEADER)) {
+      sections.push([])
+      continue
+    }
+    sections.at(-1)?.push(line)
+  }
+  return sections
+}
+
 export function commentableLines(diff: string): CommentableLines {
   const files = new Map<string, FileLines>()
-  for (const section of diff.split(/^diff --git .*$/m).slice(1)) {
+  for (const section of fileSections(diff)) {
     const parsed = parseFile(section)
     if (parsed) {
       files.set(...parsed)

@@ -32,10 +32,6 @@ export type Finding = v.InferOutput<typeof Finding>
 export type FindingInput = Omit<Finding, "id" | "decision">
 export type FindingChanges = { [K in keyof FindingInput]?: FindingInput[K] | undefined }
 
-/**
- * `investigating` while the agent works, `ready` once it has proposed a verdict, `posted` after GitHub accepted the
- * review. Posting is a user action in the panel, never an agent tool.
- */
 const DraftStatus = v.picklist(["investigating", "ready", "posted"])
 
 export const ReviewDraft = v.object({
@@ -80,7 +76,6 @@ export function pendingFindings(draft: ReviewDraft): Finding[] {
 const SEVERITY_RANK: Record<Finding["severity"], number> = { blocker: 0, major: 1, minor: 2, nit: 3 }
 const CONFIDENCE_RANK: Record<Finding["confidence"], number> = { high: 0, medium: 1, low: 2 }
 
-/** The finding to walk through next: strongest blockers first, low-confidence ones last. */
 export function nextFinding(draft: ReviewDraft): Finding | undefined {
   return pendingFindings(draft).sort(
     (a, b) =>
@@ -90,7 +85,6 @@ export function nextFinding(draft: ReviewDraft): Finding | undefined {
   )[0]
 }
 
-/** Why the draft cannot be posted yet, or undefined when it can. */
 export function postBlocker(draft: ReviewDraft, headSha?: string): string | undefined {
   if (draft.status === "posted") {
     return "This review was already posted."

@@ -68,10 +68,7 @@ preview, or summarize other findings; the user decides on them one at a time.
   queue panel.`
 }
 
-/**
- * What the agent should do next in a review session. Tool results end with it and every model request in the session
- * carries it, so the walkthrough stays one finding at a time even when the model drifts from the instructions.
- */
+/** Repeated in tool results and on every model request, because models drift from the initial instructions. */
 export function nextStep(draft: ReviewDraft): string | undefined {
   if (draft.status === "posted") {
     return undefined
@@ -87,7 +84,6 @@ export function nextStep(draft: ReviewDraft): string | undefined {
   return `Review status: walkthrough, ${decided} of ${draft.findings.length} findings decided. Present exactly one finding per message: call review_next_finding, show only that finding with its proposed comment verbatim, ask the user to keep, edit, drop, explain, or investigate it, and end your turn. Never list or preview other findings.`
 }
 
-/** The next finding as the agent should show it, with its position in the walkthrough. */
 export function findingCard(draft: ReviewDraft, finding: Finding): string {
   const position = draft.findings.length - pendingFindings(draft).length + 1
   const location = finding.startLine

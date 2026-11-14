@@ -3,7 +3,6 @@ import { For, onCleanup, Show } from "solid-js"
 import { commentCount, type ReviewPreview } from "../../../shared/review-flow.js"
 import { dialogStyles } from "./styles.js"
 
-/** Shows exactly what will be posted and resolves true only when the user confirms. */
 export function confirmPost(context: Context, preview: ReviewPreview): Promise<boolean> {
   return new Promise((resolve) => {
     context.dialogs.open((dialog) => {
@@ -11,7 +10,6 @@ export function confirmPost(context: Context, preview: ReviewPreview): Promise<b
         resolve(confirmed)
         dialog.close()
       }
-      // Escape, a click outside, and the close button end the dialog without a choice.
       onCleanup(() => resolve(false))
       return (
         <context.ui.Dialog

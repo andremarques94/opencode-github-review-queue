@@ -1,11 +1,18 @@
 import { mkdir, realpath, stat } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
+import * as v from "valibot"
 import { runGh } from "../github/cli.js"
 import { repositoryForDirectory } from "../github/repository.js"
 import { registeredWorktrees, remoteFor, runGit } from "./git.js"
 
-const SEGMENT = /^[A-Za-z0-9_.-]+$/
+/** One directory name, so a repository name can never escape the cache directory. */
+const PathSegment = v.pipe(v.string(), v.nonEmpty(), v.notValues([".", ".."]), v.excludes("\\"))
+const Repository = v.pipe(
+  v.string(),
+  v.transform((repository) => repository.split("/")),
+  v.strictTuple([PathSegment, PathSegment]),
+)
 
 export const expandHome = (path: string) =>
   path === "~" || path.startsWith("~/") ? join(homedir(), path.slice(1)) : path
@@ -15,13 +22,11 @@ export function defaultCacheDirectory(): string {
 }
 
 function segments(repository: string): [string, string] {
-  const [owner, name, ...rest] = repository.split("/")
-  const valid = (part: string | undefined): part is string =>
-    !!part && SEGMENT.test(part) && part !== "." && part !== ".."
-  if (!valid(owner) || !valid(name) || rest.length > 0) {
+  const parsed = v.safeParse(Repository, repository)
+  if (!parsed.success) {
     throw new Error(`Unexpected repository name: ${repository}`)
   }
-  return [owner, name]
+  return parsed.output
 }
 
 export function managedClonePath(cacheDirectory: string, repository: string): string {
@@ -40,10 +45,6 @@ const exists = (path: string) =>
     () => false,
   )
 
-/**
- * A local repository to create the review worktree from: the caller's checkout when it is a clone of `repository`,
- * else a clone this plugin made earlier. Undefined means the user has to approve a new clone.
- */
 export async function findCheckout(input: {
   repository: string
   directory?: string | undefined
@@ -75,7 +76,6 @@ export async function cloneRepository(
   return target
 }
 
-/** Fetches the pull request head into a detached worktree and returns the commit it checked out. */
 export async function createWorktree(input: {
   checkout: string
   repository: string
@@ -97,7 +97,6 @@ export async function createWorktree(input: {
   return sha
 }
 
-/** Removes a review worktree only when `checkout` has it registered; anything else is left alone. */
 export async function removeWorktree(checkout: string, worktree: string, signal: AbortSignal): Promise<void> {
   if (!(await exists(checkout))) {
     return

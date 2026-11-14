@@ -33,7 +33,6 @@ function parse<T>(schema: v.GenericSchema<unknown, T>, input: unknown): T {
 const describeFinding = (finding: Finding) =>
   `#${finding.id} ${finding.path}:${finding.line} (${finding.side}) ${finding.severity} [${finding.decision}]`
 
-/** A tool result that ends with what to do next, so the walkthrough stays on track. */
 const reply = (text: string, draft: ReviewDraft) => ({ content: [text, nextStep(draft)].filter(Boolean).join("\n\n") })
 
 export function addReviewTools(editor: ToolEditor, service: ReviewService): void {

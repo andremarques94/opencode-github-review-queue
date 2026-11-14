@@ -17,7 +17,19 @@ export async function runGit(directory: string, args: readonly string[], signal:
   }
 }
 
-const GITHUB_REMOTE = /github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/
+const GITHUB_HOST = "github.com"
+
+/** `git@github.com:acme/api.git` or `https://github.com/acme/api` → `acme/api`. */
+function githubRepository(url: string): string | undefined {
+  const host = url.indexOf(GITHUB_HOST)
+  const separator = url[host + GITHUB_HOST.length]
+  if (host === -1 || (separator !== ":" && separator !== "/")) {
+    return undefined
+  }
+  const path = url.slice(host + GITHUB_HOST.length + 1)
+  const trimmed = path.endsWith("/") ? path.slice(0, -1) : path
+  return trimmed.endsWith(".git") ? trimmed.slice(0, -".git".length) : trimmed
+}
 
 /** The remote of `directory` that points at `repository` on GitHub, so forks' `origin` is never assumed. */
 export async function remoteFor(
@@ -27,9 +39,10 @@ export async function remoteFor(
 ): Promise<string | undefined> {
   const output = await runGit(directory, ["remote", "-v"], signal)
   for (const line of output.split("\n")) {
-    const [name, url] = line.split(/\s+/)
-    const match = url?.match(GITHUB_REMOTE)?.[1]
-    if (name && match?.toLowerCase() === repository.toLowerCase()) {
+    // `git remote -v` prints `<name>\t<url> (fetch)`.
+    const [name, entry = ""] = line.split("\t")
+    const remote = githubRepository(entry.split(" ")[0] ?? "")
+    if (name && remote?.toLowerCase() === repository.toLowerCase()) {
       return name
     }
   }

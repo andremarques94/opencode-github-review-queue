@@ -25,7 +25,6 @@ type Shared = {
 
 let shared: Shared | undefined
 
-/** Turns a thrown error into the method's `failed` error, so the UI receives its message. */
 async function reported<T, E>(
   context: { error(type: "failed", message: string): E },
   run: () => Promise<T>,
@@ -113,7 +112,6 @@ export default Plugin.define({
         reported(rpcContext, () => current.reviews.post(input.key, input.allowStale, timeout(rpcContext.signal))),
     })
     const tools = await ctx.tool.transform((editor) => addReviewTools(editor, current.reviews))
-    // Restates the walkthrough's position on every model request of a review session.
     const reminder = await ctx.session.hook("context", async (event) => {
       const draft = await current.drafts.bySession(event.sessionID)
       const step = draft && nextStep(draft)
