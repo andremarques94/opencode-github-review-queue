@@ -1,10 +1,10 @@
 import { usePlugin } from "@opencode/plugin/tui"
 import type { PanelInput } from "@opencode/plugin/tui/context"
 import type { Accessor, Setter } from "solid-js"
-import type { QueueSnapshot } from "@/domain/review-queue.js"
-import type { ReviewRequest } from "@/domain/review-request.js"
-import { fullReference, type QueueFilter } from "@/shared/presentation.js"
-import { ReviewQueue } from "@/shared/rpc.js"
+import type { QueueSnapshot } from "../../domain/review-queue.js"
+import type { ReviewRequest } from "../../domain/review-request.js"
+import { fullReference, type QueueFilter } from "../../shared/presentation.js"
+import { ReviewQueue } from "../../shared/rpc.js"
 
 export type CopyKind = "number" | "reference" | "link"
 

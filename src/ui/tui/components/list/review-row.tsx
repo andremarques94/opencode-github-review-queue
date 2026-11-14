@@ -3,9 +3,9 @@
 import { usePlugin } from "@opencode/plugin/tui"
 import type { MouseEvent } from "@opentui/core"
 import { createSignal, Show } from "solid-js"
-import type { ReviewRequest } from "@/domain/review-request.js"
-import { ago } from "@/shared/presentation.js"
-import type { ReviewActions } from "@/ui/tui/review-actions.js"
+import type { ReviewRequest } from "../../../../domain/review-request.js"
+import { ago } from "../../../../shared/presentation.js"
+import type { ReviewActions } from "../../review-actions.js"
 
 const RIGHT_BUTTON = 2
 

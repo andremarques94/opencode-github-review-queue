@@ -1,8 +1,8 @@
 import type { Context } from "@opencode/plugin/gui"
 import { Show } from "solid-js"
 import type { Store } from "solid-js/store"
-import type { QueueSnapshot } from "@/domain/review-queue.js"
-import type { QueueFilter } from "@/shared/presentation.js"
+import type { QueueSnapshot } from "../../../../domain/review-queue.js"
+import type { QueueFilter } from "../../../../shared/presentation.js"
 
 export function EmptyState(props: { context: Context; state: Store<QueueSnapshot>; filter: QueueFilter }) {
   const message = () => {

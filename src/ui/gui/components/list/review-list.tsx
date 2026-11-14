@@ -1,7 +1,7 @@
 import type { Context } from "@opencode/plugin/gui"
 import { createMemo, For } from "solid-js"
-import type { ReviewRequest } from "@/domain/review-request.js"
-import { groupByRepository } from "@/shared/presentation.js"
+import type { ReviewRequest } from "../../../../domain/review-request.js"
+import { groupByRepository } from "../../../../shared/presentation.js"
 import { ReviewGroup } from "./review-group.js"
 
 export function ReviewList(props: {

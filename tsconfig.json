@@ -12,12 +12,7 @@
       "node",
       "vitest/globals"
     ],
-    "skipLibCheck": true,
-    "paths": {
-      "@/*": [
-        "./src/*"
-      ]
-    }
+    "skipLibCheck": true
   },
   "include": [
     "src",

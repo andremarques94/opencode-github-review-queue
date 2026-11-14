@@ -1,4 +1,4 @@
-import type { ReviewRequest } from "@/domain/review-request.js"
+import type { ReviewRequest } from "../../domain/review-request.js"
 
 export interface DiscoveryBatcher {
   push(item: ReviewRequest): void

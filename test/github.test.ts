@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const runGh = vi.hoisted(() => vi.fn())
 
-vi.mock("@/server/github/cli.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/server/github/cli.js")>()),
+vi.mock("../src/server/github/cli.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/server/github/cli.js")>()),
   runGh,
 }))
 
-const { classifyGhError } = await import("@/server/github/cli.js")
-const { fetchReviewRequests } = await import("@/server/github/review-requests.js")
+const { classifyGhError } = await import("../src/server/github/cli.js")
+const { fetchReviewRequests } = await import("../src/server/github/review-requests.js")
 
 const node = (number: number, createdAt: string) => ({
   number,
@@ -35,7 +35,7 @@ describe("fetchReviewRequests", () => {
 
     const result = await fetchReviewRequests(signal)
 
-    expect(result.items.map((item) => [item.key, item.author])).toEqual([
+    expect(result.items.map((entry) => [entry.key, entry.author])).toEqual([
       ["acme/api#1", "octocat"],
       ["acme/api#2", "octocat"],
     ])

@@ -1,4 +1,4 @@
-import type { ReviewRequest } from "@/domain/review-request.js"
+import type { ReviewRequest } from "../../domain/review-request.js"
 
 const repositoryName = (repository: string) => repository.split("/").pop() ?? repository
 const shortReference = (item: ReviewRequest) => `${repositoryName(item.repository)} #${item.number}`

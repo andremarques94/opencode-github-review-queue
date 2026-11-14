@@ -1,11 +1,11 @@
 import { Command, MenuItem, Panel, type PanelTab, Plugin } from "@opencode/plugin/gui"
 import { createStore } from "solid-js/store"
-import { emptySnapshot, type QueueSnapshot } from "@/domain/review-queue.js"
-import type { ReviewRequest } from "@/domain/review-request.js"
-import { createDiscoveryBatcher } from "@/shared/notifications/discovery-batcher.js"
-import { notificationText } from "@/shared/notifications/notification-text.js"
-import { parseOptions } from "@/shared/options.js"
-import { ReviewQueue } from "@/shared/rpc.js"
+import { emptySnapshot, type QueueSnapshot } from "../../domain/review-queue.js"
+import type { ReviewRequest } from "../../domain/review-request.js"
+import { createDiscoveryBatcher } from "../../shared/notifications/discovery-batcher.js"
+import { notificationText } from "../../shared/notifications/notification-text.js"
+import { parseOptions } from "../../shared/options.js"
+import { ReviewQueue } from "../../shared/rpc.js"
 import { ReviewPanel } from "./components/review-panel.js"
 
 export default Plugin.define({

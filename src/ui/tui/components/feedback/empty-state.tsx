@@ -2,8 +2,8 @@
 
 import { usePlugin } from "@opencode/plugin/tui"
 import type { Store } from "solid-js/store"
-import type { QueueFilter } from "@/shared/presentation.js"
-import type { TuiState } from "@/ui/tui/state.js"
+import type { QueueFilter } from "../../../../shared/presentation.js"
+import type { TuiState } from "../../state.js"
 
 export function EmptyState(props: { state: Store<TuiState>; filter: QueueFilter }) {
   const theme = usePlugin().theme

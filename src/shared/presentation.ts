@@ -1,5 +1,5 @@
-import type { QueueSnapshot } from "@/domain/review-queue.js"
-import type { ReviewRequest } from "@/domain/review-request.js"
+import type { QueueSnapshot } from "../domain/review-queue.js"
+import type { ReviewRequest } from "../domain/review-request.js"
 
 export type QueueFilter = "current" | "all"
 

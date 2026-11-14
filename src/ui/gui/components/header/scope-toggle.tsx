@@ -1,4 +1,4 @@
-import type { QueueFilter } from "@/shared/presentation.js"
+import type { QueueFilter } from "../../../../shared/presentation.js"
 
 export function ScopeToggle(props: { filter: QueueFilter; canFilter: boolean; setFilter(filter: QueueFilter): void }) {
   const segment = (value: QueueFilter, label: string, disabled = false) => (
