@@ -5,7 +5,7 @@ import { createMemo, createSignal, Show } from "solid-js"
 import type { Store } from "solid-js/store"
 import type { QueueSnapshot } from "../../../domain/review-queue.js"
 import { filterItems, groupByRepository, type QueueFilter } from "../../../shared/presentation.js"
-import { useReviewActions } from "../review-actions.js"
+import { useReviewActions } from "../actions/review-actions.js"
 import type { TuiState } from "../state.js"
 import { EmptyState } from "./feedback/empty-state.js"
 import { ErrorLine } from "./feedback/error-line.js"
@@ -31,6 +31,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
     update: props.update,
     ordered,
     current,
+    drafts: () => props.state.drafts,
     setSelected,
     filter,
     setFilter,
@@ -46,6 +47,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
           grouped={filter() === "all"}
           selectedKey={current()?.key}
           newKeys={props.state.newKeys}
+          drafts={props.state.drafts}
           actions={actions}
         />
       </Show>

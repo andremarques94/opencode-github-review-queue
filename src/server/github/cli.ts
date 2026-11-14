@@ -1,10 +1,5 @@
-import { spawn } from "node:child_process"
 import type { QueueError, QueueErrorKind } from "../../domain/review-queue.js"
-
-export type CommandResult = {
-  stdout: string
-  stderr: string
-}
+import { type CommandResult, ExitError, type RunOptions, runProcess } from "../process.js"
 
 export class GhError extends Error {
   constructor(readonly detail: QueueError) {
@@ -12,43 +7,21 @@ export class GhError extends Error {
   }
 }
 
-export function runGh(args: readonly string[], options: { signal: AbortSignal; cwd?: string }): Promise<CommandResult> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("gh", args, {
-      ...(options.cwd ? { cwd: options.cwd } : {}),
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
-      signal: options.signal,
-      windowsHide: true,
-    })
-    let stdout = ""
-    let stderr = ""
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout = (stdout + chunk.toString("utf8")).slice(0, 16 * 1024 * 1024)
-    })
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr = (stderr + chunk.toString("utf8")).slice(0, 64 * 1024)
-    })
-    child.on("error", (error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") {
-        reject(
-          new GhError({
-            kind: "missing-gh",
-            message: "GitHub CLI (gh) was not found. Install it, then run `gh auth login`.",
-          }),
-        )
-        return
-      }
-      reject(error)
-    })
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve({ stdout, stderr })
-        return
-      }
-      reject(classifyGhError(stderr || `gh exited with status ${String(code)}`))
-    })
-  })
+export async function runGh(args: readonly string[], options: RunOptions): Promise<CommandResult> {
+  try {
+    return await runProcess("gh", args, options)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new GhError({
+        kind: "missing-gh",
+        message: "GitHub CLI (gh) was not found. Install it, then run `gh auth login`.",
+      })
+    }
+    if (error instanceof ExitError) {
+      throw classifyGhError(error.stderr || `gh exited with status ${String(error.code)}`)
+    }
+    throw error
+  }
 }
 
 const KNOWN_FAILURES: readonly { kind: QueueErrorKind; patterns: readonly string[]; message: string }[] = [
@@ -86,7 +59,7 @@ export function classifyGhError(stderr: string): GhError {
   if (!known) {
     return new GhError({
       kind: "unknown",
-      message: text ? `GitHub refresh failed: ${text.split("\n")[0]}` : "GitHub refresh failed.",
+      message: text ? `GitHub request failed: ${text.split("\n")[0]}` : "GitHub request failed.",
     })
   }
   return new GhError({

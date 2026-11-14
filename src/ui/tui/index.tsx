@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { Plugin } from "@opencode/plugin/tui"
 import { Show } from "solid-js"
+import type { ReviewDraft } from "../../domain/review-draft.js"
 import { emptySnapshot, type QueueSnapshot } from "../../domain/review-queue.js"
 import { createDiscoveryBatcher } from "../../shared/notifications/discovery-batcher.js"
 import { notificationText } from "../../shared/notifications/notification-text.js"
@@ -14,7 +15,7 @@ export default Plugin.define({
   async setup(context) {
     const options = parseOptions(context.options)
     const rpc = context.client.rpc(ReviewQueue)
-    const initial: TuiState = { ...emptySnapshot() }
+    const initial: TuiState = { ...emptySnapshot(), drafts: [] }
     const [state, updateState] = context.storage.memory<TuiState>("queue", { initial })
     const update = (snapshot: QueueSnapshot) => updateState((draft) => Object.assign(draft, snapshot))
 
@@ -27,8 +28,19 @@ export default Plugin.define({
         }
       }),
     )
+    const updateDrafts = (drafts: ReviewDraft[]) =>
+      updateState((store) => {
+        store.drafts = drafts
+      })
     void rpc.snapshot({}).then((snapshot) => update(snapshot))
-    const stopState = rpc.events.on("state", (event) => update(event.data))
+    // Another location (the review session's) may write a draft, so re-read drafts with every queue update too.
+    const loadDrafts = () => void rpc.drafts({}).then((result) => updateDrafts(result.drafts))
+    loadDrafts()
+    const stopState = rpc.events.on("state", (event) => {
+      update(event.data)
+      loadDrafts()
+    })
+    const stopDrafts = rpc.events.on("drafts", (event) => updateDrafts(event.data.drafts))
     const batcher = createDiscoveryBatcher((items) => {
       const { title, message } = notificationText(items)
       context.ui.toast.show({ title, message: `${message}  ·  /reviews`, variant: "info" })
@@ -77,6 +89,7 @@ export default Plugin.define({
 
     return () => {
       stopState()
+      stopDrafts()
       stopDiscovered()
       batcher.dispose()
       removePanel()

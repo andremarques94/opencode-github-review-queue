@@ -1,5 +1,17 @@
 // GUI bundles cannot ship CSS, and the host only compiles the Tailwind utilities it uses itself.
-export const panelStyles = `
+const badgeStyles = `
+.grq-badge {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border: 1px solid var(--border-weak-base);
+  border-radius: var(--radius-xs);
+  font-size: 10px;
+  line-height: 14px;
+}
+.grq-badge-review { border-color: var(--border-interactive-base, var(--border-weak-base)); color: var(--text-interactive-base, var(--text-base)); }
+`
+
+export const panelStyles = `${badgeStyles}
 .grq {
   display: flex;
   flex-direction: column;
@@ -176,14 +188,6 @@ export const panelStyles = `
 .grq-row-meta > span { overflow: hidden; text-overflow: ellipsis; }
 .grq-number { flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .grq-sep { flex-shrink: 0; color: var(--text-weaker); }
-.grq-badge {
-  flex-shrink: 0;
-  padding: 0 5px;
-  border: 1px solid var(--border-weak-base);
-  border-radius: var(--radius-xs);
-  font-size: 10px;
-  line-height: 14px;
-}
 .grq-row-actions { flex-shrink: 0; margin-top: -3px; opacity: 0; transition: opacity 120ms; }
 .grq-row:hover .grq-row-actions,
 .grq-row:focus-within .grq-row-actions,
@@ -203,4 +207,30 @@ export const panelStyles = `
   line-height: 18px;
 }
 .grq-empty-icon { color: var(--icon-weak-base); }
+`
+
+export const dialogStyles = `${badgeStyles}
+.grq-preview { display: flex; flex-direction: column; gap: 16px; font-size: 13px; }
+.grq-preview-meta { display: flex; align-items: center; gap: 8px; color: var(--text-weak); }
+.grq-preview-section { display: flex; flex-direction: column; gap: 8px; }
+.grq-preview-heading {
+  margin: 0;
+  color: var(--text-weak);
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.grq-preview-comment {
+  padding: 8px 10px;
+  border: 1px solid var(--border-weaker-base);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset-base);
+}
+.grq-preview-location {
+  margin-bottom: 4px;
+  color: var(--text-weak);
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+}
 `

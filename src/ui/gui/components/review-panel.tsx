@@ -1,9 +1,11 @@
 import type { Context } from "@opencode/plugin/gui"
 import { createEffect, createMemo, createSignal, Show } from "solid-js"
 import type { Store } from "solid-js/store"
+import type { ReviewDraft } from "../../../domain/review-draft.js"
 import type { QueueSnapshot } from "../../../domain/review-queue.js"
 import { filterItems, type QueueFilter } from "../../../shared/presentation.js"
 import { ReviewQueue } from "../../../shared/rpc.js"
+import { createReviewActions } from "../actions/review-actions.js"
 import { EmptyState } from "./feedback/empty-state.js"
 import { ErrorBanner } from "./feedback/error-banner.js"
 import { PanelHeader } from "./header/panel-header.js"
@@ -13,6 +15,8 @@ import { panelStyles } from "./styles.js"
 export type ReviewPanelProps = {
   context: Context
   directory: string | undefined
+  server: string
+  drafts: readonly ReviewDraft[]
   repositories: Map<string, string | undefined>
   state: Store<QueueSnapshot>
   update(snapshot: QueueSnapshot): void
@@ -22,6 +26,11 @@ export function ReviewPanel(props: ReviewPanelProps) {
   const [filter, setFilter] = createSignal<QueueFilter>("all")
   const [repository, setRepository] = createSignal<string | undefined>()
   const rpc = () => props.context.client.rpc(ReviewQueue)
+  const actions = createReviewActions({
+    context: props.context,
+    server: () => props.server,
+    directory: () => props.directory,
+  })
 
   createEffect(() => {
     const directory = props.directory
@@ -75,6 +84,8 @@ export function ReviewPanel(props: ReviewPanelProps) {
           context={props.context}
           items={items()}
           newKeys={props.state.newKeys}
+          drafts={props.drafts}
+          actions={actions}
           grouped={filter() === "all"}
           copy={copy}
         />

@@ -4,7 +4,7 @@ import { usePlugin } from "@opencode/plugin/tui"
 import { Show } from "solid-js"
 import type { Store } from "solid-js/store"
 import { type QueueFilter, refreshLabel } from "../../../../shared/presentation.js"
-import type { ReviewActions } from "../../review-actions.js"
+import type { ReviewActions } from "../../actions/review-actions.js"
 import type { TuiState } from "../../state.js"
 import { ScopeToggle } from "./scope-toggle.js"
 
