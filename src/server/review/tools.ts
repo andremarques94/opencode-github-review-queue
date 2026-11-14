@@ -1,6 +1,7 @@
 import type { ToolEditor } from "@opencode/plugin/promise/tool"
 import * as v from "valibot"
-import { type Finding, FindingFields, Verdict } from "../../domain/review-draft.js"
+import { type Finding, FindingFields, nextFinding, type ReviewDraft, Verdict } from "../../domain/review-draft.js"
+import { findingCard, nextStep } from "./instructions.js"
 import type { ReviewService } from "./review-service.js"
 
 const side = { type: "string", enum: ["LEFT", "RIGHT"] }
@@ -32,6 +33,9 @@ function parse<T>(schema: v.GenericSchema<unknown, T>, input: unknown): T {
 const describeFinding = (finding: Finding) =>
   `#${finding.id} ${finding.path}:${finding.line} (${finding.side}) ${finding.severity} [${finding.decision}]`
 
+/** A tool result that ends with what to do next, so the walkthrough stays on track. */
+const reply = (text: string, draft: ReviewDraft) => ({ content: [text, nextStep(draft)].filter(Boolean).join("\n\n") })
+
 export function addReviewTools(editor: ToolEditor, service: ReviewService): void {
   editor.namespace({
     name: "review",
@@ -50,7 +54,7 @@ export function addReviewTools(editor: ToolEditor, service: ReviewService): void
     options: { namespace: "review" },
     execute: async (input, context) => {
       const finding = await service.addFinding(context.sessionID, parse(AddInput, input))
-      return { content: `Recorded ${describeFinding(finding)}.` }
+      return reply(`Recorded ${describeFinding(finding)}.`, await service.draftForSession(context.sessionID))
     },
   })
   editor.add({
@@ -67,7 +71,7 @@ export function addReviewTools(editor: ToolEditor, service: ReviewService): void
     execute: async (input, context) => {
       const { id, ...changes } = parse(UpdateInput, input)
       const finding = await service.updateFinding(context.sessionID, id, changes)
-      return { content: `Updated ${describeFinding(finding)}.` }
+      return reply(`Updated ${describeFinding(finding)}.`, await service.draftForSession(context.sessionID))
     },
   })
   editor.add({
@@ -83,7 +87,7 @@ export function addReviewTools(editor: ToolEditor, service: ReviewService): void
     execute: async (input, context) => {
       const { id, decision } = parse(DecideInput, input)
       const finding = await service.decide(context.sessionID, id, decision)
-      return { content: `Recorded ${describeFinding(finding)}.` }
+      return reply(`Recorded ${describeFinding(finding)}.`, await service.draftForSession(context.sessionID))
     },
   })
   editor.add({
@@ -102,17 +106,38 @@ export function addReviewTools(editor: ToolEditor, service: ReviewService): void
     execute: async (input, context) => {
       const { verdict, summary } = parse(VerdictInput, input)
       const draft = await service.setVerdict(context.sessionID, verdict, summary)
-      return { content: `Verdict ${draft.verdict}. ${draft.findings.length} findings in the draft.` }
+      return reply(
+        `Verdict ${draft.verdict}. ${draft.findings.length} findings in the draft. Send the overview now without describing any finding.`,
+        draft,
+      )
     },
   })
   editor.add({
-    name: "get_draft",
-    description: "Read the current review draft, including the user's decisions so far.",
+    name: "next_finding",
+    description:
+      "Get the one finding to present next, as a card to show the user. Present only this finding, then wait for the user's decision.",
     input: { type: "object", properties: {}, additionalProperties: false },
     options: { namespace: "review" },
     execute: async (_input, context) => {
       const draft = await service.draftForSession(context.sessionID)
-      return { content: JSON.stringify(draft, null, 2) }
+      const finding = nextFinding(draft)
+      if (!finding) {
+        return reply("No finding is waiting for a decision.", draft)
+      }
+      return {
+        content: `${findingCard(draft, finding)}\n\nShow this card with a short code quote and your recommendation, ask whether to keep, edit, drop, explain, or investigate it, and end your turn. Do not mention any other finding.`,
+      }
+    },
+  })
+  editor.add({
+    name: "get_draft",
+    description:
+      "Read the whole review draft to check decisions or the final summary. Never use it to present several findings at once.",
+    input: { type: "object", properties: {}, additionalProperties: false },
+    options: { namespace: "review" },
+    execute: async (_input, context) => {
+      const draft = await service.draftForSession(context.sessionID)
+      return reply(JSON.stringify(draft, null, 2), draft)
     },
   })
 }

@@ -5,6 +5,7 @@ import { openReview, repositoryForDirectory } from "./github/repository.js"
 import { fetchReviewRequests } from "./github/review-requests.js"
 import { defaultCacheDirectory, expandHome } from "./review/checkout.js"
 import { DraftStore } from "./review/draft-store.js"
+import { nextStep } from "./review/instructions.js"
 import { rememberModel, reviewModels } from "./review/models.js"
 import { ReviewService } from "./review/review-service.js"
 import { addReviewTools } from "./review/tools.js"
@@ -112,6 +113,14 @@ export default Plugin.define({
         reported(rpcContext, () => current.reviews.post(input.key, input.allowStale, timeout(rpcContext.signal))),
     })
     const tools = await ctx.tool.transform((editor) => addReviewTools(editor, current.reviews))
+    // Restates the walkthrough's position on every model request of a review session.
+    const reminder = await ctx.session.hook("context", async (event) => {
+      const draft = await current.drafts.bySession(event.sessionID)
+      const step = draft && nextStep(draft)
+      if (step) {
+        event.system.push({ type: "text", text: step })
+      }
+    })
 
     const emit = (event: PollerEvent) => {
       if (event.type === "state") {
@@ -129,6 +138,7 @@ export default Plugin.define({
       unsubscribe()
       unsubscribeDrafts()
       await tools.dispose()
+      await reminder.dispose()
       await registration.dispose()
       current.refs -= 1
       if (current.refs === 0) {

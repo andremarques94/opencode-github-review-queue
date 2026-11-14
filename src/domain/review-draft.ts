@@ -77,6 +77,19 @@ export function pendingFindings(draft: ReviewDraft): Finding[] {
   return draft.findings.filter((finding) => finding.decision === "pending")
 }
 
+const SEVERITY_RANK: Record<Finding["severity"], number> = { blocker: 0, major: 1, minor: 2, nit: 3 }
+const CONFIDENCE_RANK: Record<Finding["confidence"], number> = { high: 0, medium: 1, low: 2 }
+
+/** The finding to walk through next: strongest blockers first, low-confidence ones last. */
+export function nextFinding(draft: ReviewDraft): Finding | undefined {
+  return pendingFindings(draft).sort(
+    (a, b) =>
+      SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
+      CONFIDENCE_RANK[a.confidence] - CONFIDENCE_RANK[b.confidence] ||
+      a.id - b.id,
+  )[0]
+}
+
 /** Why the draft cannot be posted yet, or undefined when it can. */
 export function postBlocker(draft: ReviewDraft, headSha?: string): string | undefined {
   if (draft.status === "posted") {
