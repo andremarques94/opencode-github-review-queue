@@ -110,6 +110,24 @@ your last pick selected, then prepares a local review and opens its session:
 The row shows where the review stands: _reviewing_, _N to decide_, _ready to post_, or _posted_. **Resume review**
 returns to the same session.
 
+Each finding ends with a question: **Keep**, **Edit wording**, **Drop**, **Explain**, or **Investigate**, with the
+agent's recommendation first. Click one or type a reply. Explain and Investigate answer about that finding and ask
+again.
+
+Inside a review session you can also triage without the chat:
+
+- **Desktop:** the **Review** pill above the composer shows _N of M decided_ and the verdict, with **Post review…** and
+  **Show findings**, which opens a **Findings** side tab (close it like any other tab). It lists every finding in
+  walkthrough order with its comment and decision, and buttons to keep, drop, edit the comment, ask the agent about
+  it, or read its evidence in a dialog.
+- **TUI:** the line above the composer shows the same progress; click **findings** or run `/findings` to open the list,
+  and **post review…** to post. The list shows one line per finding and opens the selected one with its comment
+  rendered as Markdown. `j`/`k` move, `y` keeps, `d` drops, `e` edits the comment (`ctrl+s` saves), `a` asks the
+  agent, `enter` shows the evidence, `p` posts, and `shift+f` toggles full screen.
+
+A decision made there is yours: the agent skips it and moves on instead of asking again. Saving an edited comment keeps
+the finding. The `review_*` tools only appear in review sessions.
+
 **Post review** shows the verdict, summary, and every retained comment, and posts only after you confirm. It refuses
 while findings are undecided, and asks again if new commits were pushed since the draft. The agent cannot post.
 After posting, the worktree is removed, and so is a clone the plugin made once no other review uses it (set

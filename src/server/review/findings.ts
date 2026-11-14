@@ -51,6 +51,24 @@ export class Findings {
     return findingIn(saved, id)
   }
 
+  /**
+   * The user's own wording from the panel. Unlike the agent's `update`, it counts as keeping the finding: the user
+   * wrote the comment that gets posted, so there is nothing left for them to approve.
+   */
+  async reword(sessionID: string, id: number, body: string): Promise<ReviewDraft> {
+    const draft = await this.editableDraft(sessionID)
+    findingIn(draft, id)
+    return this.store.update(draft.key, (next) => {
+      next.findings = next.findings.map((finding) =>
+        finding.id === id ? { ...finding, body, decision: "keep" as const } : finding,
+      )
+    })
+  }
+
+  async find(sessionID: string, id: number): Promise<Finding> {
+    return findingIn(await this.draftForSession(sessionID), id)
+  }
+
   async decide(sessionID: string, id: number, decision: Exclude<Decision, "pending">): Promise<Finding> {
     const draft = await this.editableDraft(sessionID)
     findingIn(draft, id)

@@ -1,21 +1,21 @@
 /** @jsxImportSource @opentui/solid */
 
 import { usePlugin } from "@opencode/plugin/tui"
-import type { ReviewActions } from "../actions/review-actions.js"
+import { For } from "solid-js"
 
-export function KeyHints(props: { actions: ReviewActions }) {
+export function KeyHints(props: { hints: { key: string; label: string; run: () => unknown }[] }) {
   const theme = usePlugin().theme
-  const hint = (key: string, label: string, run: () => unknown) => (
-    <text wrapMode="none" onMouseUp={() => void run()}>
-      <span style={{ fg: theme.text.base }}>{key}</span>
-      <span style={{ fg: theme.text.faint }}> {label}</span>
-    </text>
-  )
 
   return (
-    <box flexDirection="row" gap={2} marginTop={1} marginBottom={1} overflow="hidden">
-      {hint("enter", "review", props.actions.review)}
-      {hint("m", "actions", props.actions.menu)}
+    <box flexDirection="row" flexWrap="wrap" columnGap={2} marginTop={1} marginBottom={1}>
+      <For each={props.hints}>
+        {(hint) => (
+          <text wrapMode="none" flexShrink={0} onMouseUp={() => void hint.run()}>
+            <span style={{ fg: theme.text.base }}>{hint.key}</span>
+            <span style={{ fg: theme.text.faint }}> {hint.label}</span>
+          </text>
+        )}
+      </For>
     </box>
   )
 }

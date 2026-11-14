@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { type ReviewRequest, requestKey } from "../src/domain/review-request.js"
-import { ago, groupByRepository } from "../src/shared/presentation.js"
+import { ago, escapeInlineFences, fitLine, groupByRepository } from "../src/shared/presentation.js"
 
 const item = (repository: string, number: number): ReviewRequest => ({
   key: requestKey(repository, number),
@@ -33,5 +33,20 @@ describe("groupByRepository", () => {
       ["acme", "api", [1, 3]],
       ["acme", "web", [2]],
     ])
+  })
+})
+
+describe("fitLine", () => {
+  it("keeps the first non-empty line and cuts it at the end", () => {
+    expect(fitLine("\n`slice(tmp + 1)` drops the opening fence\nsecond", 20)).toBe("`slice(tmp + 1)` dr…")
+    expect(fitLine("Short.  \nmore", 20)).toBe("Short.")
+    expect(fitLine("", 20)).toBe("")
+  })
+})
+
+describe("escapeInlineFences", () => {
+  it("escapes fences inside a line and keeps fenced blocks", () => {
+    expect(escapeInlineFences('returns ("a:\\n```tsx\\nx")')).toBe('returns ("a:\\n\\`\\`\\`tsx\\nx")')
+    expect(escapeInlineFences("```ts\nconst a = 1\n  ```")).toBe("```ts\nconst a = 1\n  ```")
   })
 })

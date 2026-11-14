@@ -1,7 +1,21 @@
 import type { usePlugin } from "@opencode/plugin/tui"
+import type { FindingFlowHost } from "../../../shared/review/finding-flows.js"
 import type { ReviewFlowHost } from "../../../shared/review/flows.js"
-import { previewText } from "../../../shared/review/preview.js"
 import { ReviewQueue } from "../../../shared/rpc.js"
+import { editFindingBody } from "../components/findings/edit-finding-dialog.js"
+import { confirmPost } from "../components/post-review-dialog.js"
+
+export function createFindingFlowHost(context: ReturnType<typeof usePlugin>): FindingFlowHost {
+  const rpc = context.client.rpc(ReviewQueue)
+  return {
+    decideFinding: (request) => rpc.decideFinding(request),
+    editFinding: (request) => rpc.editFinding(request),
+    askAboutFinding: (request) => rpc.askAboutFinding(request),
+    editBody: (input) => editFindingBody(context, input),
+    questions: (sessionID) => context.client.session.form.list({ sessionID }),
+    cancelQuestion: (input) => context.client.session.form.cancel(input),
+  }
+}
 
 export function createFlowHost(context: ReturnType<typeof usePlugin>): ReviewFlowHost {
   const rpc = context.client.rpc(ReviewQueue)
@@ -12,12 +26,7 @@ export function createFlowHost(context: ReturnType<typeof usePlugin>): ReviewFlo
         message: options.message,
         label: { confirm: options.confirm },
       })) === true,
-    confirmPost: async (preview) =>
-      (await context.ui.dialog.confirm({
-        title: preview.title,
-        message: previewText(preview),
-        label: { confirm: "Post review" },
-      })) === true,
+    confirmPost: (preview) => confirmPost(context, preview),
     select: (options) =>
       context.ui.dialog.select({
         title: options.title,
