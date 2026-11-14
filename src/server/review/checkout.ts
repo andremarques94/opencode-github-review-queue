@@ -1,10 +1,11 @@
 import { existsSync } from "node:fs"
-import { mkdir } from "node:fs/promises"
+import { mkdir, rm, rmdir } from "node:fs/promises"
 import { homedir } from "node:os"
-import { dirname, join } from "node:path"
+import { dirname, isAbsolute, join, relative, sep } from "node:path"
 import * as v from "valibot"
 import { runGit } from "../git/cli.js"
 import { remoteFor } from "../git/remotes.js"
+import { linkedWorktrees, removeWorktree } from "../git/worktrees.js"
 import { runGh } from "../github/cli.js"
 import { repositoryForDirectory } from "../github/repository.js"
 
@@ -31,14 +32,22 @@ function segments(repository: string): [string, string] {
   return parsed.output
 }
 
+const clonesDirectory = (cacheDirectory: string) => join(cacheDirectory, "repos")
+const worktreesDirectory = (cacheDirectory: string) => join(cacheDirectory, "worktrees")
+
+const isInside = (path: string, root: string) => {
+  const fromRoot = relative(root, path)
+  return fromRoot !== "" && !isAbsolute(fromRoot) && fromRoot.split(sep)[0] !== ".."
+}
+
 export function managedClonePath(cacheDirectory: string, repository: string): string {
   const [owner, name] = segments(repository)
-  return join(cacheDirectory, "repos", owner, `${name}.git`)
+  return join(clonesDirectory(cacheDirectory), owner, `${name}.git`)
 }
 
 export function worktreePath(cacheDirectory: string, repository: string, number: number): string {
   const [owner, name] = segments(repository)
-  return join(cacheDirectory, "worktrees", owner, name, `pr-${number}`)
+  return join(worktreesDirectory(cacheDirectory), owner, name, `pr-${number}`)
 }
 
 export async function findCheckout(input: {
@@ -70,4 +79,44 @@ export async function cloneRepository(
   // A bare, blobless clone keeps the cache small; the worktree fetches the blobs it checks out.
   await runGh(["repo", "clone", repository, target, "--", "--bare", "--filter=blob:none"], { signal })
   return target
+}
+
+/** Removes the now empty `owner/repo` folders above `path`, stopping at `root`. */
+async function removeEmptyParents(path: string, root: string): Promise<void> {
+  for (let directory = dirname(path); isInside(directory, root); directory = dirname(directory)) {
+    const removed = await rmdir(directory).then(
+      () => true,
+      () => false,
+    )
+    if (!removed) {
+      return
+    }
+  }
+}
+
+/** Deletes a clone this plugin made once no review worktree uses it; the user's own checkouts are never touched. */
+async function removeUnusedClone(checkout: string, cacheDirectory: string, signal: AbortSignal): Promise<void> {
+  const clones = clonesDirectory(cacheDirectory)
+  if (!isInside(checkout, clones) || !existsSync(checkout)) {
+    return
+  }
+  if ((await linkedWorktrees(checkout, signal)).length > 0) {
+    return
+  }
+  await rm(checkout, { recursive: true, force: true })
+  await removeEmptyParents(checkout, clones)
+}
+
+export async function cleanUpCheckout(input: {
+  checkout: string
+  worktree: string
+  cacheDirectory: string
+  keepClones: boolean
+  signal: AbortSignal
+}): Promise<void> {
+  await removeWorktree(input.checkout, input.worktree, input.signal)
+  await removeEmptyParents(input.worktree, worktreesDirectory(input.cacheDirectory))
+  if (!input.keepClones) {
+    await removeUnusedClone(input.checkout, input.cacheDirectory, input.signal)
+  }
 }

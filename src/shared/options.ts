@@ -3,6 +3,7 @@ export type PluginOptions = {
   timeoutMs: number
   maxBackoffMs: number
   notifications: boolean
+  keepClones: boolean
   cacheDirectory?: string
   reviewGuidelines?: string
 }
@@ -19,6 +20,7 @@ export function parseOptions(input: Readonly<Record<string, unknown>>): PluginOp
     timeoutMs: Math.max(1_000, numberOption(input.timeoutMs, 20_000)),
     maxBackoffMs: Math.max(60_000, numberOption(input.maxBackoffMs, 15 * 60_000)),
     notifications: input.notifications !== false,
+    keepClones: input.keepClones === true,
     ...pathOption("cacheDirectory", input.cacheDirectory),
     ...pathOption("reviewGuidelines", input.reviewGuidelines),
   }

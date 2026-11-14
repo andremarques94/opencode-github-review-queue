@@ -1,11 +1,12 @@
 import { readFile } from "node:fs/promises"
 import type { Location, Plugin } from "@opencode/plugin"
-import { postBlocker, reviewPayload } from "../../domain/review-draft.js"
+import { postBlocker, type ReviewDraft, reviewPayload } from "../../domain/review-draft.js"
+import type { QueueSnapshot } from "../../domain/review-queue.js"
 import type { ReviewRequest } from "../../domain/review-request.js"
-import { createWorktree, removeWorktree } from "../git/worktrees.js"
+import { createWorktree } from "../git/worktrees.js"
 import { fetchPullRequest, postReview, viewerLogin } from "../github/pull-request.js"
 import { DEFAULT_GUIDELINES, reviewInstructions, startPrompt } from "./agent/instructions.js"
-import { cloneRepository, findCheckout, managedClonePath, worktreePath } from "./checkout.js"
+import { cleanUpCheckout, cloneRepository, findCheckout, managedClonePath, worktreePath } from "./checkout.js"
 import type { DraftStore } from "./draft-store.js"
 
 type SessionModel = NonNullable<NonNullable<Parameters<Plugin.Context["session"]["create"]>[0]>["model"]>
@@ -13,15 +14,24 @@ type SessionModel = NonNullable<NonNullable<Parameters<Plugin.Context["session"]
 export type StartResult =
   | { status: "started" | "resumed"; sessionID: string }
   | { status: "needs-clone"; repository: string; directory: string }
-export type PostResult = { status: "posted"; url: string } | { status: "stale"; reason: string }
+export type PostResult =
+  | { status: "posted"; url: string; cleanupWarning?: string }
+  | { status: "stale"; reason: string }
 
 const INSTRUCTIONS_KEY = "github-review-queue"
 
 /** Starting, resetting, and posting a review: the panel's side of the workflow. */
 export class ReviewSessions {
+  private pruning: Promise<void> | undefined
+
   constructor(
     private readonly store: DraftStore,
-    private readonly options: { cacheDirectory: string; guidelinesFile?: string | undefined; timeoutMs: number },
+    private readonly options: {
+      cacheDirectory: string
+      guidelinesFile?: string | undefined
+      keepClones: boolean
+      timeoutMs: number
+    },
   ) {}
 
   async start(input: {
@@ -105,7 +115,7 @@ export class ReviewSessions {
       return { status: "started", sessionID: session.id }
     } catch (error) {
       await this.store.remove(item.key)
-      await removeWorktree(checkout, worktree, AbortSignal.timeout(this.options.timeoutMs)).catch(() => undefined)
+      await this.cleanUp({ checkout, worktree }, AbortSignal.timeout(this.options.timeoutMs)).catch(() => undefined)
       throw error
     }
   }
@@ -116,7 +126,7 @@ export class ReviewSessions {
       return
     }
     if (draft.status !== "posted") {
-      await removeWorktree(draft.checkout, draft.worktree, signal)
+      await this.cleanUp(draft, signal)
     }
     await this.store.remove(key)
   }
@@ -140,8 +150,60 @@ export class ReviewSessions {
       saved.status = "posted"
       saved.postedUrl = url
     })
-    await removeWorktree(draft.checkout, draft.worktree, signal).catch(() => undefined)
-    return { status: "posted", url }
+    const cleanupWarning = await this.cleanUp(draft, signal).then(
+      () => undefined,
+      (error: unknown) =>
+        `The review was posted, but its worktree at ${draft.worktree} could not be removed: ${error instanceof Error ? error.message : String(error)}`,
+    )
+    return { status: "posted", url, ...(cleanupWarning ? { cleanupWarning } : {}) }
+  }
+
+  /**
+   * Forgets the drafts of pull requests that left the queue: posted ones right away, unposted ones once the pull
+   * request is closed or merged. An open pull request keeps its draft, since the user may still post it.
+   */
+  /** Prunes after each successful queue refresh, one run at a time. */
+  pruneAfterRefresh(state: QueueSnapshot, signal: AbortSignal): Promise<void> {
+    if (state.loading || state.error || this.pruning) {
+      return this.pruning ?? Promise.resolve()
+    }
+    const queued = new Set(state.items.map((item) => item.key))
+    this.pruning = this.prune(queued, signal)
+      .catch(() => undefined)
+      .finally(() => {
+        this.pruning = undefined
+      })
+    return this.pruning
+  }
+
+  async prune(queued: ReadonlySet<string>, signal: AbortSignal): Promise<void> {
+    for (const draft of await this.store.list()) {
+      if (queued.has(draft.key) || !(await this.finished(draft, signal))) {
+        continue
+      }
+      if (draft.status !== "posted") {
+        await this.cleanUp(draft, signal).catch(() => undefined)
+      }
+      await this.store.remove(draft.key)
+    }
+  }
+
+  private async finished(draft: ReviewDraft, signal: AbortSignal): Promise<boolean> {
+    if (draft.status === "posted") {
+      return true
+    }
+    const pullRequest = await fetchPullRequest(draft.repository, draft.number, signal).catch(() => undefined)
+    return pullRequest !== undefined && pullRequest.state !== "OPEN"
+  }
+
+  private cleanUp(draft: Pick<ReviewDraft, "checkout" | "worktree">, signal: AbortSignal): Promise<void> {
+    return cleanUpCheckout({
+      checkout: draft.checkout,
+      worktree: draft.worktree,
+      cacheDirectory: this.options.cacheDirectory,
+      keepClones: this.options.keepClones,
+      signal,
+    })
   }
 
   private async guidelines(): Promise<string> {

@@ -92,9 +92,13 @@ export function useReviewActions(input: {
         if (!draft) {
           return
         }
-        const url = await postReviewFlow(host, draft)
-        if (url) {
-          context.ui.toast.show({ message: `Review posted · ${url}`, variant: "success" })
+        const posted = await postReviewFlow(host, draft)
+        if (!posted) {
+          return
+        }
+        context.ui.toast.show({ message: `Review posted · ${posted.url}`, variant: "success" })
+        if (posted.cleanupWarning) {
+          context.ui.toast.show({ message: posted.cleanupWarning, variant: "warning" })
         }
       }, "Could not post the review"),
     reset: () =>

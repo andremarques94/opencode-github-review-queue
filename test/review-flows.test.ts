@@ -94,7 +94,7 @@ describe("startReviewFlow", () => {
 
 describe("postReviewFlow", () => {
   it("posts after the preview is confirmed", async () => {
-    expect(await postReviewFlow(host(), draft)).toBe("https://github.com/review")
+    expect(await postReviewFlow(host(), draft)).toEqual({ status: "posted", url: "https://github.com/review" })
   })
 
   it("refuses a draft that still has blockers", async () => {
@@ -107,7 +107,7 @@ describe("postReviewFlow", () => {
       .mockResolvedValueOnce({ status: "stale", reason: "New commits were pushed." })
       .mockResolvedValueOnce({ status: "posted", url: "https://github.com/review" })
 
-    expect(await postReviewFlow(host({ postReview }), draft)).toBe("https://github.com/review")
+    expect(await postReviewFlow(host({ postReview }), draft)).toMatchObject({ url: "https://github.com/review" })
     expect(postReview).toHaveBeenLastCalledWith({ key: draft.key, allowStale: true })
 
     const declined = host({

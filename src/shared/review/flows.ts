@@ -70,7 +70,9 @@ export async function startReviewFlow(
   return second.status === "needs-clone" ? undefined : second.sessionID
 }
 
-export async function postReviewFlow(host: ReviewFlowHost, draft: ReviewDraft): Promise<string | undefined> {
+export type PostedReview = Extract<RpcOutput<"postReview">, { status: "posted" }>
+
+export async function postReviewFlow(host: ReviewFlowHost, draft: ReviewDraft): Promise<PostedReview | undefined> {
   const blocker = postBlocker(draft)
   if (blocker) {
     throw new Error(blocker)
@@ -80,7 +82,7 @@ export async function postReviewFlow(host: ReviewFlowHost, draft: ReviewDraft): 
   }
   const first = await host.postReview({ key: draft.key, allowStale: false })
   if (first.status === "posted") {
-    return first.url
+    return first
   }
   const anyway = await host.confirm({
     title: "Post anyway?",
@@ -92,7 +94,7 @@ export async function postReviewFlow(host: ReviewFlowHost, draft: ReviewDraft): 
     return undefined
   }
   const second = await host.postReview({ key: draft.key, allowStale: true })
-  return second.status === "posted" ? second.url : undefined
+  return second.status === "posted" ? second : undefined
 }
 
 export async function resetReviewFlow(host: ReviewFlowHost, draft: ReviewDraft): Promise<boolean> {

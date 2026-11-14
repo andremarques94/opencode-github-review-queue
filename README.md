@@ -112,10 +112,16 @@ returns to the same session.
 
 **Post review** shows the verdict, summary, and every retained comment, and posts only after you confirm. It refuses
 while findings are undecided, and asks again if new commits were pushed since the draft. The agent cannot post.
-After posting, the worktree is removed.
+After posting, the worktree is removed, and so is a clone the plugin made once no other review uses it (set
+`keepClones` to keep clones for faster re-reviews). If cleanup fails, the review still counts as posted and a warning
+names the folder left behind.
 
 **Reset review** deletes the draft and its worktree. The session's chat history and anything already on GitHub
 stay.
+
+When a reviewed pull request leaves the queue, its draft is forgotten once the review was posted or the pull request
+was closed or merged, and any worktree left is cleaned up. A pull request that is still open keeps its draft, so you
+can still post it.
 
 The default review guidelines cover readability, naming, dead code, duplication, error handling, tests, and types,
 in a direct tone. Point `reviewGuidelines` at a Markdown file to replace them with your own quality bar and tone.
@@ -138,7 +144,8 @@ Set `"notifications": false` to keep the in-app toasts but silence native ones.
         "maxBackoffMs": 900000,
         "notifications": true,
         "cacheDirectory": "~/.cache/opencode-github-review-queue",
-        "reviewGuidelines": "/path/to/review-guidelines.md"
+        "reviewGuidelines": "/path/to/review-guidelines.md",
+        "keepClones": false
       }
     }
   ]
@@ -153,6 +160,7 @@ Set `"notifications": false` to keep the in-app toasts but silence native ones.
 | `notifications` | `true`    | Native and terminal-attention notifications                       |
 | `cacheDirectory` | `$XDG_CACHE_HOME/opencode-github-review-queue` | Plugin-made clones and review worktrees; falls back to `~/.cache` |
 | `reviewGuidelines` | built-in | Path to a Markdown file that replaces the review quality bar and tone |
+| `keepClones` | `false` | Keep the plugin's clones after their last review instead of deleting them |
 
 
 ## Development

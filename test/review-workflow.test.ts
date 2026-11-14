@@ -78,7 +78,7 @@ beforeEach(async () => {
   saved = new Map()
   store = new DraftStore(storage(saved))
   findings = new Findings(store, 1_000)
-  sessions = new ReviewSessions(store, { cacheDirectory: "/cache", timeoutMs: 1_000 })
+  sessions = new ReviewSessions(store, { cacheDirectory: "/cache", keepClones: false, timeoutMs: 1_000 })
   await store.put(base)
 })
 
@@ -159,12 +159,54 @@ describe("review workflow", () => {
 
   it("posts what another location recorded in shared storage", async () => {
     // The review session's location records findings; the panel's location, with its own store, posts.
-    const panel = new ReviewSessions(new DraftStore(storage(saved)), { cacheDirectory: "/cache", timeoutMs: 1_000 })
+    const panel = new ReviewSessions(new DraftStore(storage(saved)), {
+      cacheDirectory: "/cache",
+      keepClones: false,
+      timeoutMs: 1_000,
+    })
     await findings.add("ses_1", finding)
     await findings.decide("ses_1", 1, "keep")
     await findings.setVerdict("ses_1", "COMMENT", "One nit.")
 
     expect(await panel.post(base.key, false, signal)).toMatchObject({ status: "posted" })
+  })
+
+  it("still reports a posted review when its cleanup fails", async () => {
+    await findings.setVerdict("ses_1", "APPROVE", "Clean.")
+    checkout.removeWorktree.mockRejectedValue(new Error("busy"))
+
+    expect(await sessions.post(base.key, false, signal)).toMatchObject({
+      status: "posted",
+      cleanupWarning: expect.stringMatching(/could not be removed: busy/),
+    })
+  })
+
+  it("forgets drafts of pull requests that left the queue once they are posted, closed, or merged", async () => {
+    const draft = (number: number, status: ReviewDraft["status"]) => ({
+      ...base,
+      key: `acme/api#${number}`,
+      number,
+      sessionID: `ses_${number}`,
+      worktree: `/cache/worktrees/acme/api/pr-${number}`,
+      status,
+    })
+    await store.put(draft(8, "posted"))
+    await store.put(draft(9, "ready"))
+    await store.put(draft(10, "ready"))
+    github.fetchPullRequest.mockImplementation(async (_repository: string, number: number) => ({
+      headRefOid: "abc123",
+      state: number === 9 ? "MERGED" : "OPEN",
+    }))
+
+    const queue = { items: [{ key: base.key }], newKeys: [], initialized: true, stale: false }
+    await sessions.pruneAfterRefresh({ ...queue, loading: true } as never, signal)
+    expect(await store.list()).toHaveLength(4)
+
+    await sessions.pruneAfterRefresh({ ...queue, loading: false } as never, signal)
+
+    expect((await store.list()).map((entry) => entry.key).sort()).toEqual(["acme/api#10", base.key])
+    expect(checkout.removeWorktree).toHaveBeenCalledTimes(1)
+    expect(checkout.removeWorktree).toHaveBeenCalledWith(base.checkout, "/cache/worktrees/acme/api/pr-9", signal)
   })
 
   it("reset removes the worktree and forgets the draft", async () => {

@@ -15,6 +15,11 @@ async function registeredWorktrees(directory: string, signal: AbortSignal): Prom
     .map((line) => line.slice(prefix.length))
 }
 
+/** The worktrees added to `directory`, without the repository's own main or bare entry. */
+export async function linkedWorktrees(directory: string, signal: AbortSignal): Promise<string[]> {
+  return (await registeredWorktrees(directory, signal)).slice(1)
+}
+
 /** Fetches the pull request head into a detached worktree and returns the commit it checked out. */
 export async function createWorktree(input: {
   checkout: string

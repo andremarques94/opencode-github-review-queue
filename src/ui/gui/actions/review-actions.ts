@@ -41,14 +41,18 @@ export function createReviewActions(input: {
       }, "Could not start the review"),
     post: (draft) =>
       attempt(async () => {
-        const url = await postReviewFlow(host, draft)
-        if (url) {
-          context.toast.show({
-            variant: "success",
-            title: "Review posted",
-            description: url,
-            actions: [{ label: "Open", run: () => context.system.openExternal(url) }],
-          })
+        const posted = await postReviewFlow(host, draft)
+        if (!posted) {
+          return
+        }
+        context.toast.show({
+          variant: "success",
+          title: "Review posted",
+          description: posted.url,
+          actions: [{ label: "Open", run: () => context.system.openExternal(posted.url) }],
+        })
+        if (posted.cleanupWarning) {
+          context.toast.show({ variant: "error", title: "Cleanup failed", description: posted.cleanupWarning })
         }
       }, "Could not post the review"),
     reset: (draft) =>

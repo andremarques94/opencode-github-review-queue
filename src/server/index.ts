@@ -56,7 +56,13 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
   const reviews = new ReviewSessions(drafts, {
     cacheDirectory: options.cacheDirectory ? expandHome(options.cacheDirectory) : defaultCacheDirectory(),
     guidelinesFile: options.reviewGuidelines && expandHome(options.reviewGuidelines),
+    keepClones: options.keepClones,
     timeoutMs: options.timeoutMs,
+  })
+  poller.on((event) => {
+    if (event.type === "state") {
+      void reviews.pruneAfterRefresh(event.state, AbortSignal.timeout(options.timeoutMs))
+    }
   })
   return { poller, drafts, reviews, findings: new Findings(drafts, options.timeoutMs), refs: 0 }
 }

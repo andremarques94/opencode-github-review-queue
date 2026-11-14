@@ -50,7 +50,7 @@ export const ReviewQueue = Rpc.define({
     postReview: {
       input: v.strictObject({ key: v.string(), allowStale: v.boolean() }),
       output: v.variant("status", [
-        v.object({ status: v.literal("posted"), url: v.string() }),
+        v.object({ status: v.literal("posted"), url: v.string(), cleanupWarning: v.exactOptional(v.string()) }),
         v.object({ status: v.literal("stale"), reason: v.string() }),
       ]),
       errors,
