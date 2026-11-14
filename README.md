@@ -1,58 +1,88 @@
 # OpenCode GitHub Review Queue
 
-An OpenCode v2 plugin that polls GitHub for open pull requests where the authenticated user is a requested reviewer.
-It provides a compact queue in both the TUI and OpenCode Desktop, plus one-time review-request notifications.
+See GitHub review requests without leaving OpenCode.
 
-## Requirements and compatibility
+This plugin adds a pending-review queue to the OpenCode TUI and Desktop app. It uses the authenticated GitHub CLI
+account, keeps the last successful queue available while offline, and notifies you when a new review request appears.
 
-- OpenCode **v2.3.0** (the version this plugin is built and verified against).
-- Node.js 22 or newer and pnpm.
-- [GitHub CLI](https://cli.github.com/) authenticated with an account that can read the relevant repositories.
-- OpenCode Desktop's GUI plugin API is experimental. Rebuild and re-test before using a different OpenCode minor
-  version.
+## Features
 
-The server, TUI, and Desktop parts use their separate official v2.3.0 APIs. The TUI is not assumed to support Desktop
-components, and the Desktop bundle is built with OpenCode's required Vite preset.
+- One shared review queue for the TUI and Desktop.
+- Current-repository and all-repositories views.
+- Native and in-app notifications for new requests.
+- Direct GitHub opening and copy actions.
+- Paginated GitHub search with timeouts, backoff, and rate-limit handling.
+- Persistent state that avoids duplicate notifications after restarting OpenCode.
 
-## Architecture
+## Requirements
 
-The source tree follows the plugin's runtime boundaries:
+- OpenCode 2.3.0.
+- [GitHub CLI](https://cli.github.com/) installed and authenticated.
 
-- `src/domain/`: review queue data and comparison rules.
-- `src/server/`: the OpenCode server entry, GitHub CLI adapter, persistence, and polling state machine.
-- `src/rpc/`: the contract shared by the server and clients.
-- `src/shared/`: runtime-neutral options and presentation helpers.
-- `src/tui/`: the TUI entry, local state, and TUI components.
-- `src/gui/`: the Desktop entry and Solid components.
-
-The poller remains local rather than wrapping a generic retry package. Retry libraries can calculate backoff, but this
-module must also persist successful baselines, detect queue transitions, coalesce overlapping refreshes, honor GitHub's
-rate-reset timestamp, and schedule indefinitely. A dependency would not remove those responsibilities or materially
-reduce the implementation.
-
-## Install
+Verify GitHub authentication before enabling the plugin:
 
 ```sh
-pnpm install
-pnpm build
 gh auth status
 ```
 
-If `gh auth status` fails, run:
+If needed, authenticate with:
 
 ```sh
 gh auth login
 ```
 
-Add the plugin's absolute directory to the **global** `~/.config/opencode/opencode.jsonc`. Desktop loads GUI plugins
-only from global OpenCode configuration.
+## Installation
+
+Add the package to the `plugins` array in your global `~/.config/opencode/opencode.jsonc`:
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
   "plugins": [
     {
-      "package": "/absolute/path/to/opencode-github-review-queue",
+      "package": "opencode-github-review-queue"
+    }
+  ]
+}
+```
+
+OpenCode downloads the package and loads its server, TUI, and Desktop integrations automatically. The global
+configuration is required for the Desktop integration.
+
+OpenCode watches its configuration. Run `/reload` only if you need to force an already-open client to reload.
+
+## Usage
+
+### TUI
+
+Run `/reviews` or choose **Show GitHub review requests** from the command palette.
+
+- `j` / `k`: move selection
+- `Enter`: open the selected pull request
+- `c`: copy the pull request number
+- `y`: copy `owner/repo#123`
+- `u`: copy the URL
+- `f`: switch between the current repository and all repositories
+- `r`: refresh
+- `Shift+F`: toggle full screen
+
+Clipboard actions use OSC 52 and require terminal support.
+
+### Desktop
+
+Open the pinned **Review requests** side-panel tab or choose **Show GitHub review requests** from the command palette.
+Use **Current** and **All** to change scope. Click a review request to open it, or use its menu to copy its number,
+qualified reference, or URL.
+
+## Configuration
+
+Pass options with the object form of the plugin entry:
+
+```jsonc
+{
+  "plugins": [
+    {
+      "package": "opencode-github-review-queue",
       "options": {
         "intervalMs": 60000,
         "timeoutMs": 20000,
@@ -64,69 +94,55 @@ only from global OpenCode configuration.
 }
 ```
 
-OpenCode watches configuration and local plugin builds. Use `/reload` if you want to force a reload.
+- `intervalMs`: polling interval. Defaults to 60 seconds; minimum 10 seconds.
+- `timeoutMs`: timeout for GitHub CLI requests. Defaults to 20 seconds.
+- `maxBackoffMs`: maximum delay after transient failures. Defaults to 15 minutes.
+- `notifications`: enables native and terminal-attention notifications. Defaults to `true`; in-app toasts remain
+  enabled when this is `false`.
 
-### Options
+Desktop notifications also follow **Settings > Notifications**. TUI notifications follow its attention preferences.
 
-- `intervalMs`: polling interval; defaults to 60 seconds and has a 10-second minimum.
-- `timeoutMs`: timeout for each GitHub CLI request; defaults to 20 seconds.
-- `maxBackoffMs`: maximum transient-failure backoff; defaults to 15 minutes.
-- `notifications`: set to `false` to suppress this plugin's attention/native notifications. In-app toasts still show.
+## How it works
 
-Desktop native notifications additionally follow **Settings > Notifications**. Terminal notifications follow the
-TUI's configured attention preferences.
+The server plugin runs one non-overlapping poller using GitHub's
+`is:pr is:open review-requested:@me` search. The first successful refresh establishes a silent baseline. Later queue
+additions produce notifications, including a request that leaves the queue and is requested again.
 
-## Use
+Malformed, partial, timed-out, or failed responses never replace the last successful queue. The plugin spawns `gh`
+directly without a shell and does not read or persist GitHub tokens.
 
-### TUI
+## Development
 
-Open a session, then run `/reviews` or choose **Show GitHub review requests** from the command palette.
+```sh
+git clone https://github.com/andremarques94/opencode-github-review-queue.git
+cd opencode-github-review-queue
+pnpm install
+pnpm check
+```
 
-- `j` / `k`: move selection
-- `Enter`: open the selected PR on GitHub
-- `c`: copy its numeric PR number
-- `y`: copy `owner/repo#123`
-- `u`: copy its URL
-- `f`: switch between the current repository and all repositories
-- `r`: refresh manually
-- `Shift+F`: toggle full-screen presentation
+To load a development checkout, replace the package name in the global configuration with the checkout's absolute
+path. Run `pnpm build` after changing the Desktop integration.
 
-TUI copying uses the terminal's OSC 52 clipboard support. A terminal that blocks OSC 52 cannot accept these copy
-actions.
+The source tree is organized by runtime boundary:
 
-### Desktop
+- `src/server`: server entry, GitHub adapter, and polling state machine
+- `src/rpc`: shared RPC contract
+- `src/tui`: TUI entry and components
+- `src/gui`: Desktop entry and components
+- `src/domain`: review queue domain types and comparison rules
+- `src/shared`: runtime-neutral options and presentation helpers
 
-Open the pinned GitHub review tab in a session's side panel, or choose **Show GitHub review requests** from the command
-palette. Use **Current** / **All** to filter, click a row to open it, and use its menu to copy the PR number,
-`owner/repo#123`, or URL.
-
-The panel requests the SDK's compact `narrow` side-panel width. The host still lets the user resize it.
-
-## Behaviour and reliability
-
-- One server-side poller supplies both panels and notifications, preventing separate UI polling loops.
-- The query is `is:pr is:open review-requested:@me`, not assignment. GraphQL pagination fetches 100 results per page
-  without a per-PR metadata request.
-- The first successful refresh is silent. The complete queue and last successful refresh are persisted as the baseline.
-- A PR that is observed leaving the queue and later returning is notified again.
-- Failed, timed-out, malformed, or partial responses never replace the last successful queue or persisted baseline.
-- Refreshes cannot overlap. Transient failures use bounded exponential backoff, and reported rate-limit reset times are
-  respected.
-- `gh` is spawned directly with an argument array; no PR content is interpolated into a shell command. Tokens are
-  neither read nor persisted by the plugin.
-- Polling and subprocesses stop when the server plugin unloads.
+Releases use Conventional Commits and Release Please. Merging a release PR creates a GitHub release and publishes the
+same version to npm.
 
 ## Limitations
 
-- GitHub's search API caps one search at 1,000 results. Pagination is complete up to that service limit.
-- Polling cannot detect a review request that is both added and removed entirely between two successful refreshes.
-- OpenCode Desktop deduplicates native notifications across windows using the plugin's event ID. The v2.3.0 TUI
-  attention API has no equivalent event-ID facility, so multiple TUI clients attached to the same server may each show
-  an alert. Desktop's window API also has no supported "active window only" toast target, so an in-app toast can appear
-  in each open Desktop window; the native notification remains deduplicated.
-- Separate OpenCode server processes cannot share a live poller. Each process uses its own plugin runtime, though each
-  retains a durable baseline to suppress restart duplicates.
-- The current-repository filter is unavailable when `gh repo view` cannot resolve the session directory; the all-repos
-  queue remains usable.
-- The TUI has no client-side URL-opening API in v2.3.0. Its Open action runs `gh pr view --web` where the OpenCode
-  server is running, which is normally the local machine; Desktop opens the URL directly on the client.
+- GitHub search returns at most 1,000 results.
+- Polling cannot observe a request added and removed entirely between successful refreshes.
+- Separate OpenCode server processes maintain separate live pollers and persisted baselines.
+- The current-repository filter requires `gh repo view` to resolve the session directory.
+- TUI URL opening runs `gh pr view --web` on the machine hosting the OpenCode server.
+
+## License
+
+[MIT](LICENSE)

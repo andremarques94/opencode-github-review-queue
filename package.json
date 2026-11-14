@@ -3,7 +3,16 @@
   "version": "0.1.0",
   "description": "Pending GitHub review requests for OpenCode TUI and Desktop",
   "type": "module",
-  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andremarques94/opencode-github-review-queue.git"
+  },
+  "homepage": "https://github.com/andremarques94/opencode-github-review-queue#readme",
+  "bugs": {
+    "url": "https://github.com/andremarques94/opencode-github-review-queue/issues"
+  },
+  "keywords": ["opencode", "github", "pull-request", "code-review", "plugin"],
   "packageManager": "pnpm@12.18.0",
   "exports": {
     ".": "./src/server/index.ts",
@@ -16,8 +25,12 @@
     "build": "vite build",
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
     "lint": "biome check src test vite.config.ts vitest.config.ts",
+    "prepack": "pnpm build",
     "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc --noEmit"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "engines": { "node": ">=22" },
   "dependencies": { "@opencode/plugin": "2.3.0" },

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "fd0f64c8fe4cbbe956b602e60fe6074c7689ea81",
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "package-name": "opencode-github-review-queue",
+      "include-v-in-tag": true
+    }
+  }
+}
