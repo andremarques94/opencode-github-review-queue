@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v0.2.1...opencode-github-review-queue-v0.3.0) (2026-11-14)
+
+
+### Features
+
+* review pull requests from the queue panel ([#20](https://github.com/andremarques94/opencode-github-review-queue/issues/20)) ([3102630](https://github.com/andremarques94/opencode-github-review-queue/commit/3102630fb73a61d7854e4edfdf732ac028be1047))
+
 ## [0.2.1](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v0.2.0...opencode-github-review-queue-v0.2.1) (2026-11-14)
 
 
