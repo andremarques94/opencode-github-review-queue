@@ -21,10 +21,20 @@
       "preset": "recommended",
       "style": {
         "useBlockStatements": "error"
-      },
-      "suspicious": {
-        "noExplicitAny": "off"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/ui/tui/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noStaticElementInteractions": "off",
+            "useKeyWithMouseEvents": "off"
+          }
+        }
+      }
+    }
+  ]
 }

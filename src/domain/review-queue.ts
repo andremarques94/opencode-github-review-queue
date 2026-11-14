@@ -1,23 +1,14 @@
-export interface ReviewRequest {
-  key: string
-  repository: string
-  number: number
-  title: string
-  author: string
-  draft: boolean
-  createdAt: string
-  url: string
-}
+import type { ReviewRequest } from "./review-request.js"
 
 export type QueueErrorKind = "missing-gh" | "authentication" | "offline" | "rate-limit" | "unavailable" | "unknown"
 
-export interface QueueError {
+export type QueueError = {
   kind: QueueErrorKind
   message: string
   retryAt?: string
 }
 
-export interface QueueSnapshot {
+export type QueueSnapshot = {
   items: ReviewRequest[]
   newKeys: string[]
   initialized: boolean
@@ -27,12 +18,11 @@ export interface QueueSnapshot {
   error?: QueueError
 }
 
-export interface PersistedQueue {
+export type PersistedQueue = {
   version: 1
   initialized: boolean
   items: ReviewRequest[]
   lastSuccessAt?: string
-  /** When each recently queued request was last observed, keyed by request key. */
   seen?: Record<string, string>
 }
 
@@ -43,10 +33,6 @@ export const emptySnapshot = (): QueueSnapshot => ({
   loading: true,
   stale: false,
 })
-
-export function requestKey(repository: string, number: number): string {
-  return `${repository.toLowerCase()}#${number}`
-}
 
 export function compareQueues(previous: readonly ReviewRequest[], current: readonly ReviewRequest[]) {
   const previousKeys = new Set(previous.map((item) => item.key))

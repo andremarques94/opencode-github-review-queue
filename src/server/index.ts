@@ -1,21 +1,12 @@
 import { Plugin } from "@opencode/plugin"
 import type { PersistedQueue } from "../domain/review-queue.js"
-import { ReviewQueue } from "../rpc/review-queue.js"
 import { parseOptions } from "../shared/options.js"
-import { fetchReviewRequests, openReview, repositoryForDirectory } from "./github.js"
+import { ReviewQueue } from "../shared/rpc.js"
+import { openReview, repositoryForDirectory } from "./github/repository.js"
+import { fetchReviewRequests } from "./github/review-requests.js"
 import { type PollerEvent, ReviewQueuePoller } from "./review-queue-poller.js"
 
 let shared: { poller: ReviewQueuePoller; refs: number; started?: Promise<void> } | undefined
-
-function savedQueue(value: unknown): PersistedQueue | undefined {
-  if (typeof value !== "object" || value === null) {
-    return undefined
-  }
-  const candidate = value as Partial<PersistedQueue>
-  return candidate.version === 1 && typeof candidate.initialized === "boolean" && Array.isArray(candidate.items)
-    ? (candidate as PersistedQueue)
-    : undefined
-}
 
 export default Plugin.define({
   id: "github-review-queue",
@@ -25,8 +16,8 @@ export default Plugin.define({
       const poller = new ReviewQueuePoller(
         fetchReviewRequests,
         {
-          load: async () => savedQueue(await ctx.storage.get("baseline")),
-          save: (value) => ctx.storage.set("baseline", value as any),
+          load: async () => (await ctx.storage.get("baseline")) as PersistedQueue | undefined,
+          save: (value) => ctx.storage.set("baseline", value),
         },
         options,
       )
@@ -36,8 +27,8 @@ export default Plugin.define({
     current.refs += 1
 
     const registration = await ctx.rpc.register(ReviewQueue, {
-      snapshot: async () => current.poller.snapshot() as any,
-      refresh: async () => (await current.poller.refresh()) as any,
+      snapshot: async () => current.poller.snapshot(),
+      refresh: () => current.poller.refresh(),
       repository: async (input, rpcContext) => {
         const directory = (input as { directory: string }).directory
         const signal = AbortSignal.any([rpcContext.signal, AbortSignal.timeout(options.timeoutMs)])
@@ -57,9 +48,9 @@ export default Plugin.define({
 
     const emit = (event: PollerEvent) => {
       if (event.type === "state") {
-        void registration.events.emit("state", event.state as any)
+        void registration.events.emit("state", event.state)
       } else {
-        void registration.events.emit("discovered", event as any)
+        void registration.events.emit("discovered", event)
       }
     }
     const unsubscribe = current.poller.on(emit)

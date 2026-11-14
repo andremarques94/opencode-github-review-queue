@@ -1,39 +1,50 @@
+<div align="center">
+
 # OpenCode GitHub Review Queue
 
-See GitHub review requests without leaving OpenCode.
+**Every pull request waiting on your review, inside OpenCode.**
 
-This plugin adds a pending-review queue to the OpenCode TUI and Desktop app. It uses the authenticated GitHub CLI
-account, keeps the last successful queue available while offline, and notifies you when a new review request appears.
+A review queue for the TUI and the Desktop app, so checking GitHub never
+breaks your flow.
+
+[![CI](https://github.com/andremarques94/opencode-github-review-queue/actions/workflows/ci.yml/badge.svg)](https://github.com/andremarques94/opencode-github-review-queue/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![OpenCode 2.3](https://img.shields.io/badge/OpenCode-2.3-000000.svg)](https://opencode.ai)
+[![npm](https://img.shields.io/npm/v/opencode-github-review-queue.svg)](https://www.npmjs.com/package/opencode-github-review-queue)
+
+
+</div>
+
+## Why
+
+Review requests arrive when you are in the middle of something. The usual answer is another tab, another search,
+another context switch. This plugin puts them where you already are: one queue, grouped by repository, kept current
+in the background, with a notification only when something actually needs you.
 
 ## Features
 
-- One shared review queue for the TUI and Desktop.
-- Current-repository and all-repositories views.
-- Native and in-app notifications for new requests.
-- Direct GitHub opening and copy actions.
-- Paginated GitHub search with timeouts, backoff, and rate-limit handling.
-- Persistent state that avoids duplicate notifications after restarting OpenCode.
+- **One queue, both surfaces.** The TUI panel and the Desktop side panel read the same server-side poller.
+- **Grouped by repository**, with a **Current** scope for the repository in the session.
+- **Notifications that respect you.** New requests are batched into one notification; a request that briefly drops
+  out of GitHub's search index does not notify twice.
+- **Keyboard and mouse.** Move, open, copy, filter and refresh, or click and right-click.
+- **Stays useful offline.** The last successful queue is shown, marked stale, while GitHub is unreachable.
+- **Polite to the API.** Paginated search, request timeouts, bounded backoff, and GitHub's rate-limit reset time.
+- **No tokens touched.** The GitHub CLI is spawned directly; the plugin reads and stores no credentials.
 
 ## Requirements
 
-- OpenCode 2.3.0.
-- [GitHub CLI](https://cli.github.com/) installed and authenticated.
-
-Verify GitHub authentication before enabling the plugin:
+- **OpenCode 2.3.0** (the version this plugin is built and tested against).
+- **[GitHub CLI](https://cli.github.com/)** installed and authenticated.
 
 ```sh
-gh auth status
-```
-
-If needed, authenticate with:
-
-```sh
+gh auth status   # if this fails:
 gh auth login
 ```
 
-## Installation
+## Install
 
-Add the package to the `plugins` array in your global `~/.config/opencode/opencode.jsonc`:
+Add the plugin to the `plugins` array in your **global** `~/.config/opencode/opencode.jsonc`:
 
 ```jsonc
 {
@@ -46,37 +57,43 @@ Add the package to the `plugins` array in your global `~/.config/opencode/openco
 }
 ```
 
-OpenCode downloads the package and loads its server, TUI, and Desktop integrations automatically. The global
-configuration is required for the Desktop integration.
+OpenCode downloads the package and loads its server, TUI and Desktop parts. The global config is required for the
+Desktop part. Run `/reload` if an already-open client does not pick it up.
 
-OpenCode watches its configuration. Run `/reload` only if you need to force an already-open client to reload.
+Then open the queue with `/reviews`, or **Show GitHub review requests** from the command palette.
 
 ## Usage
 
 ### TUI
 
-Run `/reviews` or choose **Show GitHub review requests** from the command palette.
+| Key       | Action                                                        |
+| --------- | ------------------------------------------------------------- |
+| `j` / `k` | Move the selection                                            |
+| `Enter`   | Open the pull request on GitHub                               |
+| `m`       | Actions menu: open, copy number, reference, or URL            |
+| `c`       | Copy the number                                               |
+| `y`       | Copy `owner/repo#123`                                         |
+| `u`       | Copy the URL                                                  |
+| `f`       | Switch between **Current** and **All**                        |
+| `r`       | Refresh                                                       |
+| `Shift+F` | Toggle full screen                                            |
+| `Esc`     | Close the panel                                               |
 
-- `j` / `k`: move selection
-- `Enter`: open the selected pull request
-- `c`: copy the pull request number
-- `y`: copy `owner/repo#123`
-- `u`: copy the URL
-- `f`: switch between the current repository and all repositories
-- `r`: refresh
-- `Shift+F`: toggle full screen
-
-Clipboard actions use OSC 52 and require terminal support.
+With mouse support enabled in your terminal, click a request to select it, click it again to open it, and right-click
+for the actions menu. **All** / **Current** and the footer hints are clickable, and the wheel scrolls the list.
+Copying uses OSC 52, so it needs a terminal that supports it.
 
 ### Desktop
 
-Open the pinned **Review requests** side-panel tab or choose **Show GitHub review requests** from the command palette.
-Use **Current** and **All** to change scope. Click a review request to open it, or use its menu to copy its number,
-qualified reference, or URL.
+Open the pinned **Review requests** tab in the side panel, or **Show GitHub review requests** from the command palette.
+Click a row to open it, or use its menu to copy. New requests also raise a toast with a **Show reviews** button.
+
+### Notifications
+
+Desktop notifications follow **Settings › Notifications**; TUI notifications follow the TUI's attention settings.
+Set `"notifications": false` to keep the in-app toasts but silence native ones.
 
 ## Configuration
-
-Pass options with the object form of the plugin entry:
 
 ```jsonc
 {
@@ -94,60 +111,37 @@ Pass options with the object form of the plugin entry:
 }
 ```
 
-- `intervalMs`: polling interval. Defaults to 60 seconds; minimum 10 seconds.
-- `timeoutMs`: timeout for GitHub CLI requests. Defaults to 20 seconds.
-- `maxBackoffMs`: maximum delay after transient failures. Defaults to 15 minutes.
-- `notifications`: enables native and terminal-attention notifications. Defaults to `true`; in-app toasts remain
-  enabled when this is `false`.
+| Option          | Default   | Description                                                       |
+| --------------- | --------- | ----------------------------------------------------------------- |
+| `intervalMs`    | `60000`   | Poll interval; minimum 10 seconds                                 |
+| `timeoutMs`     | `20000`   | Timeout for each GitHub CLI request                               |
+| `maxBackoffMs`  | `900000`  | Longest delay after transient failures                            |
+| `notifications` | `true`    | Native and terminal-attention notifications                       |
 
-Desktop notifications also follow **Settings > Notifications**. TUI notifications follow its attention preferences.
-
-## How it works
-
-The server plugin runs one non-overlapping poller using GitHub's
-`is:pr is:open review-requested:@me` search. The first successful refresh establishes a silent baseline. Later queue
-additions produce notifications. A request that leaves the queue notifies again only after it has been gone for an
-hour, so brief gaps in GitHub's search index do not re-notify. Simultaneous requests are grouped into one notification,
-and the Desktop toast's **Show reviews** button opens the queue.
-
-Malformed, partial, timed-out, or failed responses never replace the last successful queue. The plugin spawns `gh`
-directly without a shell and does not read or persist GitHub tokens.
 
 ## Development
 
 ```sh
 git clone https://github.com/andremarques94/opencode-github-review-queue.git
 cd opencode-github-review-queue
-pnpm install
-pnpm check
+pnpm install     # also installs the Husky hooks
+pnpm check       # typecheck, lint, test, build
+pnpm fallow      # full repository audit
 ```
 
-The install step also configures the repository's Husky hooks. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the complete contribution workflow.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the hook and commit conventions.
 
-To load a development checkout, replace the package name in the global configuration with the checkout's absolute
-path. Run `pnpm build` after changing the Desktop integration.
+Releases use Conventional Commits and Release Please: merging the release PR tags the version and publishes it to
+npm.
 
-The source tree is organized by runtime boundary:
+## Contributing
 
-- `src/server`: server entry, GitHub adapter, and polling state machine
-- `src/rpc`: shared RPC contract
-- `src/tui`: TUI entry and components
-- `src/gui`: Desktop entry and components
-- `src/domain`: review queue domain types and comparison rules
-- `src/shared`: runtime-neutral options and presentation helpers
-
-Releases use Conventional Commits and Release Please. Merging a release PR creates a GitHub release and publishes the
-same version to npm.
-
-## Limitations
-
-- GitHub search returns at most 1,000 results.
-- Polling cannot observe a request added and removed entirely between successful refreshes.
-- Separate OpenCode server processes maintain separate live pollers and persisted baselines.
-- The current-repository filter requires `gh repo view` to resolve the session directory.
-- TUI URL opening runs `gh pr view --web` on the machine hosting the OpenCode server.
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, hooks and commit style.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © André Marques
+
+---
+
+<sub>An independent plugin. Not built by, or affiliated with, the OpenCode team.</sub>

@@ -1,15 +1,7 @@
 {
   "$schema": "./node_modules/fallow/schema.json",
-  "entry": [
-    "src/server/index.ts",
-    "src/tui/index.tsx",
-    "src/gui/index.tsx",
-    "src/rpc/review-queue.ts"
-  ],
+  "entry": ["src/ui/gui/index.tsx"],
   "rules": {
     "private-type-leaks": "warn"
-  },
-  "audit": {
-    "gate": "new-only"
   }
 }

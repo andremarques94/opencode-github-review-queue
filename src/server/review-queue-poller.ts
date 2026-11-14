@@ -1,5 +1,11 @@
-import type { PersistedQueue, QueueError, QueueSnapshot, ReviewRequest } from "../domain/review-queue.js"
-import { compareQueues, emptySnapshot } from "../domain/review-queue.js"
+import {
+  compareQueues,
+  emptySnapshot,
+  type PersistedQueue,
+  type QueueError,
+  type QueueSnapshot,
+} from "../domain/review-queue.js"
+import type { ReviewRequest } from "../domain/review-request.js"
 
 export interface QueuePersistence {
   load(): Promise<PersistedQueue | undefined>
@@ -9,7 +15,6 @@ export interface PollerOptions {
   intervalMs: number
   timeoutMs: number
   maxBackoffMs: number
-  /** A request must be absent this long before its return notifies again. Absorbs GitHub search flapping. */
   renotifyAfterMs?: number
 }
 
@@ -149,7 +154,6 @@ export class ReviewQueuePoller {
     return this.options.renotifyAfterMs ?? DEFAULT_RENOTIFY_AFTER_MS
   }
 
-  /** Additions that were not observed within the renotify window; brief search-index gaps are not new requests. */
   private newlyQueued(candidates: readonly ReviewRequest[], now: number): ReviewRequest[] {
     return candidates.filter((item) => {
       const last = this.seen.get(item.key)
