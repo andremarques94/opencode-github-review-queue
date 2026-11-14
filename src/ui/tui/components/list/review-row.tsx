@@ -26,14 +26,18 @@ export function ReviewRow(props: {
       ? { background: theme.background.raised.base, bar: theme.text.action.primary.base, wrap: "word" as const }
       : { background: undefined, bar: theme.text.faint, wrap: "none" as const }
 
-  const press = (event: MouseEvent) => {
-    const wasSelected = props.selected
+  // Dialogs open on release: opened on press, the release would land outside them and close them again.
+  let pressedSelected = false
+  const press = () => {
+    pressedSelected = props.selected
     props.actions.select(props.item.key)
+  }
+  const release = (event: MouseEvent) => {
     if (event.button === RIGHT_BUTTON) {
       void props.actions.menu()
       return
     }
-    if (wasSelected) {
+    if (pressedSelected) {
       void props.actions.review()
     }
   }
@@ -45,6 +49,7 @@ export function ReviewRow(props: {
       marginTop={Math.min(props.index, 1)}
       backgroundColor={look().background}
       onMouseDown={press}
+      onMouseUp={release}
       onMouseOver={() => setHovered(true)}
       onMouseOut={() => setHovered(false)}
     >

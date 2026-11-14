@@ -74,7 +74,7 @@ Then open the queue with `/reviews`, or **Show GitHub review requests** from the
 | `Enter`   | Start a review of the selected pull request, or resume it     |
 | `o`       | Open the pull request on GitHub                               |
 | `p`       | Post the selected review, after a preview                     |
-| `m`       | Actions menu: open, copy, post, or reset                      |
+| `m`       | Actions menu, listing every action with its key               |
 | `y`       | Copy `owner/repo#123`                                         |
 | `u`       | Copy the URL                                                  |
 | `f`       | Switch between **Current** and **All**                        |
@@ -82,8 +82,9 @@ Then open the queue with `/reviews`, or **Show GitHub review requests** from the
 | `Shift+F` | Toggle full screen                                            |
 | `Esc`     | Close the panel                                               |
 
-With mouse support enabled in your terminal, click a request to select it, click it again to start or resume its
-review, and right-click for the actions menu. **All** / **Current** and the footer hints are clickable, and the wheel scrolls the list.
+The footer only shows `enter` and `m`, so it fits a narrow panel; the actions menu lists the rest. With mouse support
+enabled in your terminal, click a request to select it, click it again to start or resume its review, and right-click
+for the actions menu. **All** / **Current** and the footer hints are clickable, and the wheel scrolls the list.
 Copying uses OSC 52, so it needs a terminal that supports it.
 
 ### Desktop
