@@ -8,8 +8,21 @@
     "exactOptionalPropertyTypes": true,
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
-    "types": ["node", "vitest/globals"],
-    "skipLibCheck": true
+    "types": [
+      "node",
+      "vitest/globals"
+    ],
+    "skipLibCheck": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
   },
-  "include": ["src", "test", "vite.config.ts", "vitest.config.ts"]
+  "include": [
+    "src",
+    "test",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ]
 }

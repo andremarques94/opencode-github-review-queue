@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
-import type { PersistedQueue, ReviewRequest } from "../src/domain/review-queue.js"
-import { compareQueues, requestKey } from "../src/domain/review-queue.js"
-import { type QueuePersistence, ReviewQueuePoller } from "../src/server/review-queue-poller.js"
+import { compareQueues, type PersistedQueue } from "@/domain/review-queue.js"
+import { type ReviewRequest, requestKey } from "@/domain/review-request.js"
+import { type QueuePersistence, ReviewQueuePoller } from "@/server/review-queue-poller.js"
 
 const item = (repository: string, number: number): ReviewRequest => ({
   key: requestKey(repository, number),

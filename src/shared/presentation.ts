@@ -1,4 +1,5 @@
-import type { QueueSnapshot, ReviewRequest } from "../domain/review-queue.js"
+import type { QueueSnapshot } from "@/domain/review-queue.js"
+import type { ReviewRequest } from "@/domain/review-request.js"
 
 export type QueueFilter = "current" | "all"
 
@@ -48,7 +49,6 @@ export interface RepositoryGroup {
   items: ReviewRequest[]
 }
 
-/** Groups requests by repository, keeping the first-seen order of repositories and of requests within each. */
 export function groupByRepository(items: readonly ReviewRequest[]): RepositoryGroup[] {
   const groups = new Map<string, RepositoryGroup>()
   for (const item of items) {

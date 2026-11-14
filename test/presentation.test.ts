@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
-import type { ReviewRequest } from "../src/domain/review-queue.js"
-import { requestKey } from "../src/domain/review-queue.js"
-import { ago, groupByRepository } from "../src/shared/presentation.js"
+import { type ReviewRequest, requestKey } from "@/domain/review-request.js"
+import { ago, groupByRepository } from "@/shared/presentation.js"
 
 const item = (repository: string, number: number): ReviewRequest => ({
   key: requestKey(repository, number),
