@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { ReviewRequest } from "../src/domain/review-queue.js"
-import { requestKey } from "../src/domain/review-queue.js"
-import { createDiscoveryBatcher, notificationText } from "../src/shared/notifications.js"
+import { type ReviewRequest, requestKey } from "@/domain/review-request.js"
+import { createDiscoveryBatcher } from "@/shared/notifications/discovery-batcher.js"
+import { notificationText } from "@/shared/notifications/notification-text.js"
 
 const item = (repository: string, number: number, title = `PR ${number}`): ReviewRequest => ({
   key: requestKey(repository, number),

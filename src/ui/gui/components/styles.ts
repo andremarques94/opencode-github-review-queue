@@ -1,5 +1,4 @@
-// The GUI bundle ships no CSS and the host's Tailwind build only contains the utilities the app itself uses, so the
-// panel styles itself here with the host's theme variables. Every selector is scoped under `.grq`.
+// GUI bundles cannot ship CSS, and the host only compiles the Tailwind utilities it uses itself.
 export const panelStyles = `
 .grq {
   display: flex;

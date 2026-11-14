@@ -1,9 +1,9 @@
 import type { Context } from "@opencode/plugin/gui"
 import { Show } from "solid-js"
-import type { ReviewRequest } from "../../domain/review-queue.js"
-import { ago, fullReference } from "../../shared/presentation.js"
+import type { ReviewRequest } from "@/domain/review-request.js"
+import { ago, fullReference } from "@/shared/presentation.js"
 
-interface ReviewRowProps {
+export interface ReviewRowProps {
   context: Context
   item: ReviewRequest
   isNew: boolean

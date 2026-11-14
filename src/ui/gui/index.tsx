@@ -1,10 +1,11 @@
 import { Command, MenuItem, Panel, type PanelTab, Plugin } from "@opencode/plugin/gui"
 import { createStore } from "solid-js/store"
-import type { QueueSnapshot, ReviewRequest } from "../domain/review-queue.js"
-import { emptySnapshot } from "../domain/review-queue.js"
-import { ReviewQueue } from "../rpc/review-queue.js"
-import { createDiscoveryBatcher, notificationText } from "../shared/notifications.js"
-import { parseOptions } from "../shared/options.js"
+import { emptySnapshot, type QueueSnapshot } from "@/domain/review-queue.js"
+import type { ReviewRequest } from "@/domain/review-request.js"
+import { createDiscoveryBatcher } from "@/shared/notifications/discovery-batcher.js"
+import { notificationText } from "@/shared/notifications/notification-text.js"
+import { parseOptions } from "@/shared/options.js"
+import { ReviewQueue } from "@/shared/rpc.js"
 import { ReviewPanel } from "./components/review-panel.js"
 
 export default Plugin.define({
@@ -24,8 +25,8 @@ export default Plugin.define({
 
     void rpc()
       .snapshot({})
-      .then((snapshot) => update(snapshot as unknown as QueueSnapshot))
-    const stopState = rpc().events.on("state", (event) => update(event.data as unknown as QueueSnapshot))
+      .then((snapshot) => update(snapshot as QueueSnapshot))
+    const stopState = rpc().events.on("state", (event) => update(event.data as QueueSnapshot))
     const openPanel = () => {
       const session = ctx.sessions.current() ?? ctx.sessions.list()[0]
       if (session) {
@@ -42,7 +43,6 @@ export default Plugin.define({
       })
       if (options.notifications) {
         const session = ctx.sessions.current() ?? ctx.sessions.list()[0]
-        // Every window batches the same events, so the sorted keys plus the hour identify one notification app-wide.
         const keys = items.map((item) => item.key).sort()
         void ctx.attention.notify({
           title,
