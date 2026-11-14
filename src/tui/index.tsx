@@ -4,6 +4,7 @@ import { Show } from "solid-js"
 import type { QueueSnapshot, ReviewRequest } from "../domain/review-queue.js"
 import { emptySnapshot } from "../domain/review-queue.js"
 import { ReviewQueue } from "../rpc/review-queue.js"
+import { createDiscoveryBatcher, notificationText } from "../shared/notifications.js"
 import { parseOptions } from "../shared/options.js"
 import { ReviewPanel } from "./components/review-panel.js"
 import type { TuiState } from "./state.js"
@@ -28,18 +29,20 @@ export default Plugin.define({
     )
     void rpc.snapshot({}).then((snapshot) => update(snapshot as unknown as QueueSnapshot))
     const stopState = rpc.events.on("state", (event) => update(event.data as unknown as QueueSnapshot))
-    const stopDiscovered = rpc.events.on("discovered", (event) => {
-      const item = (event.data as { item: ReviewRequest }).item
-      const message = `${item.repository} #${item.number} — ${item.title}`
-      context.ui.toast.show({ title: "Review requested", message, variant: "info" })
+    const batcher = createDiscoveryBatcher((items) => {
+      const { title, message } = notificationText(items)
+      context.ui.toast.show({ title, message: `${message}  ·  /reviews`, variant: "info" })
       if (options.notifications) {
         void context.attention.notify({
-          title: "Review requested",
+          title,
           message,
           notification: { when: "blurred" },
           sound: { name: "default", when: "blurred" },
         })
       }
+    })
+    const stopDiscovered = rpc.events.on("discovered", (event) => {
+      batcher.push((event.data as { item: ReviewRequest }).item)
     })
 
     const removePanel = context.ui.slot({
@@ -75,6 +78,7 @@ export default Plugin.define({
     return () => {
       stopState()
       stopDiscovered()
+      batcher.dispose()
       removePanel()
     }
   },

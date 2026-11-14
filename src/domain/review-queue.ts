@@ -32,6 +32,8 @@ export interface PersistedQueue {
   initialized: boolean
   items: ReviewRequest[]
   lastSuccessAt?: string
+  /** When each recently queued request was last observed, keyed by request key. */
+  seen?: Record<string, string>
 }
 
 export const emptySnapshot = (): QueueSnapshot => ({

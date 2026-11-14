@@ -9,7 +9,11 @@ export interface PollerOptions {
   intervalMs: number
   timeoutMs: number
   maxBackoffMs: number
+  /** A request must be absent this long before its return notifies again. Absorbs GitHub search flapping. */
+  renotifyAfterMs?: number
 }
+
+const DEFAULT_RENOTIFY_AFTER_MS = 60 * 60_000
 export interface FetchResult {
   items: ReviewRequest[]
   retryAt?: string
@@ -30,6 +34,7 @@ export class ReviewQueuePoller {
   private controller: AbortController | undefined
   private stopped = false
   private failures = 0
+  private seen = new Map<string, number>()
 
   constructor(
     private readonly fetchQueue: FetchQueue,
@@ -56,6 +61,16 @@ export class ReviewQueuePoller {
         loading: true,
         stale: false,
         ...(saved.lastSuccessAt ? { lastSuccessAt: saved.lastSuccessAt } : {}),
+      }
+      const fallback = saved.lastSuccessAt ? Date.parse(saved.lastSuccessAt) : this.now()
+      for (const item of saved.items) {
+        this.seen.set(item.key, fallback)
+      }
+      for (const [key, at] of Object.entries(saved.seen ?? {})) {
+        const time = Date.parse(at)
+        if (Number.isFinite(time)) {
+          this.seen.set(key, time)
+        }
       }
     }
     this.emit({ type: "state", state: this.snapshot() })
@@ -87,24 +102,30 @@ export class ReviewQueuePoller {
     try {
       const result = await this.fetchQueue(this.controller.signal)
       const firstSuccess = !this.state.initialized
-      const { added } = compareQueues(this.state.items, result.items)
-      const timestamp = new Date(this.now()).toISOString()
+      const now = this.now()
+      const timestamp = new Date(now).toISOString()
+      const added = firstSuccess ? [] : this.newlyQueued(compareQueues(this.state.items, result.items).added, now)
+      const seen = this.recordSeen(result.items, now)
       const nextState: QueueSnapshot = {
         items: result.items,
-        newKeys: firstSuccess ? [] : added.map((item) => item.key),
+        newKeys: added.map((item) => item.key),
         initialized: true,
         loading: false,
         stale: false,
         lastSuccessAt: timestamp,
       }
-      await this.persistence.save({ version: 1, initialized: true, items: result.items, lastSuccessAt: timestamp })
+      await this.persistence.save({
+        version: 1,
+        initialized: true,
+        items: result.items,
+        lastSuccessAt: timestamp,
+        seen,
+      })
       this.failures = 0
       this.state = nextState
       this.emit({ type: "state", state: this.snapshot() })
-      if (!firstSuccess) {
-        for (const item of added) {
-          this.emit({ type: "discovered", item, eventID: `${item.key}:${timestamp}` })
-        }
+      for (const item of added) {
+        this.emit({ type: "discovered", item, eventID: `${item.key}:${timestamp}` })
       }
       this.schedule(Math.max(this.options.intervalMs, this.delayFromRetryAt(result.retryAt) ?? 0))
     } catch (error) {
@@ -122,6 +143,33 @@ export class ReviewQueuePoller {
       this.controller = undefined
     }
     return this.snapshot()
+  }
+
+  private get renotifyAfterMs(): number {
+    return this.options.renotifyAfterMs ?? DEFAULT_RENOTIFY_AFTER_MS
+  }
+
+  /** Additions that were not observed within the renotify window; brief search-index gaps are not new requests. */
+  private newlyQueued(candidates: readonly ReviewRequest[], now: number): ReviewRequest[] {
+    return candidates.filter((item) => {
+      const last = this.seen.get(item.key)
+      return last === undefined || now - last > this.renotifyAfterMs
+    })
+  }
+
+  private recordSeen(items: readonly ReviewRequest[], now: number): Record<string, string> {
+    for (const item of items) {
+      this.seen.set(item.key, now)
+    }
+    const persisted: Record<string, string> = {}
+    for (const [key, at] of this.seen) {
+      if (now - at > this.renotifyAfterMs) {
+        this.seen.delete(key)
+      } else {
+        persisted[key] = new Date(at).toISOString()
+      }
+    }
+    return persisted
   }
 
   private errorDetail(error: unknown, timedOut: boolean): QueueError {
