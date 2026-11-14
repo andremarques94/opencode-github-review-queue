@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import type { QueueError, QueueErrorKind } from "@/domain/review-queue.js"
+import type { QueueError, QueueErrorKind } from "../../domain/review-queue.js"
 
 export interface CommandResult {
   stdout: string

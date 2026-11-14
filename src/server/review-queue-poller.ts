@@ -4,8 +4,8 @@ import {
   type PersistedQueue,
   type QueueError,
   type QueueSnapshot,
-} from "@/domain/review-queue.js"
-import type { ReviewRequest } from "@/domain/review-request.js"
+} from "../domain/review-queue.js"
+import type { ReviewRequest } from "../domain/review-request.js"
 
 export interface QueuePersistence {
   load(): Promise<PersistedQueue | undefined>

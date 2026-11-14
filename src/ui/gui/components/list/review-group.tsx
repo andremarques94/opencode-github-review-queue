@@ -1,6 +1,6 @@
 import type { Context } from "@opencode/plugin/gui"
 import { For, Show } from "solid-js"
-import type { RepositoryGroup } from "@/shared/presentation.js"
+import type { RepositoryGroup } from "../../../../shared/presentation.js"
 import { ReviewRow } from "./review-row.js"
 
 export function ReviewGroup(props: {

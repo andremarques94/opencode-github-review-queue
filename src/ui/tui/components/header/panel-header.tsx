@@ -3,9 +3,9 @@
 import { usePlugin } from "@opencode/plugin/tui"
 import { Show } from "solid-js"
 import type { Store } from "solid-js/store"
-import { type QueueFilter, refreshLabel } from "@/shared/presentation.js"
-import type { ReviewActions } from "@/ui/tui/review-actions.js"
-import type { TuiState } from "@/ui/tui/state.js"
+import { type QueueFilter, refreshLabel } from "../../../../shared/presentation.js"
+import type { ReviewActions } from "../../review-actions.js"
+import type { TuiState } from "../../state.js"
 import { ScopeToggle } from "./scope-toggle.js"
 
 export function PanelHeader(props: {

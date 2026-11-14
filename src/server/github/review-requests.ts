@@ -1,4 +1,4 @@
-import { type ReviewRequest, requestKey } from "@/domain/review-request.js"
+import { type ReviewRequest, requestKey } from "../../domain/review-request.js"
 import { GhError, runGh } from "./cli.js"
 
 const QUERY = `query($endCursor: String) {

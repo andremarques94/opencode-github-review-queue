@@ -2,8 +2,8 @@
 
 import { usePlugin } from "@opencode/plugin/tui"
 import { For, Show } from "solid-js"
-import type { RepositoryGroup } from "@/shared/presentation.js"
-import type { ReviewActions } from "@/ui/tui/review-actions.js"
+import type { RepositoryGroup } from "../../../../shared/presentation.js"
+import type { ReviewActions } from "../../review-actions.js"
 import { ReviewRow } from "./review-row.js"
 
 export function ReviewGroup(props: {

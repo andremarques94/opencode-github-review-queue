@@ -15,9 +15,9 @@ review in the TUI and Desktop app.
 UI components live one per file, grouped by role (`header/`, `list/`, `feedback/`). A directory with a single file
 should not exist; keep that file in its parent instead.
 
-Import siblings and children relatively (`./header/panel-header.js`). Anything that would need `../` uses the
-`@/` alias for `src/` instead (for example `@/domain/review-request.js`), configured in `tsconfig.json` and the
-Vite and Vitest configs.
+Use relative imports (`./header/panel-header.js`, `../../shared/rpc.js`). OpenCode loads these sources with a
+resolver that honours neither `tsconfig.json` paths nor `package.json` imports, so an alias such as `@/` fails at
+load time even when TypeScript, Vite and Vitest accept it. Adding an alias means adding a build step first.
 
 Keep runtime-specific code out of `src/domain` and `src/shared`. `src/server/github/cli.ts` spawns `gh` without a
 shell; never interpolate pull request data into a command or persist credentials.

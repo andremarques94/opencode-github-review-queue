@@ -1,4 +1,4 @@
-import type { ReviewRequest } from "@/domain/review-request.js"
+import type { ReviewRequest } from "../../domain/review-request.js"
 import { runGh } from "./cli.js"
 
 export async function repositoryForDirectory(directory: string, signal: AbortSignal): Promise<string | undefined> {

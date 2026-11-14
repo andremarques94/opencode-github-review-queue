@@ -2,8 +2,8 @@
 
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { createEffect, For } from "solid-js"
-import type { RepositoryGroup } from "@/shared/presentation.js"
-import type { ReviewActions } from "@/ui/tui/review-actions.js"
+import type { RepositoryGroup } from "../../../../shared/presentation.js"
+import type { ReviewActions } from "../../review-actions.js"
 import { ReviewGroup } from "./review-group.js"
 import { rowID } from "./review-row.js"
 

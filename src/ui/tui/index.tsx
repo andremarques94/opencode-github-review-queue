@@ -1,12 +1,12 @@
 /** @jsxImportSource @opentui/solid */
 import { Plugin } from "@opencode/plugin/tui"
 import { Show } from "solid-js"
-import { emptySnapshot, type QueueSnapshot } from "@/domain/review-queue.js"
-import type { ReviewRequest } from "@/domain/review-request.js"
-import { createDiscoveryBatcher } from "@/shared/notifications/discovery-batcher.js"
-import { notificationText } from "@/shared/notifications/notification-text.js"
-import { parseOptions } from "@/shared/options.js"
-import { ReviewQueue } from "@/shared/rpc.js"
+import { emptySnapshot, type QueueSnapshot } from "../../domain/review-queue.js"
+import type { ReviewRequest } from "../../domain/review-request.js"
+import { createDiscoveryBatcher } from "../../shared/notifications/discovery-batcher.js"
+import { notificationText } from "../../shared/notifications/notification-text.js"
+import { parseOptions } from "../../shared/options.js"
+import { ReviewQueue } from "../../shared/rpc.js"
 import { ReviewPanel } from "./components/review-panel.js"
 import type { TuiState } from "./state.js"
 
