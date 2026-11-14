@@ -12,7 +12,13 @@
   "bugs": {
     "url": "https://github.com/andremarques94/opencode-github-review-queue/issues"
   },
-  "keywords": ["opencode", "github", "pull-request", "code-review", "plugin"],
+  "keywords": [
+    "opencode",
+    "github",
+    "pull-request",
+    "code-review",
+    "plugin"
+  ],
   "packageManager": "pnpm@12.18.0",
   "exports": {
     ".": "./src/server/index.ts",
@@ -20,20 +26,39 @@
     "./gui-experimental": "./dist/gui-experimental.cjs",
     "./rpc": "./src/rpc/review-queue.ts"
   },
-  "files": ["src", "dist", "README.md"],
+  "files": [
+    "src",
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "vite build",
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
+    "fallow": "fallow",
+    "fallow:audit": "fallow audit",
     "lint": "biome check src test vite.config.ts vitest.config.ts",
     "prepack": "pnpm build",
+    "prepare": "husky",
     "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc --noEmit"
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
+  },
+  "lint-staged": {
+    "*.{cjs,js,json,jsonc,jsx,mjs,ts,tsx}": "biome check --write --no-errors-on-unmatched"
   },
   "publishConfig": {
     "access": "public"
   },
-  "engines": { "node": ">=22" },
-  "dependencies": { "@opencode/plugin": "2.3.0" },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.3.0"
+  },
   "peerDependencies": {
     "@opentui/core": ">=0.8.4",
     "@opentui/solid": ">=0.8.4",
@@ -41,9 +66,14 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.7",
+    "@commitlint/cli": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4",
     "@opentui/core": "0.8.4",
     "@opentui/solid": "0.8.4",
     "@types/node": "24.10.1",
+    "fallow": "3.42.0",
+    "husky": "9.1.7",
+    "lint-staged": "17.6.0",
     "solid-js": "1.9.19",
     "typescript": "5.9.3",
     "vite": "7.2.2",

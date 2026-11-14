@@ -120,6 +120,9 @@ pnpm install
 pnpm check
 ```
 
+The install step also configures the repository's Husky hooks. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the complete contribution workflow.
+
 To load a development checkout, replace the package name in the global configuration with the checkout's absolute
 path. Run `pnpm build` after changing the Desktop integration.
 
