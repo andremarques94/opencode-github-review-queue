@@ -1,30 +1,35 @@
-import type { ReviewRequest } from "./review-request.js"
+import * as v from "valibot"
+import { ReviewRequest } from "./review-request.js"
 
-export type QueueErrorKind = "missing-gh" | "authentication" | "offline" | "rate-limit" | "unavailable" | "unknown"
+const QueueErrorKind = v.picklist(["missing-gh", "authentication", "offline", "rate-limit", "unavailable", "unknown"])
+export type QueueErrorKind = v.InferOutput<typeof QueueErrorKind>
 
-export type QueueError = {
-  kind: QueueErrorKind
-  message: string
-  retryAt?: string
-}
+const QueueError = v.object({
+  kind: QueueErrorKind,
+  message: v.string(),
+  retryAt: v.exactOptional(v.string()),
+})
+export type QueueError = v.InferOutput<typeof QueueError>
 
-export type QueueSnapshot = {
-  items: ReviewRequest[]
-  newKeys: string[]
-  initialized: boolean
-  loading: boolean
-  stale: boolean
-  lastSuccessAt?: string
-  error?: QueueError
-}
+export const QueueSnapshot = v.object({
+  items: v.array(ReviewRequest),
+  newKeys: v.array(v.string()),
+  initialized: v.boolean(),
+  loading: v.boolean(),
+  stale: v.boolean(),
+  lastSuccessAt: v.exactOptional(v.string()),
+  error: v.exactOptional(QueueError),
+})
+export type QueueSnapshot = v.InferOutput<typeof QueueSnapshot>
 
-export type PersistedQueue = {
-  version: 1
-  initialized: boolean
-  items: ReviewRequest[]
-  lastSuccessAt?: string
-  seen?: Record<string, string>
-}
+export const PersistedQueue = v.object({
+  version: v.literal(1),
+  initialized: v.boolean(),
+  items: v.array(ReviewRequest),
+  lastSuccessAt: v.exactOptional(v.string()),
+  seen: v.exactOptional(v.record(v.string(), v.string())),
+})
+export type PersistedQueue = v.InferOutput<typeof PersistedQueue>
 
 export const emptySnapshot = (): QueueSnapshot => ({
   items: [],

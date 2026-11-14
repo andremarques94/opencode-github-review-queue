@@ -1,5 +1,5 @@
 import type { QueueSnapshot } from "../../domain/review-queue.js"
 
-export interface TuiState extends QueueSnapshot {
+export type TuiState = QueueSnapshot & {
   repository?: string
 }

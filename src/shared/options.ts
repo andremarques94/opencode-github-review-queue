@@ -1,4 +1,4 @@
-export interface PluginOptions {
+export type PluginOptions = {
   intervalMs: number
   timeoutMs: number
   maxBackoffMs: number

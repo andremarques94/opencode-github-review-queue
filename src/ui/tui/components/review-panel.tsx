@@ -13,7 +13,7 @@ import { PanelHeader } from "./header/panel-header.js"
 import { KeyHints } from "./key-hints.js"
 import { ReviewList } from "./list/review-list.js"
 
-export interface ReviewPanelProps {
+export type ReviewPanelProps = {
   panel: PanelInput
   state: Store<TuiState>
   update(state: QueueSnapshot): void

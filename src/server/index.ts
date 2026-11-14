@@ -1,5 +1,4 @@
 import { Plugin } from "@opencode/plugin"
-import type { PersistedQueue } from "../domain/review-queue.js"
 import { parseOptions } from "../shared/options.js"
 import { ReviewQueue } from "../shared/rpc.js"
 import { openReview, repositoryForDirectory } from "./github/repository.js"
@@ -16,7 +15,7 @@ export default Plugin.define({
       const poller = new ReviewQueuePoller(
         fetchReviewRequests,
         {
-          load: async () => (await ctx.storage.get("baseline")) as PersistedQueue | undefined,
+          load: () => ctx.storage.get("baseline"),
           save: (value) => ctx.storage.set("baseline", value),
         },
         options,
@@ -30,13 +29,11 @@ export default Plugin.define({
       snapshot: async () => current.poller.snapshot(),
       refresh: () => current.poller.refresh(),
       repository: async (input, rpcContext) => {
-        const directory = (input as { directory: string }).directory
         const signal = AbortSignal.any([rpcContext.signal, AbortSignal.timeout(options.timeoutMs)])
-        return { repository: (await repositoryForDirectory(directory, signal)) ?? null }
+        return { repository: (await repositoryForDirectory(input.directory, signal)) ?? null }
       },
       open: async (input, rpcContext) => {
-        const key = (input as { key: string }).key
-        const item = current.poller.snapshot().items.find((candidate) => candidate.key === key)
+        const item = current.poller.snapshot().items.find((candidate) => candidate.key === input.key)
         if (!item) {
           throw new Error("That review request is no longer in the queue. Refresh and try again.")
         }
@@ -49,9 +46,9 @@ export default Plugin.define({
     const emit = (event: PollerEvent) => {
       if (event.type === "state") {
         void registration.events.emit("state", event.state)
-      } else {
-        void registration.events.emit("discovered", event)
+        return
       }
+      void registration.events.emit("discovered", event)
     }
     const unsubscribe = current.poller.on(emit)
     current.started ??= current.poller.start()

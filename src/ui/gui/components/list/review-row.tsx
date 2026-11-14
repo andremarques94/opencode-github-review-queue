@@ -3,7 +3,7 @@ import { Show } from "solid-js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
 import { ago, fullReference } from "../../../../shared/presentation.js"
 
-export interface ReviewRowProps {
+export type ReviewRowProps = {
   context: Context
   item: ReviewRequest
   isNew: boolean

@@ -42,7 +42,7 @@ export function ago(createdAt: string, now = Date.now()): string {
   return value === "now" ? "just now" : `${value} ago`
 }
 
-export interface RepositoryGroup {
+export type RepositoryGroup = {
   repository: string
   owner: string
   name: string

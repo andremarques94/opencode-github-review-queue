@@ -1,3 +1,4 @@
+import * as v from "valibot"
 import { type ReviewRequest, requestKey } from "../../domain/review-request.js"
 import { GhError, runGh } from "./cli.js"
 
@@ -15,17 +16,38 @@ const QUERY = `query($endCursor: String) {
   rateLimit { remaining resetAt }
 }`
 
-interface PullRequestNode {
-  number: number
-  title: string
-  url: string
-  createdAt: string
-  isDraft: boolean
-  author?: unknown
-  repository: { nameWithOwner: string }
-}
+const PullRequest = v.pipe(
+  v.object({
+    number: v.number(),
+    title: v.string(),
+    url: v.string(),
+    createdAt: v.string(),
+    isDraft: v.boolean(),
+    author: v.fallback(v.object({ login: v.string() }), { login: "ghost" }),
+    repository: v.object({ nameWithOwner: v.string() }),
+  }),
+  v.transform(
+    (node): ReviewRequest => ({
+      key: requestKey(node.repository.nameWithOwner, node.number),
+      repository: node.repository.nameWithOwner,
+      number: node.number,
+      title: node.title,
+      url: node.url,
+      createdAt: node.createdAt,
+      draft: node.isDraft,
+      author: node.author.login,
+    }),
+  ),
+)
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null
+const GraphQLErrors = v.object({ errors: v.pipe(v.array(v.unknown()), v.nonEmpty()) })
+
+const SearchPage = v.object({
+  data: v.object({
+    search: v.object({ nodes: v.array(v.unknown()) }),
+    rateLimit: v.fallback(v.optional(v.object({ remaining: v.number(), resetAt: v.string() })), undefined),
+  }),
+})
 
 const unchanged = (problem: string) =>
   new GhError({ kind: "unknown", message: `GitHub returned ${problem}; the saved queue was left unchanged.` })
@@ -43,53 +65,24 @@ function parsePages(stdout: string): unknown[] {
   return parsed
 }
 
-const hasErrors = (page: Record<string, unknown>) => Array.isArray(page.errors) && page.errors.length > 0
-
-function searchData(page: unknown): { nodes: unknown[]; rateLimit: unknown } {
-  if (!isRecord(page) || hasErrors(page)) {
-    throw unchanged(isRecord(page) ? "a partial GraphQL response" : "a partial response")
+function readPage(page: unknown): { nodes: unknown[]; retryAt?: string } {
+  if (v.is(GraphQLErrors, page)) {
+    throw unchanged("a partial GraphQL response")
   }
-  const data = page.data
-  if (!isRecord(data) || !isRecord(data.search) || !Array.isArray(data.search.nodes)) {
+  const parsed = v.safeParse(SearchPage, page)
+  if (!parsed.success) {
     throw unchanged("a partial response")
   }
-  return { nodes: data.search.nodes, rateLimit: data.rateLimit }
-}
-
-function readPage(page: unknown): { nodes: unknown[]; retryAt?: string } {
-  const { nodes, rateLimit } = searchData(page)
-  const resetAt = isRecord(rateLimit) && rateLimit.remaining === 0 ? rateLimit.resetAt : undefined
-  return { nodes, ...(typeof resetAt === "string" ? { retryAt: resetAt } : {}) }
-}
-
-function isPullRequestNode(node: unknown): node is PullRequestNode {
-  return (
-    isRecord(node) &&
-    isRecord(node.repository) &&
-    typeof node.repository.nameWithOwner === "string" &&
-    typeof node.number === "number" &&
-    typeof node.title === "string" &&
-    typeof node.url === "string" &&
-    typeof node.createdAt === "string" &&
-    typeof node.isDraft === "boolean"
-  )
+  const { search, rateLimit } = parsed.output.data
+  return { nodes: search.nodes, ...(rateLimit?.remaining === 0 ? { retryAt: rateLimit.resetAt } : {}) }
 }
 
 function readNode(node: unknown): ReviewRequest {
-  if (!isPullRequestNode(node)) {
+  const parsed = v.safeParse(PullRequest, node)
+  if (!parsed.success) {
     throw unchanged("a partial pull request")
   }
-  const repository = node.repository.nameWithOwner
-  return {
-    key: requestKey(repository, node.number),
-    repository,
-    number: node.number,
-    title: node.title,
-    url: node.url,
-    createdAt: node.createdAt,
-    draft: node.isDraft,
-    author: isRecord(node.author) && typeof node.author.login === "string" ? node.author.login : "ghost",
-  }
+  return parsed.output
 }
 
 export async function fetchReviewRequests(signal: AbortSignal): Promise<{ items: ReviewRequest[]; retryAt?: string }> {

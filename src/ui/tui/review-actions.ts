@@ -14,7 +14,7 @@ const copyTargets: Record<CopyKind, { label: string; value(item: ReviewRequest):
   link: { label: "Link", value: (item) => item.url },
 }
 
-export interface ReviewActions {
+export type ReviewActions = {
   select(key: string): void
   open(): Promise<void>
   copy(kind: CopyKind): void
@@ -86,12 +86,14 @@ export function useReviewActions(input: {
       })
       if (choice === "open") {
         await actions.open()
-      } else if (choice) {
+        return
+      }
+      if (choice) {
         actions.copy(choice)
       }
     },
     async refresh() {
-      input.update((await rpc.refresh({})) as QueueSnapshot)
+      input.update(await rpc.refresh({}))
     },
     setFilter(filter) {
       input.setFilter(filter)

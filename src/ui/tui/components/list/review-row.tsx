@@ -30,7 +30,9 @@ export function ReviewRow(props: {
     props.actions.select(props.item.key)
     if (event.button === RIGHT_BUTTON) {
       void props.actions.menu()
-    } else if (wasSelected) {
+      return
+    }
+    if (wasSelected) {
       void props.actions.open()
     }
   }

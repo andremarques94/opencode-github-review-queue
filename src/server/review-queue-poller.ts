@@ -1,17 +1,19 @@
+import * as v from "valibot"
 import {
   compareQueues,
   emptySnapshot,
-  type PersistedQueue,
+  PersistedQueue,
   type QueueError,
   type QueueSnapshot,
 } from "../domain/review-queue.js"
 import type { ReviewRequest } from "../domain/review-request.js"
+import { GhError } from "./github/cli.js"
 
-export interface QueuePersistence {
-  load(): Promise<PersistedQueue | undefined>
+export type QueuePersistence = {
+  load(): Promise<unknown>
   save(value: PersistedQueue): Promise<void>
 }
-export interface PollerOptions {
+export type PollerOptions = {
   intervalMs: number
   timeoutMs: number
   maxBackoffMs: number
@@ -19,7 +21,7 @@ export interface PollerOptions {
 }
 
 const DEFAULT_RENOTIFY_AFTER_MS = 60 * 60_000
-export interface FetchResult {
+export type FetchResult = {
   items: ReviewRequest[]
   retryAt?: string
 }
@@ -27,9 +29,6 @@ export type FetchQueue = (signal: AbortSignal) => Promise<FetchResult>
 export type PollerEvent =
   | { type: "state"; state: QueueSnapshot }
   | { type: "discovered"; item: ReviewRequest; eventID: string }
-
-const persistedIsValid = (value: PersistedQueue | undefined): value is PersistedQueue =>
-  value?.version === 1 && typeof value.initialized === "boolean" && Array.isArray(value.items)
 
 export class ReviewQueuePoller {
   private state: QueueSnapshot = emptySnapshot()
@@ -57,8 +56,9 @@ export class ReviewQueuePoller {
   }
 
   async start(): Promise<void> {
-    const saved = await this.persistence.load()
-    if (persistedIsValid(saved)) {
+    const loaded = v.safeParse(PersistedQueue, await this.persistence.load())
+    if (loaded.success) {
+      const saved = loaded.output
       this.state = {
         items: saved.items,
         newKeys: [],
@@ -169,9 +169,9 @@ export class ReviewQueuePoller {
     for (const [key, at] of this.seen) {
       if (now - at > this.renotifyAfterMs) {
         this.seen.delete(key)
-      } else {
-        persisted[key] = new Date(at).toISOString()
+        continue
       }
+      persisted[key] = new Date(at).toISOString()
     }
     return persisted
   }
@@ -183,8 +183,8 @@ export class ReviewQueuePoller {
         message: `GitHub refresh timed out after ${Math.round(this.options.timeoutMs / 1_000)} seconds. The saved queue was left unchanged.`,
       }
     }
-    if (typeof error === "object" && error !== null && "detail" in error) {
-      return (error as { detail: QueueError }).detail
+    if (error instanceof GhError) {
+      return error.detail
     }
     return {
       kind: "unknown",

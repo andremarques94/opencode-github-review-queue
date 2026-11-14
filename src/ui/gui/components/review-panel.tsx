@@ -10,7 +10,7 @@ import { PanelHeader } from "./header/panel-header.js"
 import { ReviewList } from "./list/review-list.js"
 import { panelStyles } from "./styles.js"
 
-export interface ReviewPanelProps {
+export type ReviewPanelProps = {
   context: Context
   directory: string | undefined
   repositories: Map<string, string | undefined>
@@ -36,7 +36,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
     void rpc()
       .repository({ directory })
       .then((result) => {
-        const value = (result as { repository: string | null }).repository ?? undefined
+        const value = result.repository ?? undefined
         props.repositories.set(directory, value)
         setRepository(value)
       })
@@ -46,7 +46,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
   const refresh = () => {
     void rpc()
       .refresh({})
-      .then((snapshot) => props.update(snapshot as QueueSnapshot))
+      .then((snapshot) => props.update(snapshot))
   }
   const copy = (text: string, name: string) => {
     void props.context.system
