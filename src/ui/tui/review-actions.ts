@@ -224,13 +224,13 @@ export function useReviewActions(input: {
       {
         id: "github-review-queue.next",
         title: "Next review request",
-        bind: "j",
+        bind: "j,down",
         run: () => input.setSelected((value) => Math.min(value + 1, input.ordered().length - 1)),
       },
       {
         id: "github-review-queue.previous",
         title: "Previous review request",
-        bind: "k",
+        bind: "k,up",
         run: () => input.setSelected((value) => Math.max(0, value - 1)),
       },
       { id: "github-review-queue.review", title: "Start or resume review", bind: "enter", run: actions.review },

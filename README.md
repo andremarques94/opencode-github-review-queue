@@ -70,7 +70,7 @@ Then open the queue with `/reviews`, or **Show GitHub review requests** from the
 
 | Key       | Action                                                        |
 | --------- | ------------------------------------------------------------- |
-| `j` / `k` | Move the selection                                            |
+| `j` / `k` | Move the selection (or `↓` / `↑`)                              |
 | `Enter`   | Start a review of the selected pull request, or resume it     |
 | `o`       | Open the pull request on GitHub                               |
 | `p`       | Post the selected review, after a preview                     |
