@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { type Finding, nextFinding, type ReviewDraft } from "../src/domain/review-draft.js"
-import { findingCard, nextStep } from "../src/server/review/instructions.js"
+import { findingCard, nextStep } from "../src/server/review/agent/instructions.js"
 
 const finding = (id: number, overrides: Partial<Finding> = {}): Finding => ({
   id,

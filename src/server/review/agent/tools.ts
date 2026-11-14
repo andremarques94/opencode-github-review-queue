@@ -1,8 +1,8 @@
 import type { ToolEditor } from "@opencode/plugin/promise/tool"
 import * as v from "valibot"
-import { type Finding, FindingFields, nextFinding, type ReviewDraft, Verdict } from "../../domain/review-draft.js"
+import { type Finding, FindingFields, nextFinding, type ReviewDraft, Verdict } from "../../../domain/review-draft.js"
+import type { Findings } from "../findings.js"
 import { findingCard, nextStep } from "./instructions.js"
-import type { ReviewService } from "./review-service.js"
 
 const side = { type: "string", enum: ["LEFT", "RIGHT"] }
 const findingProperties = {
@@ -35,7 +35,7 @@ const describeFinding = (finding: Finding) =>
 
 const reply = (text: string, draft: ReviewDraft) => ({ content: [text, nextStep(draft)].filter(Boolean).join("\n\n") })
 
-export function addReviewTools(editor: ToolEditor, service: ReviewService): void {
+export function addReviewTools(editor: ToolEditor, findings: Findings): void {
   editor.namespace({
     name: "review",
     description:
@@ -52,8 +52,8 @@ export function addReviewTools(editor: ToolEditor, service: ReviewService): void
     },
     options: { namespace: "review" },
     execute: async (input, context) => {
-      const finding = await service.addFinding(context.sessionID, parse(AddInput, input))
-      return reply(`Recorded ${describeFinding(finding)}.`, await service.draftForSession(context.sessionID))
+      const finding = await findings.add(context.sessionID, parse(AddInput, input))
+      return reply(`Recorded ${describeFinding(finding)}.`, await findings.draftForSession(context.sessionID))
     },
   })
   editor.add({
@@ -69,8 +69,8 @@ export function addReviewTools(editor: ToolEditor, service: ReviewService): void
     options: { namespace: "review" },
     execute: async (input, context) => {
       const { id, ...changes } = parse(UpdateInput, input)
-      const finding = await service.updateFinding(context.sessionID, id, changes)
-      return reply(`Updated ${describeFinding(finding)}.`, await service.draftForSession(context.sessionID))
+      const finding = await findings.update(context.sessionID, id, changes)
+      return reply(`Updated ${describeFinding(finding)}.`, await findings.draftForSession(context.sessionID))
     },
   })
   editor.add({
@@ -85,8 +85,8 @@ export function addReviewTools(editor: ToolEditor, service: ReviewService): void
     options: { namespace: "review" },
     execute: async (input, context) => {
       const { id, decision } = parse(DecideInput, input)
-      const finding = await service.decide(context.sessionID, id, decision)
-      return reply(`Recorded ${describeFinding(finding)}.`, await service.draftForSession(context.sessionID))
+      const finding = await findings.decide(context.sessionID, id, decision)
+      return reply(`Recorded ${describeFinding(finding)}.`, await findings.draftForSession(context.sessionID))
     },
   })
   editor.add({
@@ -104,7 +104,7 @@ export function addReviewTools(editor: ToolEditor, service: ReviewService): void
     options: { namespace: "review" },
     execute: async (input, context) => {
       const { verdict, summary } = parse(VerdictInput, input)
-      const draft = await service.setVerdict(context.sessionID, verdict, summary)
+      const draft = await findings.setVerdict(context.sessionID, verdict, summary)
       return reply(
         `Verdict ${draft.verdict}. ${draft.findings.length} findings in the draft. Send the overview now without describing any finding.`,
         draft,
@@ -118,7 +118,7 @@ export function addReviewTools(editor: ToolEditor, service: ReviewService): void
     input: { type: "object", properties: {}, additionalProperties: false },
     options: { namespace: "review" },
     execute: async (_input, context) => {
-      const draft = await service.draftForSession(context.sessionID)
+      const draft = await findings.draftForSession(context.sessionID)
       const finding = nextFinding(draft)
       if (!finding) {
         return reply("No finding is waiting for a decision.", draft)
@@ -135,7 +135,7 @@ export function addReviewTools(editor: ToolEditor, service: ReviewService): void
     input: { type: "object", properties: {}, additionalProperties: false },
     options: { namespace: "review" },
     execute: async (_input, context) => {
-      const draft = await service.draftForSession(context.sessionID)
+      const draft = await findings.draftForSession(context.sessionID)
       return reply(JSON.stringify(draft, null, 2), draft)
     },
   })

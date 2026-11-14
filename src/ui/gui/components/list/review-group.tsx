@@ -2,8 +2,8 @@ import type { Context } from "@opencode/plugin/gui"
 import { For, Show } from "solid-js"
 import type { ReviewDraft } from "../../../../domain/review-draft.js"
 import type { RepositoryGroup } from "../../../../shared/presentation.js"
-import { draftFor } from "../../../../shared/review-flow.js"
-import type { ReviewActions } from "../../review-actions.js"
+import { draftFor } from "../../../../shared/review/draft-status.js"
+import type { ReviewActions } from "../../actions/review-actions.js"
 import { ReviewRow } from "./review-row.js"
 
 export function ReviewGroup(props: {

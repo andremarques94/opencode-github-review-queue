@@ -3,8 +3,8 @@ import { Show } from "solid-js"
 import { postBlocker, type ReviewDraft } from "../../../../domain/review-draft.js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
 import { ago, fullReference } from "../../../../shared/presentation.js"
-import { type DraftAction, draftActions, draftLabel, resumable } from "../../../../shared/review-flow.js"
-import type { ReviewActions } from "../../review-actions.js"
+import { type DraftAction, draftActions, draftLabel, resumable } from "../../../../shared/review/draft-status.js"
+import type { ReviewActions } from "../../actions/review-actions.js"
 
 export type ReviewRowProps = {
   context: Context

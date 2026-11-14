@@ -4,7 +4,7 @@ import type { ScrollBoxRenderable } from "@opentui/core"
 import { createEffect, For } from "solid-js"
 import type { ReviewDraft } from "../../../../domain/review-draft.js"
 import type { RepositoryGroup } from "../../../../shared/presentation.js"
-import type { ReviewActions } from "../../review-actions.js"
+import type { ReviewActions } from "../../actions/review-actions.js"
 import { ReviewGroup } from "./review-group.js"
 import { rowID } from "./review-row.js"
 

@@ -69,6 +69,12 @@ export type ReviewPayload = {
   }[]
 }
 
+export const keptFindings = (draft: ReviewDraft) => draft.findings.filter((finding) => finding.decision === "keep")
+
+/** `src/app.ts:12`, or `src/app.ts:10-12` for a range. */
+export const findingLocation = (finding: Pick<Finding, "path" | "line" | "startLine">) =>
+  `${finding.path}:${finding.startLine === undefined ? "" : `${finding.startLine}-`}${finding.line}`
+
 export function pendingFindings(draft: ReviewDraft): Finding[] {
   return draft.findings.filter((finding) => finding.decision === "pending")
 }
@@ -107,16 +113,14 @@ export function reviewPayload(draft: ReviewDraft): ReviewPayload {
     commit_id: draft.headSha,
     event: draft.verdict ?? "COMMENT",
     body: draft.summary ?? "",
-    comments: draft.findings
-      .filter((finding) => finding.decision === "keep")
-      .map((finding) => ({
-        path: finding.path,
-        line: finding.line,
-        side: finding.side,
-        ...(finding.startLine === undefined
-          ? {}
-          : { start_line: finding.startLine, start_side: finding.startSide ?? finding.side }),
-        body: finding.body,
-      })),
+    comments: keptFindings(draft).map((finding) => ({
+      path: finding.path,
+      line: finding.line,
+      side: finding.side,
+      ...(finding.startLine === undefined
+        ? {}
+        : { start_line: finding.startLine, start_side: finding.startSide ?? finding.side }),
+      body: finding.body,
+    })),
   }
 }

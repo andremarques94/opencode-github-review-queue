@@ -1,23 +1,15 @@
 import { usePlugin } from "@opencode/plugin/tui"
 import type { PanelInput } from "@opencode/plugin/tui/context"
 import type { Accessor, Setter } from "solid-js"
-import type { ReviewDraft } from "../../domain/review-draft.js"
-import type { QueueSnapshot } from "../../domain/review-queue.js"
-import type { ReviewRequest } from "../../domain/review-request.js"
-import { fullReference, type QueueFilter } from "../../shared/presentation.js"
-import {
-  type DraftAction,
-  draftActions,
-  draftFor,
-  errorMessage,
-  postReviewFlow,
-  previewText,
-  type ReviewFlowHost,
-  resetReviewFlow,
-  resumable,
-  startReviewFlow,
-} from "../../shared/review-flow.js"
-import { ReviewQueue } from "../../shared/rpc.js"
+import type { ReviewDraft } from "../../../domain/review-draft.js"
+import type { QueueSnapshot } from "../../../domain/review-queue.js"
+import type { ReviewRequest } from "../../../domain/review-request.js"
+import { fullReference, type QueueFilter } from "../../../shared/presentation.js"
+import { draftFor, resumable } from "../../../shared/review/draft-status.js"
+import { postReviewFlow, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
+import { errorMessage, ReviewQueue } from "../../../shared/rpc.js"
+import { createFlowHost } from "./flow-host.js"
+import { pullRequestOptions, queueOptions } from "./menu-options.js"
 
 export type CopyKind = "reference" | "link"
 
@@ -40,52 +32,6 @@ export type ReviewActions = {
   close(): void
 }
 
-type MenuOption = { title: string; value: () => unknown; description?: string; footer?: string; category: string }
-
-const PULL_REQUEST = "Pull request"
-const QUEUE = "Queue"
-
-function draftOption(actions: ReviewActions, action: DraftAction): MenuOption {
-  if (action.kind === "reset") {
-    return { title: action.label, value: actions.reset, category: PULL_REQUEST }
-  }
-  return {
-    title: action.label,
-    value: actions.post,
-    description: action.blocker ?? "Ready to post",
-    footer: "p",
-    category: PULL_REQUEST,
-  }
-}
-
-function pullRequestOptions(actions: ReviewActions, item: ReviewRequest, draft: ReviewDraft | undefined): MenuOption[] {
-  return [
-    { title: "Open on GitHub", value: actions.open, footer: "o", category: PULL_REQUEST },
-    {
-      title: "Copy reference",
-      value: () => actions.copy("reference"),
-      description: fullReference(item),
-      footer: "y",
-      category: PULL_REQUEST,
-    },
-    { title: "Copy link", value: () => actions.copy("link"), footer: "u", category: PULL_REQUEST },
-    ...draftActions(draft).map((action) => draftOption(actions, action)),
-  ]
-}
-
-function queueOptions(actions: ReviewActions, filter: QueueFilter, toggleFullscreen: () => void): MenuOption[] {
-  return [
-    {
-      title: filter === "all" ? "Show only this repository" : "Show all repositories",
-      value: actions.toggleFilter,
-      footer: "f / ←→",
-      category: QUEUE,
-    },
-    { title: "Refresh", value: actions.refresh, footer: "r", category: QUEUE },
-    { title: "Toggle full screen", value: toggleFullscreen, footer: "shift+f", category: QUEUE },
-  ]
-}
-
 export function useReviewActions(input: {
   panel: PanelInput
   update(state: QueueSnapshot): void
@@ -103,31 +49,7 @@ export function useReviewActions(input: {
     const item = input.current()
     return item ? draftFor(input.drafts(), item.key) : undefined
   }
-  const host: ReviewFlowHost = {
-    confirm: async (options) =>
-      (await context.ui.dialog.confirm({
-        title: options.title,
-        message: options.message,
-        label: { confirm: options.confirm },
-      })) === true,
-    confirmPost: async (preview) =>
-      (await context.ui.dialog.confirm({
-        title: preview.title,
-        message: previewText(preview),
-        label: { confirm: "Post review" },
-      })) === true,
-    select: (options) =>
-      context.ui.dialog.select({
-        title: options.title,
-        options: options.options.map(({ group, ...option }) => ({ ...option, ...(group ? { category: group } : {}) })),
-        ...(options.current ? { current: options.current } : {}),
-      }),
-    models: () => rpc.models({}),
-    notify: (message) => context.ui.toast.show({ message, variant: "info" }),
-    startReview: (request) => rpc.startReview(request),
-    postReview: (request) => rpc.postReview(request),
-    resetReview: (request) => rpc.resetReview(request),
-  }
+  const host = createFlowHost(context)
   const attempt = async (run: () => Promise<void>, fallback: string) => {
     try {
       await run()

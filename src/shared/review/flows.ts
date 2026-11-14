@@ -1,7 +1,8 @@
-import { pendingFindings, postBlocker, type ReviewDraft, reviewPayload } from "../domain/review-draft.js"
-import type { ReviewRequest } from "../domain/review-request.js"
-import { fullReference } from "./presentation.js"
-import type { RpcInput, RpcOutput } from "./rpc.js"
+import { postBlocker, type ReviewDraft } from "../../domain/review-draft.js"
+import type { ReviewRequest } from "../../domain/review-request.js"
+import { fullReference } from "../presentation.js"
+import type { RpcInput, RpcOutput } from "../rpc.js"
+import { type ReviewPreview, reviewPreview } from "./preview.js"
 
 export type SelectOption<T> = { title: string; value: T; description?: string; group?: string }
 
@@ -15,49 +16,6 @@ export type ReviewFlowHost = {
   postReview(input: RpcInput<"postReview">): Promise<RpcOutput<"postReview">>
   resetReview(input: RpcInput<"resetReview">): Promise<unknown>
 }
-
-/** RPC failures arrive as plain `{ type, message }` objects, not `Error`s. */
-export function errorMessage(error: unknown): string | undefined {
-  if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
-    return error.message
-  }
-  return undefined
-}
-
-export function draftLabel(draft: ReviewDraft | undefined): string | undefined {
-  if (!draft) {
-    return undefined
-  }
-  switch (draft.status) {
-    case "investigating":
-      return "reviewing"
-    case "posted":
-      return "posted"
-    case "ready": {
-      const pending = pendingFindings(draft).length
-      return pending > 0 ? `${pending} to decide` : "ready to post"
-    }
-  }
-}
-
-export const resumable = (draft: ReviewDraft | undefined) => draft !== undefined && draft.status !== "posted"
-
-export type DraftAction =
-  | { kind: "post"; label: string; draft: ReviewDraft; blocker: string | undefined }
-  | { kind: "reset"; label: string; draft: ReviewDraft }
-
-export function draftActions(draft: ReviewDraft | undefined): DraftAction[] {
-  if (!draft) {
-    return []
-  }
-  const reset: DraftAction = { kind: "reset", label: "Reset review…", draft }
-  if (!resumable(draft)) {
-    return [reset]
-  }
-  return [{ kind: "post", label: "Post review…", draft, blocker: postBlocker(draft) }, reset]
-}
-
-export const draftFor = (drafts: readonly ReviewDraft[], key: string) => drafts.find((draft) => draft.key === key)
 
 type ModelOption = RpcOutput<"models">["models"][number]
 
@@ -110,43 +68,6 @@ export async function startReviewFlow(
   host.notify(`Cloning ${first.repository}…`)
   const second = await host.startReview({ ...base, clone: true })
   return second.status === "needs-clone" ? undefined : second.sessionID
-}
-
-const VERDICT_LABELS = { REQUEST_CHANGES: "Request changes", COMMENT: "Comment", APPROVE: "Approve" } as const
-
-export type ReviewPreview = {
-  title: string
-  verdict: string
-  summary: string
-  comments: { location: string; body: string }[]
-}
-
-export function reviewPreview(draft: ReviewDraft): ReviewPreview {
-  const payload = reviewPayload(draft)
-  return {
-    title: `Post review on ${draft.repository}#${draft.number}?`,
-    verdict: VERDICT_LABELS[payload.event],
-    summary: payload.body,
-    comments: payload.comments.map((comment) => ({
-      location: `${comment.path}:${comment.start_line ? `${comment.start_line}-` : ""}${comment.line}`,
-      body: comment.body,
-    })),
-  }
-}
-
-export const commentCount = (count: number) => `${count} inline comment${count === 1 ? "" : "s"}`
-
-const PREVIEW_LINE = 72
-
-export function previewText(preview: ReviewPreview): string {
-  const shorten = (text: string) => {
-    const line = text.split("\n")[0] ?? ""
-    return line.length > PREVIEW_LINE ? `${line.slice(0, PREVIEW_LINE - 1)}…` : line
-  }
-  const comments = preview.comments.map((comment) => `• ${comment.location}  ${shorten(comment.body)}`)
-  return [`${preview.verdict} · ${commentCount(preview.comments.length)}`, preview.summary, comments.join("\n")]
-    .filter(Boolean)
-    .join("\n\n")
 }
 
 export async function postReviewFlow(host: ReviewFlowHost, draft: ReviewDraft): Promise<string | undefined> {

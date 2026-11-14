@@ -1,6 +1,6 @@
 import type { Context } from "@opencode/plugin/gui"
 import { For, onCleanup, Show } from "solid-js"
-import { commentCount, type ReviewPreview } from "../../../shared/review-flow.js"
+import { commentCount, type ReviewPreview } from "../../../shared/review/preview.js"
 import { dialogStyles } from "./styles.js"
 
 export function confirmPost(context: Context, preview: ReviewPreview): Promise<boolean> {

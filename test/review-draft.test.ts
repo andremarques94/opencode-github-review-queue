@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { commentableLines, commentProblem } from "../src/domain/pull-request-diff.js"
 import { postBlocker, type ReviewDraft, reviewPayload } from "../src/domain/review-draft.js"
-import { draftActions, draftLabel, previewText, resumable, reviewPreview } from "../src/shared/review-flow.js"
+import { draftActions, draftLabel, resumable } from "../src/shared/review/draft-status.js"
+import { previewText, reviewPreview } from "../src/shared/review/preview.js"
 
 const DIFF = `diff --git a/src/app.ts b/src/app.ts
 index 1111111..2222222 100644

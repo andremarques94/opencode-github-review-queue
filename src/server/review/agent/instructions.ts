@@ -1,4 +1,4 @@
-import { type Finding, pendingFindings, type ReviewDraft } from "../../domain/review-draft.js"
+import { type Finding, findingLocation, pendingFindings, type ReviewDraft } from "../../../domain/review-draft.js"
 
 export const DEFAULT_GUIDELINES = `## Quality bar
 - Readability beats cleverness. If a line has to be read twice, flag it.
@@ -86,15 +86,12 @@ export function nextStep(draft: ReviewDraft): string | undefined {
 
 export function findingCard(draft: ReviewDraft, finding: Finding): string {
   const position = draft.findings.length - pendingFindings(draft).length + 1
-  const location = finding.startLine
-    ? `${finding.path}:${finding.startLine}-${finding.line}`
-    : `${finding.path}:${finding.line}`
   const quoted = finding.body
     .split("\n")
     .map((line) => `> ${line}`)
     .join("\n")
   return [
-    `**Finding #${finding.id} (${position} of ${draft.findings.length}) · \`${location}\` · ${finding.severity} · ${finding.confidence} confidence**`,
+    `**Finding #${finding.id} (${position} of ${draft.findings.length}) · \`${findingLocation(finding)}\` · ${finding.severity} · ${finding.confidence} confidence**`,
     finding.evidence ? `**Evidence:** ${finding.evidence}` : "",
     `**Proposed comment:**\n${quoted}`,
   ]

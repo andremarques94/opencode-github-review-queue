@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 
 import { usePlugin } from "@opencode/plugin/tui"
-import type { ReviewActions } from "../review-actions.js"
+import type { ReviewActions } from "../actions/review-actions.js"
 
 export function KeyHints(props: { actions: ReviewActions }) {
   const theme = usePlugin().theme

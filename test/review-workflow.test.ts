@@ -10,13 +10,14 @@ const github = vi.hoisted(() => ({
 const checkout = vi.hoisted(() => ({ removeWorktree: vi.fn() }))
 
 vi.mock("../src/server/github/pull-request.js", () => github)
-vi.mock("../src/server/review/checkout.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../src/server/review/checkout.js")>()),
+vi.mock("../src/server/git/worktrees.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/server/git/worktrees.js")>()),
   ...checkout,
 }))
 
 const { DraftStore } = await import("../src/server/review/draft-store.js")
-const { ReviewService } = await import("../src/server/review/review-service.js")
+const { Findings } = await import("../src/server/review/findings.js")
+const { ReviewSessions } = await import("../src/server/review/sessions.js")
 
 const DIFF = `diff --git a/src/app.ts b/src/app.ts
 --- a/src/app.ts
@@ -63,7 +64,8 @@ const storage = (values: Map<string, unknown>) => ({
 
 let saved: Map<string, unknown>
 let store: InstanceType<typeof DraftStore>
-let service: InstanceType<typeof ReviewService>
+let findings: InstanceType<typeof Findings>
+let sessions: InstanceType<typeof ReviewSessions>
 
 beforeEach(async () => {
   for (const mock of [...Object.values(github), ...Object.values(checkout)]) {
@@ -75,16 +77,17 @@ beforeEach(async () => {
   checkout.removeWorktree.mockResolvedValue(undefined)
   saved = new Map()
   store = new DraftStore(storage(saved))
-  service = new ReviewService(store, { cacheDirectory: "/cache", timeoutMs: 1_000 })
+  findings = new Findings(store, 1_000)
+  sessions = new ReviewSessions(store, { cacheDirectory: "/cache", timeoutMs: 1_000 })
   await store.put(base)
 })
 
 const signal = new AbortController().signal
 
-describe("ReviewService", () => {
+describe("review workflow", () => {
   it("resumes an unposted draft without touching git or GitHub", async () => {
     const item = { key: base.key, repository: "acme/api", number: 7, title: "Add b", author: "octocat" }
-    const result = await service.start({
+    const result = await sessions.start({
       item: { ...item, draft: false, createdAt: base.createdAt, url: "https://github.com/acme/api/pull/7" },
       clone: false,
       sessions: {} as never,
@@ -96,29 +99,29 @@ describe("ReviewService", () => {
   })
 
   it("records findings only on diff lines and only for review sessions", async () => {
-    await expect(service.addFinding("ses_1", { ...finding, line: 9 })).rejects.toThrow(/not a changed/)
-    await expect(service.addFinding("ses_other", finding)).rejects.toThrow(/not a review session/)
+    await expect(findings.add("ses_1", { ...finding, line: 9 })).rejects.toThrow(/not a changed/)
+    await expect(findings.add("ses_other", finding)).rejects.toThrow(/not a review session/)
 
-    const added = await service.addFinding("ses_1", finding)
+    const added = await findings.add("ses_1", finding)
 
     expect(added).toMatchObject({ id: 1, decision: "pending" })
     expect(github.fetchDiff).toHaveBeenCalledTimes(1)
   })
 
   it("keeps every change when tool calls run at the same time", async () => {
-    const added = await Promise.all([1, 2, 3].map(() => service.addFinding("ses_1", finding)))
+    const added = await Promise.all([1, 2, 3].map(() => findings.add("ses_1", finding)))
     expect(added.map((entry) => entry.id)).toEqual([1, 2, 3])
 
-    await Promise.all([service.decide("ses_1", 1, "keep"), service.decide("ses_1", 2, "drop")])
+    await Promise.all([findings.decide("ses_1", 1, "keep"), findings.decide("ses_1", 2, "drop")])
 
     expect((await store.get(base.key))?.findings.map((entry) => entry.decision)).toEqual(["keep", "drop", "pending"])
   })
 
   it("puts an edited finding back to pending", async () => {
-    await service.addFinding("ses_1", finding)
-    await service.decide("ses_1", 1, "keep")
+    await findings.add("ses_1", finding)
+    await findings.decide("ses_1", 1, "keep")
 
-    const updated = await service.updateFinding("ses_1", 1, { body: "Softer wording.", line: undefined })
+    const updated = await findings.update("ses_1", 1, { body: "Softer wording.", line: undefined })
 
     expect(updated).toMatchObject({ body: "Softer wording.", line: 2, decision: "pending" })
   })
@@ -126,46 +129,46 @@ describe("ReviewService", () => {
   it("refuses approving your own pull request", async () => {
     await store.put({ ...base, ownPullRequest: true })
 
-    await expect(service.setVerdict("ses_1", "APPROVE", "Looks good.")).rejects.toThrow(/own pull request/)
-    expect((await service.setVerdict("ses_1", "COMMENT", "Looks good.")).status).toBe("ready")
+    await expect(findings.setVerdict("ses_1", "APPROVE", "Looks good.")).rejects.toThrow(/own pull request/)
+    expect((await findings.setVerdict("ses_1", "COMMENT", "Looks good.")).status).toBe("ready")
   })
 
   it("posts only after every finding is decided, then cleans up the worktree", async () => {
-    await service.addFinding("ses_1", finding)
-    await service.setVerdict("ses_1", "COMMENT", "One nit.")
-    await expect(service.post(base.key, false, signal)).rejects.toThrow(/waiting for your decision/)
+    await findings.add("ses_1", finding)
+    await findings.setVerdict("ses_1", "COMMENT", "One nit.")
+    await expect(sessions.post(base.key, false, signal)).rejects.toThrow(/waiting for your decision/)
 
-    await service.decide("ses_1", 1, "keep")
-    const result = await service.post(base.key, false, signal)
+    await findings.decide("ses_1", 1, "keep")
+    const result = await sessions.post(base.key, false, signal)
 
     expect(result).toEqual({ status: "posted", url: "https://github.com/acme/api/pull/7#pullrequestreview-1" })
     expect(github.postReview.mock.calls[0]?.[2]).toMatchObject({ commit_id: "abc123", event: "COMMENT" })
     expect(checkout.removeWorktree).toHaveBeenCalledWith(base.checkout, base.worktree, signal)
     expect((await store.get(base.key))?.status).toBe("posted")
-    await expect(service.addFinding("ses_1", finding)).rejects.toThrow(/already posted/)
+    await expect(findings.add("ses_1", finding)).rejects.toThrow(/already posted/)
   })
 
   it("asks before posting a review of an outdated head", async () => {
-    await service.setVerdict("ses_1", "APPROVE", "Clean.")
+    await findings.setVerdict("ses_1", "APPROVE", "Clean.")
     github.fetchPullRequest.mockResolvedValue({ headRefOid: "def456", state: "OPEN" })
 
-    expect(await service.post(base.key, false, signal)).toMatchObject({ status: "stale" })
+    expect(await sessions.post(base.key, false, signal)).toMatchObject({ status: "stale" })
     expect(github.postReview).not.toHaveBeenCalled()
-    expect(await service.post(base.key, true, signal)).toMatchObject({ status: "posted" })
+    expect(await sessions.post(base.key, true, signal)).toMatchObject({ status: "posted" })
   })
 
   it("posts what another location recorded in shared storage", async () => {
     // The review session's location records findings; the panel's location, with its own store, posts.
-    const panel = new ReviewService(new DraftStore(storage(saved)), { cacheDirectory: "/cache", timeoutMs: 1_000 })
-    await service.addFinding("ses_1", finding)
-    await service.decide("ses_1", 1, "keep")
-    await service.setVerdict("ses_1", "COMMENT", "One nit.")
+    const panel = new ReviewSessions(new DraftStore(storage(saved)), { cacheDirectory: "/cache", timeoutMs: 1_000 })
+    await findings.add("ses_1", finding)
+    await findings.decide("ses_1", 1, "keep")
+    await findings.setVerdict("ses_1", "COMMENT", "One nit.")
 
     expect(await panel.post(base.key, false, signal)).toMatchObject({ status: "posted" })
   })
 
   it("reset removes the worktree and forgets the draft", async () => {
-    await service.reset(base.key, signal)
+    await sessions.reset(base.key, signal)
 
     expect(checkout.removeWorktree).toHaveBeenCalledWith(base.checkout, base.worktree, signal)
     expect(saved.has(base.key)).toBe(false)

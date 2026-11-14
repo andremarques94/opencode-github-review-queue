@@ -69,3 +69,11 @@ export type RpcInput<K extends keyof typeof ReviewQueue.methods> = v.InferOutput
 export type RpcOutput<K extends keyof typeof ReviewQueue.methods> = v.InferOutput<
   (typeof ReviewQueue.methods)[K]["output"]
 >
+
+/** RPC failures arrive as plain `{ type, message }` objects, not `Error`s. */
+export function errorMessage(error: unknown): string | undefined {
+  if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
+    return error.message
+  }
+  return undefined
+}

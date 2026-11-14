@@ -1,28 +1,12 @@
 import { readFile } from "node:fs/promises"
 import type { Location, Plugin } from "@opencode/plugin"
-import { type CommentableLines, commentableLines, commentProblem } from "../../domain/pull-request-diff.js"
-import {
-  type Decision,
-  type Finding,
-  type FindingChanges,
-  type FindingInput,
-  postBlocker,
-  type ReviewDraft,
-  reviewPayload,
-  type Verdict,
-} from "../../domain/review-draft.js"
+import { postBlocker, reviewPayload } from "../../domain/review-draft.js"
 import type { ReviewRequest } from "../../domain/review-request.js"
-import { fetchDiff, fetchPullRequest, postReview, viewerLogin } from "../github/pull-request.js"
-import {
-  cloneRepository,
-  createWorktree,
-  findCheckout,
-  managedClonePath,
-  removeWorktree,
-  worktreePath,
-} from "./checkout.js"
+import { createWorktree, removeWorktree } from "../git/worktrees.js"
+import { fetchPullRequest, postReview, viewerLogin } from "../github/pull-request.js"
+import { DEFAULT_GUIDELINES, reviewInstructions, startPrompt } from "./agent/instructions.js"
+import { cloneRepository, findCheckout, managedClonePath, worktreePath } from "./checkout.js"
 import type { DraftStore } from "./draft-store.js"
-import { DEFAULT_GUIDELINES, reviewInstructions, startPrompt } from "./instructions.js"
 
 type SessionModel = NonNullable<NonNullable<Parameters<Plugin.Context["session"]["create"]>[0]>["model"]>
 
@@ -33,9 +17,8 @@ export type PostResult = { status: "posted"; url: string } | { status: "stale"; 
 
 const INSTRUCTIONS_KEY = "github-review-queue"
 
-export class ReviewService {
-  private diffs = new Map<string, Promise<CommentableLines>>()
-
+/** Starting, resetting, and posting a review: the panel's side of the workflow. */
+export class ReviewSessions {
   constructor(
     private readonly store: DraftStore,
     private readonly options: { cacheDirectory: string; guidelinesFile?: string | undefined; timeoutMs: number },
@@ -135,12 +118,14 @@ export class ReviewService {
     if (draft.status !== "posted") {
       await removeWorktree(draft.checkout, draft.worktree, signal)
     }
-    this.diffs.delete(key)
     await this.store.remove(key)
   }
 
   async post(key: string, allowStale: boolean, signal: AbortSignal): Promise<PostResult> {
-    const draft = this.requireDraft(await this.store.get(key))
+    const draft = await this.store.get(key)
+    if (!draft) {
+      throw new Error("There is no review draft for this pull request.")
+    }
     const pullRequest = await fetchPullRequest(draft.repository, draft.number, signal)
     const blocker = postBlocker(draft)
     if (blocker) {
@@ -155,58 +140,8 @@ export class ReviewService {
       saved.status = "posted"
       saved.postedUrl = url
     })
-    this.diffs.delete(key)
     await removeWorktree(draft.checkout, draft.worktree, signal).catch(() => undefined)
     return { status: "posted", url }
-  }
-
-  async draftForSession(sessionID: string): Promise<ReviewDraft> {
-    return this.requireDraft(await this.store.bySession(sessionID))
-  }
-
-  async addFinding(sessionID: string, input: FindingInput): Promise<Finding> {
-    const draft = await this.editableDraft(sessionID)
-    await this.assertCommentable(draft, input)
-    let id = 0
-    const saved = await this.store.update(draft.key, (next) => {
-      id = Math.max(0, ...next.findings.map((finding) => finding.id)) + 1
-      next.findings.push({ ...input, id, decision: "pending" })
-    })
-    return this.findingIn(saved, id)
-  }
-
-  async updateFinding(sessionID: string, id: number, changes: FindingChanges): Promise<Finding> {
-    const draft = await this.editableDraft(sessionID)
-    const defined = Object.fromEntries(Object.entries(changes).filter(([, value]) => value !== undefined))
-    await this.assertCommentable(draft, { ...this.findingIn(draft, id), ...defined })
-    const saved = await this.store.update(draft.key, (next) => {
-      this.findingIn(next, id)
-      next.findings = next.findings.map((finding) =>
-        finding.id === id ? { ...finding, ...defined, decision: "pending" as const } : finding,
-      )
-    })
-    return this.findingIn(saved, id)
-  }
-
-  async decide(sessionID: string, id: number, decision: Exclude<Decision, "pending">): Promise<Finding> {
-    const draft = await this.editableDraft(sessionID)
-    this.findingIn(draft, id)
-    const saved = await this.store.update(draft.key, (next) => {
-      next.findings = next.findings.map((finding) => (finding.id === id ? { ...finding, decision } : finding))
-    })
-    return this.findingIn(saved, id)
-  }
-
-  async setVerdict(sessionID: string, verdict: Verdict, summary: string): Promise<ReviewDraft> {
-    const draft = await this.editableDraft(sessionID)
-    if (draft.ownPullRequest && verdict !== "COMMENT") {
-      throw new Error("GitHub does not let you approve or request changes on your own pull request; use COMMENT.")
-    }
-    return this.store.update(draft.key, (next) => {
-      next.verdict = verdict
-      next.summary = summary
-      next.status = "ready"
-    })
   }
 
   private async guidelines(): Promise<string> {
@@ -218,50 +153,5 @@ export class ReviewService {
     } catch {
       throw new Error(`Could not read the review guidelines file at ${this.options.guidelinesFile}.`)
     }
-  }
-
-  private requireDraft(draft: ReviewDraft | undefined): ReviewDraft {
-    if (!draft) {
-      throw new Error("This is not a review session started from the review queue panel, or its draft was reset.")
-    }
-    return draft
-  }
-
-  private async editableDraft(sessionID: string): Promise<ReviewDraft> {
-    const draft = await this.draftForSession(sessionID)
-    if (draft.status === "posted") {
-      throw new Error("This review was already posted; start a new review from the panel to draft another.")
-    }
-    return draft
-  }
-
-  private findingIn(draft: ReviewDraft, id: number): Finding {
-    const finding = draft.findings.find((candidate) => candidate.id === id)
-    if (!finding) {
-      throw new Error(`There is no finding #${id} in this draft.`)
-    }
-    return finding
-  }
-
-  private async assertCommentable(draft: ReviewDraft, target: FindingInput): Promise<void> {
-    const problem = commentProblem(await this.commentableLines(draft), target)
-    if (problem) {
-      throw new Error(
-        `${problem} Check \`gh pr diff ${draft.number} --repo ${draft.repository}\` and pick a line in a hunk.`,
-      )
-    }
-  }
-
-  private commentableLines(draft: ReviewDraft): Promise<CommentableLines> {
-    const cached = this.diffs.get(draft.key)
-    if (cached) {
-      return cached
-    }
-    const loading = fetchDiff(draft.repository, draft.number, AbortSignal.timeout(this.options.timeoutMs)).then(
-      commentableLines,
-    )
-    loading.catch(() => this.diffs.delete(draft.key))
-    this.diffs.set(draft.key, loading)
-    return loading
   }
 }

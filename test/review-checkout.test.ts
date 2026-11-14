@@ -7,7 +7,7 @@ vi.mock("../src/server/process.js", async (importOriginal) => ({
   runProcess,
 }))
 
-const { remoteFor } = await import("../src/server/review/git.js")
+const { remoteFor } = await import("../src/server/git/remotes.js")
 const { managedClonePath, worktreePath } = await import("../src/server/review/checkout.js")
 
 const signal = new AbortController().signal

@@ -3,12 +3,13 @@ import { type PluginOptions, parseOptions } from "../shared/options.js"
 import { ReviewQueue } from "../shared/rpc.js"
 import { openReview, repositoryForDirectory } from "./github/repository.js"
 import { fetchReviewRequests } from "./github/review-requests.js"
+import { nextStep } from "./review/agent/instructions.js"
+import { addReviewTools } from "./review/agent/tools.js"
 import { defaultCacheDirectory, expandHome } from "./review/checkout.js"
 import { DraftStore } from "./review/draft-store.js"
-import { nextStep } from "./review/instructions.js"
+import { Findings } from "./review/findings.js"
 import { rememberModel, reviewModels } from "./review/models.js"
-import { ReviewService } from "./review/review-service.js"
-import { addReviewTools } from "./review/tools.js"
+import { ReviewSessions } from "./review/sessions.js"
 import { type PollerEvent, ReviewQueuePoller } from "./review-queue-poller.js"
 
 // Cloning and fetching a large repository can take far longer than one GitHub API call.
@@ -18,7 +19,8 @@ const DRAFT_PREFIX = "draft/"
 type Shared = {
   poller: ReviewQueuePoller
   drafts: DraftStore
-  reviews: ReviewService
+  reviews: ReviewSessions
+  findings: Findings
   refs: number
   started?: Promise<void>
 }
@@ -51,12 +53,12 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
     save: (draft) => storage.set(`${DRAFT_PREFIX}${draft.key}`, draft),
     remove: (key) => storage.remove(`${DRAFT_PREFIX}${key}`),
   })
-  const reviews = new ReviewService(drafts, {
+  const reviews = new ReviewSessions(drafts, {
     cacheDirectory: options.cacheDirectory ? expandHome(options.cacheDirectory) : defaultCacheDirectory(),
     guidelinesFile: options.reviewGuidelines && expandHome(options.reviewGuidelines),
     timeoutMs: options.timeoutMs,
   })
-  return { poller, drafts, reviews, refs: 0 }
+  return { poller, drafts, reviews, findings: new Findings(drafts, options.timeoutMs), refs: 0 }
 }
 
 export default Plugin.define({
@@ -111,7 +113,7 @@ export default Plugin.define({
       postReview: (input, rpcContext) =>
         reported(rpcContext, () => current.reviews.post(input.key, input.allowStale, timeout(rpcContext.signal))),
     })
-    const tools = await ctx.tool.transform((editor) => addReviewTools(editor, current.reviews))
+    const tools = await ctx.tool.transform((editor) => addReviewTools(editor, current.findings))
     const reminder = await ctx.session.hook("context", async (event) => {
       const draft = await current.drafts.bySession(event.sessionID)
       const step = draft && nextStep(draft)
