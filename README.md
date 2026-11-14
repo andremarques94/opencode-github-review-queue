@@ -77,7 +77,7 @@ Then open the queue with `/reviews`, or **Show GitHub review requests** from the
 | `m`       | Actions menu, listing every action with its key               |
 | `y`       | Copy `owner/repo#123`                                         |
 | `u`       | Copy the URL                                                  |
-| `f`       | Switch between **Current** and **All**                        |
+| `f`       | Switch between **Current** and **All** (or `←` / `→`)          |
 | `r`       | Refresh                                                       |
 | `Shift+F` | Toggle full screen                                            |
 | `Esc`     | Close the panel                                               |

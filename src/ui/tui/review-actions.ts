@@ -78,7 +78,7 @@ function queueOptions(actions: ReviewActions, filter: QueueFilter, toggleFullscr
     {
       title: filter === "all" ? "Show only this repository" : "Show all repositories",
       value: actions.toggleFilter,
-      footer: "f",
+      footer: "f / ←→",
       category: QUEUE,
     },
     { title: "Refresh", value: actions.refresh, footer: "r", category: QUEUE },
@@ -244,7 +244,12 @@ export function useReviewActions(input: {
         run: () => actions.copy("reference"),
       },
       { id: "github-review-queue.copy-url", title: "Copy PR URL", bind: "u", run: () => actions.copy("link") },
-      { id: "github-review-queue.filter", title: "Toggle repository filter", bind: "f", run: actions.toggleFilter },
+      {
+        id: "github-review-queue.filter",
+        title: "Toggle repository filter",
+        bind: "f,left,right",
+        run: actions.toggleFilter,
+      },
       { id: "github-review-queue.refresh", title: "Refresh review queue", bind: "r", run: actions.refresh },
       {
         id: "github-review-queue.fullscreen",
