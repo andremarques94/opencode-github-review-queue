@@ -3,6 +3,7 @@ import { createStore } from "solid-js/store"
 import type { QueueSnapshot, ReviewRequest } from "../domain/review-queue.js"
 import { emptySnapshot } from "../domain/review-queue.js"
 import { ReviewQueue } from "../rpc/review-queue.js"
+import { createDiscoveryBatcher, notificationText } from "../shared/notifications.js"
 import { parseOptions } from "../shared/options.js"
 import { ReviewPanel } from "./components/review-panel.js"
 
@@ -25,13 +26,34 @@ export default Plugin.define({
       .snapshot({})
       .then((snapshot) => update(snapshot as unknown as QueueSnapshot))
     const stopState = rpc().events.on("state", (event) => update(event.data as unknown as QueueSnapshot))
-    const stopDiscovered = rpc().events.on("discovered", (event) => {
-      const data = event.data as { item: ReviewRequest; eventID: string }
-      const message = `${data.item.repository} #${data.item.number} — ${data.item.title}`
-      ctx.toast.show({ title: "Review requested", description: message, icon: "github" })
-      if (options.notifications) {
-        void ctx.attention.notify({ title: "Review requested", message, id: data.eventID })
+    const openPanel = () => {
+      const session = ctx.sessions.current() ?? ctx.sessions.list()[0]
+      if (session) {
+        ctx.layout.open(`${ctx.id}:main`, session)
       }
+    }
+    const batcher = createDiscoveryBatcher((items) => {
+      const { title, message } = notificationText(items)
+      ctx.toast.show({
+        title,
+        description: message,
+        icon: "github",
+        actions: [{ label: "Show reviews", run: openPanel }],
+      })
+      if (options.notifications) {
+        const session = ctx.sessions.current() ?? ctx.sessions.list()[0]
+        // Every window batches the same events, so the sorted keys plus the hour identify one notification app-wide.
+        const keys = items.map((item) => item.key).sort()
+        void ctx.attention.notify({
+          title,
+          message,
+          id: `${keys.join(",")}:${Math.floor(Date.now() / 3_600_000)}`,
+          ...(session ? { session: { server: session.server.id, id: session.id } } : {}),
+        })
+      }
+    })
+    const stopDiscovered = rpc().events.on("discovered", (event) => {
+      batcher.push((event.data as { item: ReviewRequest }).item)
     })
 
     const tab: PanelTab = {
@@ -111,6 +133,7 @@ export default Plugin.define({
     return () => {
       stopState()
       stopDiscovered()
+      batcher.dispose()
     }
   },
 })

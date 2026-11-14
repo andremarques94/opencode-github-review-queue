@@ -106,7 +106,9 @@ Desktop notifications also follow **Settings > Notifications**. TUI notification
 
 The server plugin runs one non-overlapping poller using GitHub's
 `is:pr is:open review-requested:@me` search. The first successful refresh establishes a silent baseline. Later queue
-additions produce notifications, including a request that leaves the queue and is requested again.
+additions produce notifications. A request that leaves the queue notifies again only after it has been gone for an
+hour, so brief gaps in GitHub's search index do not re-notify. Simultaneous requests are grouped into one notification,
+and the Desktop toast's **Show reviews** button opens the queue.
 
 Malformed, partial, timed-out, or failed responses never replace the last successful queue. The plugin spawns `gh`
 directly without a shell and does not read or persist GitHub tokens.
