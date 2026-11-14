@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v0.2.0...opencode-github-review-queue-v0.2.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* discard a saved review queue that contains malformed items ([2d99894](https://github.com/andremarques94/opencode-github-review-queue/commit/2d998943e2196b6a9f7b49c098da8e6b1e94a417))
+
 ## [0.2.0](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v0.1.0...opencode-github-review-queue-v0.2.0) (2026-11-14)
 
 
