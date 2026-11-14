@@ -81,11 +81,16 @@ describe("ReviewQueuePoller", () => {
     poller.stop()
   })
 
-  it("notifies when a removed request is observed again", async () => {
+  it("ignores a request that briefly drops out of search results", async () => {
     const request = item("acme/api", 3)
     const queues = [[request], [], [request]]
-    const saved = memoryPersistence()
-    const poller = new ReviewQueuePoller(async () => ({ items: queues.shift() ?? [] }), saved.persistence, options)
+    let now = Date.parse("2026-01-01T00:00:00.000Z")
+    const poller = new ReviewQueuePoller(
+      async () => ({ items: queues.shift() ?? [] }),
+      memoryPersistence().persistence,
+      { ...options, renotifyAfterMs: 60 * 60_000 },
+      () => now,
+    )
     const discovered: ReviewRequest[] = []
     poller.on((event) => {
       if (event.type === "discovered") {
@@ -94,11 +99,72 @@ describe("ReviewQueuePoller", () => {
     })
 
     await poller.start()
+    now += 60_000
     await poller.refresh()
+    now += 60_000
+    await poller.refresh()
+
+    expect(discovered).toEqual([])
+    expect(poller.snapshot().newKeys).toEqual([])
+    poller.stop()
+  })
+
+  it("notifies when a request returns after the renotify window", async () => {
+    const request = item("acme/api", 3)
+    const queues = [[request], [], [request]]
+    let now = Date.parse("2026-01-01T00:00:00.000Z")
+    const saved = memoryPersistence()
+    const poller = new ReviewQueuePoller(
+      async () => ({ items: queues.shift() ?? [] }),
+      saved.persistence,
+      { ...options, renotifyAfterMs: 60 * 60_000 },
+      () => now,
+    )
+    const discovered: ReviewRequest[] = []
+    poller.on((event) => {
+      if (event.type === "discovered") {
+        discovered.push(event.item)
+      }
+    })
+
+    await poller.start()
+    now += 60_000
+    await poller.refresh()
+    now += 2 * 60 * 60_000
     await poller.refresh()
 
     expect(discovered).toEqual([request])
     expect(poller.snapshot().newKeys).toEqual([request.key])
+    expect(Object.keys(saved.read()?.seen ?? {})).toEqual([request.key])
+    poller.stop()
+  })
+
+  it("remembers recently seen requests across restarts", async () => {
+    const request = item("acme/api", 5)
+    const now = Date.parse("2026-01-01T00:10:00.000Z")
+    const saved = memoryPersistence({
+      version: 1,
+      initialized: true,
+      items: [],
+      lastSuccessAt: "2026-01-01T00:09:00.000Z",
+      seen: { [request.key]: "2026-01-01T00:05:00.000Z" },
+    })
+    const poller = new ReviewQueuePoller(
+      async () => ({ items: [request] }),
+      saved.persistence,
+      options,
+      () => now,
+    )
+    const discovered = vi.fn()
+    poller.on((event) => {
+      if (event.type === "discovered") {
+        discovered(event.item)
+      }
+    })
+
+    await poller.start()
+
+    expect(discovered).not.toHaveBeenCalled()
     poller.stop()
   })
 
