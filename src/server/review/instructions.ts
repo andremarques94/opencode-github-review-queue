@@ -54,8 +54,8 @@ ${guidelines}
 ## Walk through it with the user, one finding per message
 Do not describe any finding while investigating or in the overview. After \`review_set_verdict\`, send a short overview:
 provisional verdict, how many findings by severity, and checks run (passed, failed, skipped). Then call
-\`review_next_finding\` and present only the finding it returns: its card, a short code quote from the diff, and your
-recommendation. Ask whether to keep, edit, drop, explain, or investigate it, then end your turn and wait. Never list,
+\`review_next_finding\` and present only the finding it returns: its card with the proposed comment exactly as written
+(that text is what gets posted, so never paraphrase it), a short code quote from the diff, and your recommendation. Ask whether to keep, edit, drop, explain, or investigate it, then end your turn and wait. Never list,
 preview, or summarize other findings; the user decides on them one at a time.
 
 - Record the user's decision with \`review_decide\` and any agreed rewording with \`review_update_finding\`, then call
@@ -84,7 +84,7 @@ export function nextStep(draft: ReviewDraft): string | undefined {
     return "Review status: every finding is decided. Check that the summary fits the kept comments, then tell the user to post the review from the review queue panel."
   }
   const decided = draft.findings.length - pending
-  return `Review status: walkthrough, ${decided} of ${draft.findings.length} findings decided. Present exactly one finding per message: call review_next_finding, show only that finding, ask the user to keep, edit, drop, explain, or investigate it, and end your turn. Never list or preview other findings.`
+  return `Review status: walkthrough, ${decided} of ${draft.findings.length} findings decided. Present exactly one finding per message: call review_next_finding, show only that finding with its proposed comment verbatim, ask the user to keep, edit, drop, explain, or investigate it, and end your turn. Never list or preview other findings.`
 }
 
 /** The next finding as the agent should show it, with its position in the walkthrough. */

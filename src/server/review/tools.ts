@@ -125,7 +125,7 @@ export function addReviewTools(editor: ToolEditor, service: ReviewService): void
         return reply("No finding is waiting for a decision.", draft)
       }
       return {
-        content: `${findingCard(draft, finding)}\n\nShow this card with a short code quote and your recommendation, ask whether to keep, edit, drop, explain, or investigate it, and end your turn. Do not mention any other finding.`,
+        content: `${findingCard(draft, finding)}\n\nShow this card to the user with its proposed comment exactly as written, since that text is what gets posted; do not paraphrase or shorten it. Add a short code quote and your recommendation, ask whether to keep, edit, drop, explain, or investigate it, and end your turn. Do not mention any other finding.`,
       }
     },
   })
