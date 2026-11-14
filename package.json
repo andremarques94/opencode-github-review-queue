@@ -1,0 +1,40 @@
+{
+  "name": "opencode-github-review-queue",
+  "version": "0.1.0",
+  "description": "Pending GitHub review requests for OpenCode TUI and Desktop",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@12.18.0",
+  "exports": {
+    ".": "./src/server/index.ts",
+    "./tui": "./src/tui/index.tsx",
+    "./gui-experimental": "./dist/gui-experimental.cjs",
+    "./rpc": "./src/rpc/review-queue.ts"
+  },
+  "files": ["src", "dist", "README.md"],
+  "scripts": {
+    "build": "vite build",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
+    "lint": "biome check src test vite.config.ts vitest.config.ts",
+    "test": "vitest run --config vitest.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": { "node": ">=22" },
+  "dependencies": { "@opencode/plugin": "2.3.0" },
+  "peerDependencies": {
+    "@opentui/core": ">=0.8.4",
+    "@opentui/solid": ">=0.8.4",
+    "solid-js": ">=1.9.19"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.7",
+    "@opentui/core": "0.8.4",
+    "@opentui/solid": "0.8.4",
+    "@types/node": "24.10.1",
+    "solid-js": "1.9.19",
+    "typescript": "5.9.3",
+    "vite": "7.2.2",
+    "vite-plugin-solid": "2.11.10",
+    "vitest": "4.0.13"
+  }
+}
