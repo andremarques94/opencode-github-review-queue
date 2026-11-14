@@ -1,6 +1,6 @@
 import type { ReviewRequest } from "../../domain/review-request.js"
 
-export interface DiscoveryBatcher {
+export type DiscoveryBatcher = {
   push(item: ReviewRequest): void
   dispose(): void
 }

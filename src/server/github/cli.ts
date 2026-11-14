@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import type { QueueError, QueueErrorKind } from "../../domain/review-queue.js"
 
-export interface CommandResult {
+export type CommandResult = {
   stdout: string
   stderr: string
 }
@@ -30,25 +30,23 @@ export function runGh(args: readonly string[], options: { signal: AbortSignal; c
       stderr = (stderr + chunk.toString("utf8")).slice(0, 64 * 1024)
     })
     child.on("error", (error: NodeJS.ErrnoException) => {
-      if (error.name === "AbortError") {
-        reject(error)
-      } else if (error.code === "ENOENT") {
+      if (error.code === "ENOENT") {
         reject(
           new GhError({
             kind: "missing-gh",
             message: "GitHub CLI (gh) was not found. Install it, then run `gh auth login`.",
           }),
         )
-      } else {
-        reject(error)
+        return
       }
+      reject(error)
     })
     child.on("close", (code) => {
       if (code === 0) {
         resolve({ stdout, stderr })
-      } else {
-        reject(classifyGhError(stderr || `gh exited with status ${String(code)}`))
+        return
       }
+      reject(classifyGhError(stderr || `gh exited with status ${String(code)}`))
     })
   })
 }

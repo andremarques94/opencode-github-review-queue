@@ -36,6 +36,8 @@ through `src/ui/gui/components/styles.ts` with the host's CSS variables. TUI col
 
 - Ask before changing the supported OpenCode or OpenTUI versions.
 - Use braces for every `if`, keep Biome formatting, and prefer the smallest change.
+- Prefer `type` over `interface`.
+- Avoid `else`; return early instead. Replace a chain of `if`s on the same value with a `switch`.
 - Commit messages follow Conventional Commits.
 
 ## Fallow

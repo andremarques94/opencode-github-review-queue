@@ -1,7 +1,6 @@
 import { Command, MenuItem, Panel, type PanelTab, Plugin } from "@opencode/plugin/gui"
 import { createStore } from "solid-js/store"
 import { emptySnapshot, type QueueSnapshot } from "../../domain/review-queue.js"
-import type { ReviewRequest } from "../../domain/review-request.js"
 import { createDiscoveryBatcher } from "../../shared/notifications/discovery-batcher.js"
 import { notificationText } from "../../shared/notifications/notification-text.js"
 import { parseOptions } from "../../shared/options.js"
@@ -25,8 +24,8 @@ export default Plugin.define({
 
     void rpc()
       .snapshot({})
-      .then((snapshot) => update(snapshot as QueueSnapshot))
-    const stopState = rpc().events.on("state", (event) => update(event.data as QueueSnapshot))
+      .then((snapshot) => update(snapshot))
+    const stopState = rpc().events.on("state", (event) => update(event.data))
     const openPanel = () => {
       const session = ctx.sessions.current() ?? ctx.sessions.list()[0]
       if (session) {
@@ -53,7 +52,7 @@ export default Plugin.define({
       }
     })
     const stopDiscovered = rpc().events.on("discovered", (event) => {
-      batcher.push((event.data as { item: ReviewRequest }).item)
+      batcher.push(event.data.item)
     })
 
     const tab: PanelTab = {

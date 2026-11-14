@@ -2,7 +2,6 @@
 import { Plugin } from "@opencode/plugin/tui"
 import { Show } from "solid-js"
 import { emptySnapshot, type QueueSnapshot } from "../../domain/review-queue.js"
-import type { ReviewRequest } from "../../domain/review-request.js"
 import { createDiscoveryBatcher } from "../../shared/notifications/discovery-batcher.js"
 import { notificationText } from "../../shared/notifications/notification-text.js"
 import { parseOptions } from "../../shared/options.js"
@@ -22,14 +21,14 @@ export default Plugin.define({
     const directory = (context.location ?? context.data.location.default()).directory
     void rpc.repository({ directory }).then((result) =>
       updateState((draft) => {
-        const repository = (result as { repository: string | null }).repository
+        const repository = result.repository
         if (repository) {
           draft.repository = repository
         }
       }),
     )
-    void rpc.snapshot({}).then((snapshot) => update(snapshot as QueueSnapshot))
-    const stopState = rpc.events.on("state", (event) => update(event.data as QueueSnapshot))
+    void rpc.snapshot({}).then((snapshot) => update(snapshot))
+    const stopState = rpc.events.on("state", (event) => update(event.data))
     const batcher = createDiscoveryBatcher((items) => {
       const { title, message } = notificationText(items)
       context.ui.toast.show({ title, message: `${message}  ·  /reviews`, variant: "info" })
@@ -43,7 +42,7 @@ export default Plugin.define({
       }
     })
     const stopDiscovered = rpc.events.on("discovered", (event) => {
-      batcher.push((event.data as { item: ReviewRequest }).item)
+      batcher.push(event.data.item)
     })
 
     const removePanel = context.ui.slot({

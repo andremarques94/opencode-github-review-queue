@@ -81,6 +81,26 @@ describe("ReviewQueuePoller", () => {
     poller.stop()
   })
 
+  it("discards a persisted queue with a corrupt item", async () => {
+    const persistence: QueuePersistence = {
+      load: async () => ({ version: 1, initialized: true, items: [{ key: "acme/api#1" }] }),
+      save: vi.fn(async () => {}),
+    }
+    const poller = new ReviewQueuePoller(async () => ({ items: [item("acme/api", 1)] }), persistence, options)
+    const discovered = vi.fn()
+    poller.on((event) => {
+      if (event.type === "discovered") {
+        discovered(event.item)
+      }
+    })
+
+    await poller.start()
+
+    expect(discovered).not.toHaveBeenCalled()
+    expect(poller.snapshot().items).toEqual([item("acme/api", 1)])
+    poller.stop()
+  })
+
   it("ignores a request that briefly drops out of search results", async () => {
     const request = item("acme/api", 3)
     const queues = [[request], [], [request]]
