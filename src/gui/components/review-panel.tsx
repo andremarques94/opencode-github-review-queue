@@ -1,10 +1,11 @@
 import type { Context } from "@opencode/plugin/gui"
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import type { Store } from "solid-js/store"
-import type { QueueSnapshot } from "../../domain/review-queue.js"
+import type { QueueSnapshot, ReviewRequest } from "../../domain/review-queue.js"
 import { ReviewQueue } from "../../rpc/review-queue.js"
-import { filterItems, type QueueFilter, refreshLabel } from "../../shared/presentation.js"
+import { filterItems, groupByRepository, type QueueFilter, refreshLabel } from "../../shared/presentation.js"
 import { ReviewRow } from "./review-row.js"
+import { panelStyles } from "./styles.js"
 
 interface ReviewPanelProps {
   context: Context
@@ -51,70 +52,161 @@ export function ReviewPanel(props: ReviewPanelProps) {
   }
 
   return (
-    <section class="flex h-full min-h-0 flex-col bg-background-base text-text-base">
-      <header class="flex items-center justify-between gap-2 border-b border-border-base px-3 py-2">
-        <div class="min-w-0">
-          <div class="flex items-center gap-2 font-medium">
-            <span>Pending reviews</span>
-            <span class="text-text-muted">{items().length}</span>
-          </div>
-          <div class="truncate text-xs text-text-muted">
-            {refreshLabel(props.state)}
-            {props.state.stale ? " · stale" : ""}
-          </div>
+    <section class="grq">
+      <style>{panelStyles}</style>
+      <PanelHeader
+        context={props.context}
+        state={props.state}
+        count={items().length}
+        filter={filter()}
+        repository={repository()}
+        setFilter={setFilter}
+        refresh={refresh}
+      />
+      <Show when={props.state.error}>
+        <div class="grq-banner">{props.state.error?.message}</div>
+      </Show>
+      <Show
+        when={items().length > 0}
+        fallback={<EmptyState context={props.context} state={props.state} filter={filter()} />}
+      >
+        <GroupedList
+          context={props.context}
+          items={items()}
+          newKeys={props.state.newKeys}
+          grouped={filter() === "all"}
+          copy={copy}
+        />
+      </Show>
+    </section>
+  )
+}
+
+function PanelHeader(props: {
+  context: Context
+  state: Store<QueueSnapshot>
+  count: number
+  filter: QueueFilter
+  repository: string | undefined
+  setFilter(filter: QueueFilter): void
+  refresh(): void
+}) {
+  const status = () => {
+    const scope = props.filter === "current" ? props.repository?.split("/").pop() : undefined
+    return [refreshLabel(props.state), scope].filter(Boolean).join(" · ")
+  }
+  const segment = (value: QueueFilter, label: string, disabled = false) => (
+    <button
+      type="button"
+      class="grq-segment-button"
+      aria-pressed={props.filter === value}
+      disabled={disabled}
+      title={disabled ? "This session is not in a GitHub repository" : undefined}
+      onClick={() => props.setFilter(value)}
+    >
+      {label}
+    </button>
+  )
+
+  return (
+    <header class="grq-header">
+      <div class="grq-header-top">
+        <div class="grq-heading">
+          <span>Review requests</span>
+          <span class="grq-count">{props.count}</span>
         </div>
-        <div class="flex items-center gap-1">
-          <props.context.ui.Button
-            size="small"
-            variant={filter() === "current" ? "neutral" : "ghost-muted"}
-            disabled={!repository()}
-            onClick={() => setFilter("current")}
-          >
-            Current
-          </props.context.ui.Button>
-          <props.context.ui.Button
-            size="small"
-            variant={filter() === "all" ? "neutral" : "ghost-muted"}
-            onClick={() => setFilter("all")}
-          >
-            All
-          </props.context.ui.Button>
+        <div class="grq-tools">
+          <fieldset class="grq-segment" aria-label="Scope">
+            {segment("current", "Current", !props.repository)}
+            {segment("all", "All")}
+          </fieldset>
           <props.context.ui.Tooltip value="Refresh">
             <props.context.ui.IconButton
               icon="outline-rotate-clockwise"
               label="Refresh"
               size="small"
               busy={props.state.loading}
-              onClick={refresh}
+              onClick={props.refresh}
             />
           </props.context.ui.Tooltip>
         </div>
-      </header>
-
-      <Show when={props.state.error}>
-        <div class="border-b border-border-base bg-background-stronger px-3 py-2 text-xs text-text-muted">
-          <span class="font-medium text-warning-base">{props.state.stale ? "Stale data: " : ""}</span>
-          {props.state.error?.message}
-        </div>
-      </Show>
-      <Show when={!props.state.loading && items().length === 0}>
-        <div class="flex flex-1 items-center justify-center px-6 text-center text-sm text-text-muted">
-          {props.state.initialized ? "No pending review requests." : "Waiting for the first successful GitHub refresh."}
-        </div>
-      </Show>
-      <Show when={props.state.loading && !props.state.initialized}>
-        <div class="flex flex-1 items-center justify-center gap-2 text-sm text-text-muted">
-          <props.context.ui.Loader /> Loading review requests…
-        </div>
-      </Show>
-
-      <div class="min-h-0 flex-1 overflow-y-auto">
-        <For each={items()}>
-          {(item) => (
-            <ReviewRow context={props.context} item={item} isNew={props.state.newKeys.includes(item.key)} copy={copy} />
-          )}
-        </For>
       </div>
-    </section>
+      <div class="grq-status">
+        {status()}
+        <Show when={props.state.stale}>
+          <span class="grq-status-stale"> · stale</span>
+        </Show>
+      </div>
+    </header>
+  )
+}
+
+function EmptyState(props: { context: Context; state: Store<QueueSnapshot>; filter: QueueFilter }) {
+  const message = () => {
+    if (!props.state.initialized) {
+      return "Waiting for the first successful GitHub refresh."
+    }
+    return props.filter === "current" ? "No review requests in this repository." : "You're all caught up."
+  }
+
+  return (
+    <div class="grq-empty">
+      <Show
+        when={props.state.loading && !props.state.initialized}
+        fallback={
+          <>
+            <span class="grq-empty-icon">
+              <props.context.ui.Icon name="github" />
+            </span>
+            <span>{message()}</span>
+          </>
+        }
+      >
+        <props.context.ui.Loader />
+        <span>Loading review requests…</span>
+      </Show>
+    </div>
+  )
+}
+
+function GroupedList(props: {
+  context: Context
+  items: ReviewRequest[]
+  newKeys: readonly string[]
+  grouped: boolean
+  copy(text: string, name: string): void
+}) {
+  const groups = createMemo(() => groupByRepository(props.items))
+
+  return (
+    <div class="grq-list">
+      <For each={groups()}>
+        {(group) => (
+          <section>
+            <Show when={props.grouped}>
+              <div class="grq-group" title={group.repository}>
+                <span class="grq-group-name">
+                  <Show when={group.owner}>
+                    <span class="grq-group-owner">{group.owner} / </span>
+                  </Show>
+                  {group.name}
+                </span>
+                <span class="grq-group-count">{group.items.length}</span>
+              </div>
+            </Show>
+            <For each={group.items}>
+              {(item) => (
+                <ReviewRow
+                  context={props.context}
+                  item={item}
+                  isNew={props.newKeys.includes(item.key)}
+                  copy={props.copy}
+                />
+              )}
+            </For>
+          </section>
+        )}
+      </For>
+    </div>
   )
 }

@@ -5,7 +5,7 @@ import { createMemo, createSignal, For, Show } from "solid-js"
 import type { Store } from "solid-js/store"
 import type { QueueSnapshot, ReviewRequest } from "../../domain/review-queue.js"
 import { ReviewQueue } from "../../rpc/review-queue.js"
-import { age, filterItems, fullReference, type QueueFilter, refreshLabel } from "../../shared/presentation.js"
+import { ago, filterItems, fullReference, type QueueFilter, refreshLabel } from "../../shared/presentation.js"
 import type { TuiState } from "../state.js"
 
 interface ReviewPanelProps {
@@ -157,7 +157,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
               <text fg={context.theme.text.base}> {item.title}</text>
               <text fg={context.theme.text.muted}>
                 {" "}
-                @{item.author} · {age(item.createdAt)} ago
+                @{item.author} · {ago(item.createdAt)}
               </text>
             </box>
           )}

@@ -1,7 +1,7 @@
 import type { Context } from "@opencode/plugin/gui"
 import { Show } from "solid-js"
 import type { ReviewRequest } from "../../domain/review-queue.js"
-import { age, fullReference } from "../../shared/presentation.js"
+import { ago, fullReference } from "../../shared/presentation.js"
 
 interface ReviewRowProps {
   context: Context
@@ -11,39 +11,29 @@ interface ReviewRowProps {
 }
 
 export function ReviewRow(props: ReviewRowProps) {
+  const open = () => props.context.system.openExternal(props.item.url)
+
   return (
-    <article class="group border-b border-border-base px-3 py-2 hover:bg-background-stronger">
-      <div class="flex items-start gap-2">
-        <button
-          type="button"
-          class="min-w-0 flex-1 text-left"
-          onClick={() => props.context.system.openExternal(props.item.url)}
-        >
-          <div class="flex items-center gap-1.5 text-sm font-medium">
-            <Show when={props.isNew}>
-              <span class="text-success-base" title="New review request">
-                ●
-              </span>
-            </Show>
-            <span class="truncate">{props.item.repository}</span>
-            <span class="shrink-0">#{props.item.number}</span>
-            <Show when={props.item.draft}>
-              <span class="shrink-0 rounded bg-background-strongest px-1 text-[10px] text-text-muted">DRAFT</span>
-            </Show>
-          </div>
-          <div class="mt-0.5 line-clamp-2 text-sm">{props.item.title}</div>
-          <div class="mt-1 text-xs text-text-muted">
-            @{props.item.author} · {age(props.item.createdAt)} ago
-          </div>
-        </button>
+    <article class="grq-row">
+      <span class="grq-dot" data-hidden={props.isNew ? undefined : ""} title={props.isNew ? "New" : undefined} />
+      <button type="button" class="grq-row-main" title={props.item.title} onClick={open}>
+        <div class="grq-row-title">{props.item.title}</div>
+        <div class="grq-row-meta">
+          <span class="grq-number">#{props.item.number}</span>
+          <span class="grq-sep">·</span>
+          <span>@{props.item.author}</span>
+          <span class="grq-sep">·</span>
+          <span class="grq-number">{ago(props.item.createdAt)}</span>
+          <Show when={props.item.draft}>
+            <span class="grq-badge">Draft</span>
+          </Show>
+        </div>
+      </button>
+      <div class="grq-row-actions">
         <props.context.ui.Menu
-          label="Copy or open"
+          label="Pull request actions"
           items={[
-            {
-              label: "Open on GitHub",
-              icon: "outline-arrow-up-right",
-              onSelect: () => props.context.system.openExternal(props.item.url),
-            },
+            { label: "Open on GitHub", icon: "outline-arrow-up-right", onSelect: open },
             {
               label: `Copy #${props.item.number}`,
               icon: "copy",
