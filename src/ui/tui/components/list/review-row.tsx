@@ -93,7 +93,10 @@ export function ReviewRow(props: {
             {(mark) => <span style={{ fg: theme.text.feedback[mark.tone].base }}> {mark.label}</span>}
           </For>
           <Show when={sizeMark(props.item)}>{(size) => ` ${size().label}`}</Show>
-          {props.item.authored ? "" : ` · @${props.item.author}`}
+          <Show when={!props.item.authored}>
+            {" · "}
+            <b>@{props.item.author}</b>
+          </Show>
           <Show when={teamRequest(props.item)}>
             {(team) => <span style={{ fg: theme.text.faint }}> {team().label}</span>}
           </Show>

@@ -131,7 +131,7 @@ export function ReviewRow(props: ReviewRowProps) {
             </Show>
             <Show when={!props.item.authored}>
               <span class="grq-sep">·</span>
-              <span>@{props.item.author}</span>
+              <span class="grq-author">@{props.item.author}</span>
             </Show>
             <Show when={teamRequest(props.item)}>
               {(team) => (
