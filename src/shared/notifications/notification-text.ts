@@ -16,7 +16,6 @@ function batchTitle(items: readonly ReviewRequest[]): string {
   return `${items.length} pull requests to review`
 }
 
-/** One notice on one of the user's own pull requests, keyed by pull request and kind for the batcher. */
 export type MyUpdate = { key: string; notice: MyNotice; item: ReviewRequest }
 
 export const myUpdate = (notice: MyNotice, item: ReviewRequest): MyUpdate => ({

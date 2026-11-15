@@ -88,7 +88,6 @@ describe("AddressSessions", () => {
         permissions: expect.arrayContaining([{ action: "shell", resource: "git push *", effect: "deny" }]),
       }),
     )
-    // Fixing the code is the point, so edits stay allowed.
     expect(session.create.mock.calls[0]?.[0].permissions.map((rule) => rule.action)).not.toContain("edit")
     expect(session.instructions.entry.put.mock.calls[0]?.[0].value).toContain("Name this.")
     expect(await start({ model })).toEqual({ status: "resumed", sessionID: "ses_9" })

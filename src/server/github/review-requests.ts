@@ -4,7 +4,6 @@ import { type Checks, type RequestedVia, type ReviewRequest, requestKey } from "
 import { GhError, runGh } from "./cli.js"
 
 const REQUESTED = "is:pr is:open review-requested:@me"
-/** Reviewed pull requests that no longer ask for the user; the queue keeps those with new commits since. */
 const REVIEWED = "is:pr is:open reviewed-by:@me -review-requested:@me"
 
 const AUTHORED = "is:pr is:open author:@me"
@@ -36,7 +35,6 @@ fragment reviewer on RequestedReviewer {
 }`
 
 const QUERY = pullRequestQuery("")
-/** Only the user's own pull requests need how their reviews stand. */
 const AUTHORED_QUERY = pullRequestQuery(`
         reviewDecision mergeStateStatus
         latestReviews(first: 20) { nodes { state author { login } } }`)
@@ -49,10 +47,9 @@ const CHECKS: Record<string, Checks> = {
   EXPECTED: "pending",
 }
 
-/** Whether the pull request conflicts; GitHub says `UNKNOWN` while it is still computing. */
+/** GitHub says `UNKNOWN` while it is still computing. */
 const MERGEABLE: Record<string, boolean> = { MERGEABLE: false, CONFLICTING: true }
 
-/** Leaves a field out instead of storing what GitHub did not report. */
 const known = <K extends string, T>(key: K, value: T | null | undefined) =>
   (value === null || value === undefined ? {} : { [key]: value }) as { [P in K]?: T }
 
@@ -112,7 +109,6 @@ const teamName = (team: { slug: string; organization: { login: string } }) => `$
 const isUser = (reviewer: Reviewer, login: string) =>
   reviewer?.__typename === "User" && reviewer.login.toLowerCase() === login.toLowerCase()
 
-/** A direct request wins over a team one: the user is asked personally either way. */
 function requestedVia(reviewers: readonly Reviewer[], viewer: string): RequestedVia | undefined {
   if (reviewers.some((reviewer) => isUser(reviewer, viewer))) {
     return { kind: "you" }
@@ -129,7 +125,6 @@ function asksFor(reviewer: Reviewer, via: RequestedVia, viewer: string): boolean
   return reviewer?.__typename === "Team" && via.teams.includes(teamName(reviewer))
 }
 
-/** The latest request for the user or their teams; when it is unclear who was asked, the latest request at all. */
 function requestedAt(events: readonly RequestEvent[], via: RequestedVia | undefined, viewer: string | undefined) {
   const matching = via && viewer ? events.filter((event) => asksFor(event.reviewer, via, viewer)) : events
   return matching.at(-1)?.at
@@ -264,7 +259,6 @@ const reviewerName = (reviewer: Reviewer) => {
   }
 }
 
-/** A pull request of the user's: nobody asks them to review it, so only how its reviews stand is kept. */
 function readAuthored(node: unknown, viewer: string | undefined): ReviewRequest {
   const { requestedVia: _, ...request } = readNode(node, viewer)
   const parsed = v.parse(AuthoredNode, node)

@@ -25,7 +25,6 @@ export type PollerOptions = {
 const DEFAULT_RENOTIFY_AFTER_MS = 60 * 60_000
 export type FetchResult = {
   items: ReviewRequest[]
-  /** The user's own pull requests, when that list is on. */
   authored?: ReviewRequest[]
   retryAt?: string
 }
@@ -282,7 +281,6 @@ export class ReviewQueuePoller {
     }
   }
 
-  /** Without a fetched list there is nothing to compare, and the saved one is left as it was. */
   private authoredUpdate(next: ReviewRequest[] | undefined) {
     if (!next) {
       return { authored: {}, notices: [] }

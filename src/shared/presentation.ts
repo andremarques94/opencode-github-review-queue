@@ -2,7 +2,6 @@ import { needsYou } from "../domain/my-pull-request.js"
 import type { QueueSnapshot } from "../domain/review-queue.js"
 import { type ReviewRequest, waitingSince } from "../domain/review-request.js"
 
-/** **Mine** lists the user's own pull requests instead of the review queue. */
 export type QueueFilter = "current" | "all" | "mine"
 
 export function filterItems(
@@ -40,7 +39,6 @@ function age(createdAt: string, now = Date.now()): string {
   return `${Math.floor(days / 30)}mo`
 }
 
-/** All, Current, then Mine when the user's own pull requests are on. */
 export function nextFilter(filter: QueueFilter, mine: boolean): QueueFilter {
   switch (filter) {
     case "all":
@@ -63,11 +61,9 @@ export function emptyMessage(filter: QueueFilter): string {
   }
 }
 
-/** How many of the user's own pull requests need them; undefined when that list is off. */
 export const needingYou = (state: Pick<QueueSnapshot, "authored">): number | undefined =>
   state.authored?.filter(needsYou).length
 
-/** How long a wait has run, such as `(12s)` or `(1m 05s)`, so a slow model still visibly counts up. */
 export function elapsedLabel(startedAt: number, now: number): string {
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1_000))
   const minutes = Math.floor(seconds / 60)
@@ -158,7 +154,6 @@ export function sizeMark(item: ReviewRequest): { label: string; detail: string }
   }
 }
 
-/** How long the pull request has waited on the user, flagged once it passes `staleAfterMs`. */
 export function waitMark(
   item: ReviewRequest,
   staleAfterMs: number | undefined,
@@ -174,7 +169,6 @@ export function waitMark(
   }
 }
 
-/** Only team requests are marked: a direct request is what the queue is for. */
 export function teamRequest(item: ReviewRequest): { label: string; detail: string } | undefined {
   if (item.requestedVia?.kind !== "team") {
     return undefined

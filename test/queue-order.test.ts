@@ -91,7 +91,6 @@ describe("row marks", () => {
     expect(waitMark(requested, 4 * 24 * 60 * 60_000, now).stale).toBe(false)
     expect(waitMark(requested, undefined, now).stale).toBe(false)
     expect(waitMark(requested, undefined, now).detail).toMatch(/^Requested /)
-    // A follow-up without a commit date waits from creation, and says so.
     expect(waitMark({ ...requested, followUp: true }, undefined, now).detail).toMatch(/^Opened /)
     const pushed = { ...requested, followUp: true as const, lastCommitAt: "2026-01-03T00:00:00.000Z" }
     expect(waitMark(pushed, undefined, now)).toMatchObject({ label: "1d ago" })

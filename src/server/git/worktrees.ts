@@ -42,7 +42,6 @@ export async function createWorktree(input: {
   return sha
 }
 
-/** The checked-out branch, or undefined on a detached head. */
 export async function currentBranch(directory: string, signal: AbortSignal): Promise<string | undefined> {
   const branch = await runGit(directory, ["rev-parse", "--abbrev-ref", "HEAD"], signal)
   return branch === "HEAD" ? undefined : branch
@@ -54,11 +53,7 @@ const hasLocalBranch = (checkout: string, branch: string, signal: AbortSignal) =
     () => false,
   )
 
-/**
- * A worktree on `branch`, so commits there land on the pull request's branch, unlike the detached review worktree.
- * An existing worktree at that path is reused when it is on the branch. Git refuses a branch checked out elsewhere,
- * and that refusal is the error the user sees.
- */
+/** Git refuses a branch checked out elsewhere, and that refusal is the error the user sees. */
 export async function createBranchWorktree(input: {
   checkout: string
   repository: string
