@@ -169,6 +169,10 @@ Inside a review session you can also triage without the chat:
   rendered as Markdown. `j`/`k` move, `y` keeps, `d` drops, `e` edits the comment (`ctrl+s` saves), `a` asks the
   agent, `enter` shows the evidence, `p` posts, and `shift+f` toggles full screen.
 
+On the Desktop you can also point at code yourself: leave line comments on the review session's files or diff, then
+click **Add as findings** in the Findings tab. The agent investigates each marked line and records a finding there,
+or says why it found nothing; the comments are removed from the composer once sent.
+
 A decision made there is yours: the agent skips it and moves on instead of asking again. Saving an edited comment keeps
 the finding. The `review_*` tools only appear in review sessions.
 

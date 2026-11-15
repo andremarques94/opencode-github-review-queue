@@ -1,6 +1,8 @@
-import type { Context, MountedSession } from "@opencode/plugin/gui"
+import type { Comment, Context, MountedSession } from "@opencode/plugin/gui"
 import type { Finding, ReviewDraft } from "../../../domain/review-draft.js"
 import { askAboutFindingFlow, decideFindingFlow, editFindingFlow } from "../../../shared/review/finding-flows.js"
+import { lineComment } from "../../../shared/review/line-comments.js"
+import { ReviewQueue } from "../../../shared/rpc.js"
 import { createFindingFlowHost } from "./flow-host.js"
 import { attempting, createReviewActions } from "./review-actions.js"
 
@@ -8,6 +10,7 @@ export type FindingActions = {
   decide(draft: ReviewDraft, finding: Finding, decision: "keep" | "drop"): Promise<void>
   edit(draft: ReviewDraft, finding: Finding): Promise<void>
   ask(draft: ReviewDraft, finding: Finding): Promise<void>
+  addLineComments(draft: ReviewDraft, comments: readonly Comment[], remove: (id: string) => void): Promise<void>
   post(draft: ReviewDraft): Promise<void>
   showFindings(): void
 }
@@ -44,6 +47,23 @@ export function createFindingActions(input: {
       }, "Could not save the comment"),
     ask: (draft, finding) =>
       attempt(() => askAboutFindingFlow(host, draft, finding), "Could not ask about the finding"),
+    addLineComments: (draft, comments, remove) =>
+      attempt(async () => {
+        await context.client
+          .rpc(ReviewQueue)
+          .addLineComments({ sessionID: draft.sessionID, comments: comments.map(lineComment) })
+        // Sent to the agent, so they must not ride along with the user's next prompt as well.
+        for (const comment of comments) {
+          remove(comment.id)
+        }
+        context.toast.show({
+          variant: "success",
+          title:
+            comments.length === 1
+              ? "Line comment sent to the review agent"
+              : `${comments.length} line comments sent to the review agent`,
+        })
+      }, "Could not send the line comments"),
     async post(draft) {
       await reviews.post(draft)
       input.reload()

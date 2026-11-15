@@ -6,6 +6,7 @@ import {
   type ReviewDraft,
 } from "../../../domain/review-draft.js"
 import type { ReviewedRecord } from "../../../domain/review-history.js"
+import type { LineComment } from "../../../shared/rpc.js"
 import { diffCommand } from "../findings.js"
 
 const CHOICES = "Keep, Edit wording, Drop, Explain, Investigate"
@@ -145,6 +146,21 @@ export function presentFinding(draft: ReviewDraft, finding: Finding): string {
 }
 
 export const askPrompt = (finding: Finding) => `Explain finding #${finding.id}`
+
+export function lineCommentsPrompt(comments: readonly LineComment[]): string {
+  const list = comments
+    .map((comment) => {
+      const side = comment.side === "LEFT" ? "the old side (LEFT)" : "the new side (RIGHT)"
+      const note = comment.note.trim() ? `: ${comment.note.trim()}` : ""
+      return `- \`${findingLocation(comment)}\` on ${side}${note}`
+    })
+    .join("\n")
+  return `Add a finding at each place I marked:
+${list}
+
+For each one, investigate what I pointed at, then record it with review_add_finding at that location and side, keeping my
+point in the comment body. If you find nothing wrong there, tell me why instead of recording it. Then go on as before.`
+}
 
 export function findingCard(draft: ReviewDraft, finding: Finding): string {
   const position = draft.findings.length - pendingFindings(draft).length + 1

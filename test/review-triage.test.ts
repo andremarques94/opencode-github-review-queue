@@ -72,6 +72,44 @@ beforeEach(async () => {
   await agent.setVerdict("ses_1", "REQUEST_CHANGES", "Fix it.")
 })
 
+describe("line comments", () => {
+  it("hands the marked lines to the agent, relative to the worktree", async () => {
+    await triage(panel, prompt).addLineComments({
+      sessionID: "ses_1",
+      comments: [
+        {
+          path: `${base.worktree}/src/app.ts`,
+          line: 3,
+          startLine: 2,
+          side: "RIGHT",
+          startSide: "RIGHT",
+          note: "Leaks?",
+        },
+        { path: "src/old.ts", line: 4, side: "LEFT", note: "" },
+      ],
+    })
+
+    const text = prompt.mock.calls[0]?.[0].text ?? ""
+    expect(text).toContain("- `src/app.ts:2-3` on the new side (RIGHT): Leaks?")
+    expect(text).toContain("- `src/old.ts:4` on the old side (LEFT)\n")
+    expect(text).toContain("review_add_finding")
+  })
+
+  it("refuses once the review is posted", async () => {
+    await new DraftStore(storage(saved)).update(base.key, (draft) => {
+      draft.status = "posted"
+    })
+
+    await expect(
+      triage(panel, prompt).addLineComments({
+        sessionID: "ses_1",
+        comments: [{ path: "src/app.ts", line: 2, side: "RIGHT", note: "" }],
+      }),
+    ).rejects.toThrow(/already posted/)
+    expect(prompt).not.toHaveBeenCalled()
+  })
+})
+
 describe("panel triage", () => {
   it("records the user's decision where the agent's next finding sees it", async () => {
     expect(nextFinding(await agent.draftForSession("ses_1"))?.id).toBe(2)

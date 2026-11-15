@@ -161,7 +161,12 @@ export default Plugin.define({
       region: "side",
       list: (input) => (input.open.includes(FINDINGS_PANEL) && reviewDraft(input.session) ? [findingsTab] : []),
       render: (props) => (
-        <FindingsPanel context={ctx} draft={reviewDraft(props.session)} actions={findingActions(() => props.session)} />
+        <FindingsPanel
+          context={ctx}
+          draft={reviewDraft(props.session)}
+          comments={props.screen.comment}
+          actions={findingActions(() => props.session)}
+        />
       ),
     })
     // A pill rather than a `session.header` slot: it has a popover for the Post action, shows only in the sessions
