@@ -50,13 +50,11 @@ export function worktreePath(cacheDirectory: string, repository: string, number:
   return join(worktreesDirectory(cacheDirectory), owner, name, `pr-${number}`)
 }
 
-/** Where addressing a review checks the pull request's branch out, when the user's checkout is on another one. */
 export function addressWorktreePath(cacheDirectory: string, repository: string, number: number): string {
   const [owner, name] = segments(repository)
   return join(cacheDirectory, "address", owner, name, `pr-${number}`)
 }
 
-/** The root of the session's own clone of `repository`, if that is what the session is in. */
 export async function sessionCheckout(input: {
   repository: string
   directory?: string | undefined

@@ -3,7 +3,6 @@ export type DiscoveryBatcher<T> = {
   dispose(): void
 }
 
-/** Batches what arrives together into one delivery, dropping a key it delivered within the window. */
 export function createDiscoveryBatcher<T extends { key: string }>(
   deliver: (items: T[]) => void,
   { delayMs = 750, windowMs = 60 * 60_000, now = Date.now } = {},

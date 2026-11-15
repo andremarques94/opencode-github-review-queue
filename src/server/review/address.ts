@@ -16,25 +16,17 @@ export type AddressResult =
 
 const INSTRUCTIONS_KEY = "github-review-queue.address"
 
-/**
- * File edits stay allowed: fixing the code is the point. What reaches GitHub stays with the user, so pushing,
- * merging, reviewing, commenting, and GraphQL mutations such as resolving a thread are denied.
- */
+/** Edits stay allowed; what reaches GitHub, including resolving a thread through GraphQL, stays with the user. */
 const PERMISSIONS = ["git push *", "gh pr merge *", "gh pr review *", "gh pr comment *", "gh api graphql *"].map(
   (resource) => ({ action: "shell", resource, effect: "deny" as const }),
 )
 
-/** Sessions that address the reviews of the user's own pull requests, in their own checkout and branch. */
 export class AddressSessions {
   constructor(
     private readonly store: KeyedStore<AddressSession>,
     private readonly cacheDirectory: string,
   ) {}
 
-  /**
-   * Checks before it acts: a checkout on another branch comes back as `needs-worktree` for the user to confirm, and
-   * without a model as `needs-model`. Nothing is created until both are settled.
-   */
   async start(input: {
     item: ReviewRequest
     directory?: string | undefined
@@ -78,7 +70,6 @@ export class AddressSessions {
     return { status: "started", sessionID: session.id }
   }
 
-  /** Where the session works: the user's checkout when it is on the branch, otherwise a worktree to add. */
   private async place(item: ReviewRequest, directory: string | undefined, signal: AbortSignal) {
     if (!item.authored) {
       throw new Error("Only your own pull requests have a review to address.")
@@ -111,10 +102,7 @@ export class AddressSessions {
     }
   }
 
-  /**
-   * Forgets the sessions of pull requests no longer among the user's open ones. Their worktrees stay: they may hold
-   * the user's commits.
-   */
+  /** Worktrees stay: they may hold the user's commits. */
   async prune(open: ReadonlySet<string>): Promise<void> {
     for (const record of await this.store.list()) {
       if (!open.has(record.key)) {

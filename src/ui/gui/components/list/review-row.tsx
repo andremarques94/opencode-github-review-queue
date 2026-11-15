@@ -57,7 +57,6 @@ export function ReviewRow(props: ReviewRowProps) {
     }
   }
 
-  // The user's own pull request has nobody's review to start, so a click opens it on GitHub instead.
   const review = () =>
     props.item.authored && !resumable(draft())
       ? open()

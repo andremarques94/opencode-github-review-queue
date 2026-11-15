@@ -21,7 +21,7 @@ export const FindingFields = {
   confidence: Confidence,
   evidence: v.string(),
   body: v.pipe(v.string(), v.nonEmpty()),
-  /** The new text for the commented RIGHT lines, posted as a GitHub suggestion; empty deletes them. */
+  /** Empty deletes the commented lines. */
   suggestion: v.exactOptional(v.string()),
 }
 
@@ -80,13 +80,12 @@ export type ReviewPayload = {
 
 const SUGGESTION_OPENING = /^(`{3,})suggestion[ \t]*$/
 
-/** A fence longer than any backtick run in the text, so a suggestion that quotes a fence still closes where it should. */
+/** Longer than any backtick run inside, so a suggestion that quotes a fence still closes. */
 function fenceFor(text: string): string {
   const longest = Math.max(2, ...(text.match(/`+/g) ?? []).map((run) => run.length))
   return "`".repeat(longest + 1)
 }
 
-/** The comment as GitHub gets it: the body, then the suggestion block. */
 export function commentBody(finding: Pick<Finding, "body" | "suggestion">): string {
   if (finding.suggestion === undefined) {
     return finding.body
@@ -96,7 +95,6 @@ export function commentBody(finding: Pick<Finding, "body" | "suggestion">): stri
   return `${finding.body.trimEnd()}\n\n${fence}suggestion\n${lines}${fence}`
 }
 
-/** The reverse of `commentBody`: a suggestion block closing the text becomes the suggestion. */
 export function splitComment(text: string): { body: string; suggestion?: string } {
   const lines = text.trimEnd().split("\n")
   const closing = lines.at(-1)?.trim()

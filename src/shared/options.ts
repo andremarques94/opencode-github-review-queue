@@ -9,12 +9,9 @@ export type PluginOptions = QueueRules & {
   notifications: boolean
   keepClones: boolean
   followUps: boolean
-  /** List the user's own open pull requests under **Mine**. */
   myPullRequests: boolean
-  /** Notify when one of them gets changes requested, becomes ready to merge, or starts failing its checks. */
   notifyOnMyPullRequests: boolean
   sort: QueueSort
-  /** How long a pull request may wait before its age is highlighted. */
   staleAfterMs?: number
   cacheDirectory?: string
   reviewGuidelines?: string

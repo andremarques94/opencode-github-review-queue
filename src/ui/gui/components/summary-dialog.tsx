@@ -4,7 +4,6 @@ import { elapsedLabel } from "../../../shared/presentation.js"
 import type { PendingSummary, SummaryView } from "../../../shared/review/summary.js"
 import { dialogStyles } from "./styles.js"
 
-/** Opens at once with a loader, so the click shows it worked while the model reads the pull request. */
 export function openSummary(context: Context, input: { title: string; waiting: string }): PendingSummary {
   const [view, setView] = createSignal<SummaryView>()
   const startedAt = Date.now()

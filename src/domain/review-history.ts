@@ -29,10 +29,7 @@ export function followUpOf(item: ReviewRequest, record: ReviewedRecord | undefin
   return record
 }
 
-/**
- * Adds the reviewed pull requests that moved on since the user's posted review. A request wins over a follow-up, and
- * a follow-up drops the teams GitHub still lists: nobody is asking the user anything.
- */
+/** A follow-up drops `requestedVia`: GitHub still lists the other requested teams, but nobody is asking the user. */
 export function withFollowUps(
   requested: readonly ReviewRequest[],
   reviewed: readonly ReviewRequest[],

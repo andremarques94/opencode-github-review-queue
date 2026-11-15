@@ -44,7 +44,6 @@ export class Findings {
     return findingIn(saved, id)
   }
 
-  /** A `null` suggestion removes it; other fields left out stay as they are. */
   async update(sessionID: string, id: number, changes: FindingChanges): Promise<Finding> {
     const draft = await this.editableDraft(sessionID)
     const { suggestion, ...current } = findingIn(draft, id)

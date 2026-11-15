@@ -9,7 +9,6 @@ import { MarkdownText } from "./markdown-text.js"
 const SUMMARY_HEIGHT = 24
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
-/** Opens at once with a spinner, so the keypress shows it worked while the model reads the pull request. */
 export function openSummary(
   context: ReturnType<typeof usePlugin>,
   input: { title: string; waiting: string },

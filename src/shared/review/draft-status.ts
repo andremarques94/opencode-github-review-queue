@@ -24,10 +24,7 @@ export function draftLabel(draft: ReviewDraft | undefined): string | undefined {
 
 export const resumable = (draft: ReviewDraft | undefined) => draft !== undefined && draft.status !== "posted"
 
-/**
- * A draft in progress wins; otherwise new commits matter more than a review that is already posted. The user's own
- * pull request says how its reviews stand instead.
- */
+/** A draft in progress wins; otherwise new commits matter more than a review that is already posted. */
 export function reviewLabel(
   item: ReviewRequest,
   draft: ReviewDraft | undefined,
@@ -82,7 +79,6 @@ export type ReviewProgress = {
   blocker: string | undefined
 }
 
-/** The few words that fit the composer pill: _Reviewing_, _2 to decide_, _Ready to post_, or _Posted_. */
 export function pillStatus(draft: ReviewDraft): string {
   const label = draftLabel(draft) ?? "reviewing"
   return `${label.charAt(0).toUpperCase()}${label.slice(1)}`

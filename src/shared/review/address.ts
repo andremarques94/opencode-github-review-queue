@@ -7,10 +7,6 @@ export type AddressFlowHost = Pick<ReviewFlowHost, "confirm" | "models" | "selec
   addressReview(input: RpcInput<"addressReview">): Promise<RpcOutput<"addressReview">>
 }
 
-/**
- * Opens, or returns to, a session that addresses the review in the user's own checkout. A checkout on another branch
- * is never switched: the user confirms a worktree on the pull request's branch instead.
- */
 export async function addressReviewFlow(
   host: AddressFlowHost,
   item: ReviewRequest,

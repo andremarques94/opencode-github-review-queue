@@ -108,7 +108,6 @@ describe("queueSource", () => {
     const on = await queueSource(parseOptions({ excludeAuthors: ["dependabot"] }), records())(signal)
     const off = await queueSource(parseOptions({ myPullRequests: false }), records())(signal)
 
-    // The queue rules are for the review queue: they never hide the user's own work.
     expect(on.authored?.map((entry) => entry.number)).toEqual([5])
     expect(on.items).toEqual([])
     expect(off).not.toHaveProperty("authored")

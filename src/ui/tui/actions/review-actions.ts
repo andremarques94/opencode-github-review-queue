@@ -114,7 +114,6 @@ export function useReviewActions(input: {
         if (!item) {
           return
         }
-        // The user's own pull request has nobody's review to start, so Enter opens it on GitHub instead.
         if (item.authored && !resumable(currentDraft())) {
           await actions.open()
           return
