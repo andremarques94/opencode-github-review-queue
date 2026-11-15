@@ -111,7 +111,8 @@ button.
 Rows show what GitHub reports about the pull request's last commit and mergeability: ✓, ✗, or ● for checks that
 pass, fail, or are still running, _conflicts_ when it cannot merge cleanly, and _N threads_ for unresolved review
 threads. Anything GitHub does not know yet, such as a pull request without checks or mergeability still being
-computed, shows nothing.
+computed, shows nothing. On a pull request with more than 100 review threads only the first 100 are counted, so the
+mark reads _N+ threads_.
 
 ### Snooze
 

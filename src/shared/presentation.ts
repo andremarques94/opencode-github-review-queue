@@ -98,11 +98,12 @@ export function readinessMarks(item: ReviewRequest): ReadinessMark[] {
     marks.push({ label: "conflicts", tone: "error", detail: "Conflicts with the base branch" })
   }
   if (item.unresolvedThreads) {
-    marks.push({
-      label: plural(item.unresolvedThreads, "thread"),
-      tone: "warning",
-      detail: plural(item.unresolvedThreads, "unresolved review thread"),
-    })
+    const detail = plural(item.unresolvedThreads, "unresolved review thread")
+    marks.push(
+      item.unresolvedThreadsCapped
+        ? { label: `${item.unresolvedThreads}+ threads`, tone: "warning", detail: `At least ${detail}` }
+        : { label: plural(item.unresolvedThreads, "thread"), tone: "warning", detail },
+    )
   }
   return marks
 }

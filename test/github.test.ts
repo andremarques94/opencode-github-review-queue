@@ -83,9 +83,29 @@ describe("fetchReviewRequests", () => {
       conflicts: true,
       unresolvedThreads: 2,
     })
+    expect(first).not.toHaveProperty("unresolvedThreadsCapped")
     for (const field of ["headSha", "checks", "conflicts", "unresolvedThreads"]) {
       expect(second).not.toHaveProperty(field)
     }
+  })
+
+  it("marks the thread count as a lower bound past the first page", async () => {
+    const threads = (isResolved: boolean) => ({
+      pageInfo: { hasNextPage: true },
+      nodes: [{ isResolved }, { isResolved: true }],
+    })
+    respond([
+      page([
+        { ...node(1, "2026-01-01T00:00:00Z"), reviewThreads: threads(false) },
+        { ...node(2, "2026-01-02T00:00:00Z"), reviewThreads: threads(true) },
+      ]),
+    ])
+
+    const [some, none] = (await fetchReviewRequests(signal)).items
+
+    expect(some).toMatchObject({ unresolvedThreads: 1, unresolvedThreadsCapped: true })
+    expect(none).not.toHaveProperty("unresolvedThreads")
+    expect(none).not.toHaveProperty("unresolvedThreadsCapped")
   })
 
   it.each([

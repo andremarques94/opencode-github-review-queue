@@ -71,6 +71,13 @@ describe("readiness", () => {
     expect(readinessSummary(ready)).toBe("Checks failing · Conflicts with the base branch · 1 unresolved review thread")
   })
 
+  it("shows a capped thread count as a lower bound", () => {
+    const busy = { ...item("acme/api", 1), unresolvedThreads: 1, unresolvedThreadsCapped: true }
+
+    expect(readinessMarks(busy).map((mark) => mark.label)).toEqual(["1+ threads"])
+    expect(readinessSummary(busy)).toBe("At least 1 unresolved review thread")
+  })
+
   it("mentions a clean merge only in the summary", () => {
     const clean = { ...item("acme/api", 1), checks: "passing" as const, conflicts: false, unresolvedThreads: 0 }
 

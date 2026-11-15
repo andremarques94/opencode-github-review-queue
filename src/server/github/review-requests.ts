@@ -11,7 +11,7 @@ const QUERY = `query($endCursor: String) {
         author { login }
         repository { nameWithOwner }
         commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
-        reviewThreads(first: 100) { nodes { isResolved } }
+        reviewThreads(first: 100) { pageInfo { hasNextPage } nodes { isResolved } }
       }
     }
   }
@@ -33,7 +33,22 @@ const Commits = v.object({
   nodes: v.array(v.object({ commit: v.object({ statusCheckRollup: v.nullable(v.object({ state: v.string() })) }) })),
 })
 
-const ReviewThreads = v.object({ nodes: v.array(v.object({ isResolved: v.boolean() })) })
+const ReviewThreads = v.object({
+  pageInfo: v.optional(v.object({ hasNextPage: v.boolean() })),
+  nodes: v.array(v.object({ isResolved: v.boolean() })),
+})
+
+/** Past the first page the count is a lower bound; none unresolved on it says nothing about the rest. */
+function threadReadiness(threads: v.InferOutput<typeof ReviewThreads> | null | undefined) {
+  if (!threads) {
+    return {}
+  }
+  const unresolvedThreads = threads.nodes.filter((thread) => !thread.isResolved).length
+  if (!threads.pageInfo?.hasNextPage) {
+    return { unresolvedThreads }
+  }
+  return unresolvedThreads > 0 ? { unresolvedThreads, unresolvedThreadsCapped: true } : {}
+}
 
 const PullRequest = v.pipe(
   v.object({
@@ -67,9 +82,7 @@ const PullRequest = v.pipe(
       ...(node.mergeable === "MERGEABLE" || node.mergeable === "CONFLICTING"
         ? { conflicts: node.mergeable === "CONFLICTING" }
         : {}),
-      ...(node.reviewThreads
-        ? { unresolvedThreads: node.reviewThreads.nodes.filter((thread) => !thread.isResolved).length }
-        : {}),
+      ...threadReadiness(node.reviewThreads),
     }
   }),
 )

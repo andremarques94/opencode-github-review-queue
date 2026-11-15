@@ -18,6 +18,8 @@ export const ReviewRequest = v.object({
   checks: v.exactOptional(Checks),
   conflicts: v.exactOptional(v.boolean()),
   unresolvedThreads: v.exactOptional(v.number()),
+  /** Only the first page of threads was counted, so `unresolvedThreads` is a lower bound. */
+  unresolvedThreadsCapped: v.exactOptional(v.boolean()),
 })
 export type ReviewRequest = v.InferOutput<typeof ReviewRequest>
 
