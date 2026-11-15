@@ -48,6 +48,16 @@ function age(createdAt: string, now = Date.now()): string {
   return `${Math.floor(days / 30)}mo`
 }
 
+/** The scopes as the TUI header lists them, left to right. */
+const scopes = (mine: boolean): QueueFilter[] => (mine ? ["all", "current", "mine"] : ["all", "current"])
+
+/** The scope beside `filter` in the header, staying put at either end. */
+export function adjacentFilter(filter: QueueFilter, direction: -1 | 1, mine: boolean): QueueFilter {
+  const order = scopes(mine)
+  const index = order.indexOf(filter)
+  return order[Math.min(order.length - 1, Math.max(0, index + direction))] ?? filter
+}
+
 export function nextFilter(filter: QueueFilter, mine: boolean): QueueFilter {
   switch (filter) {
     case "all":

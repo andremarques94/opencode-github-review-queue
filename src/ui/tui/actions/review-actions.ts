@@ -7,7 +7,7 @@ import { reviewedFor } from "../../../domain/review-history.js"
 import type { QueueSnapshot } from "../../../domain/review-queue.js"
 import type { ReviewRequest } from "../../../domain/review-request.js"
 import { parseOptions } from "../../../shared/options.js"
-import { fullReference, nextFilter, type QueueFilter } from "../../../shared/presentation.js"
+import { adjacentFilter, fullReference, nextFilter, type QueueFilter } from "../../../shared/presentation.js"
 import { addressReviewFlow } from "../../../shared/review/address.js"
 import { draftFor, resumable } from "../../../shared/review/draft-status.js"
 import { postReviewFlow, type ReviewFlowHost, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
@@ -40,6 +40,7 @@ export type ReviewActions = {
   refresh(): Promise<void>
   setFilter(filter: QueueFilter): void
   toggleFilter(): void
+  moveFilter(direction: -1 | 1): void
   close(): void
 }
 
@@ -234,6 +235,12 @@ export function useReviewActions(input: {
     toggleFilter() {
       actions.setFilter(nextFilter(input.filter(), parseOptions(context.options).myPullRequests))
     },
+    moveFilter(direction) {
+      const next = adjacentFilter(input.filter(), direction, parseOptions(context.options).myPullRequests)
+      if (next !== input.filter()) {
+        actions.setFilter(next)
+      }
+    },
     close: input.panel.close,
   }
 
@@ -282,11 +289,18 @@ export function useReviewActions(input: {
         run: () => actions.copy("reference"),
       },
       { id: "github-review-queue.copy-url", title: "Copy PR URL", bind: "u", run: () => actions.copy("link") },
+      { id: "github-review-queue.filter", title: "Cycle the queue's scope", bind: "f", run: actions.toggleFilter },
       {
-        id: "github-review-queue.filter",
-        title: "Toggle repository filter",
-        bind: "f,left,right",
-        run: actions.toggleFilter,
+        id: "github-review-queue.filter-left",
+        title: "Scope to the left",
+        bind: "left",
+        run: () => actions.moveFilter(-1),
+      },
+      {
+        id: "github-review-queue.filter-right",
+        title: "Scope to the right",
+        bind: "right",
+        run: () => actions.moveFilter(1),
       },
       { id: "github-review-queue.refresh", title: "Refresh review queue", bind: "r", run: actions.refresh },
       {

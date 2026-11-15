@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { type Authored, myNotices, myStatus, myStatusLabel } from "../src/domain/my-pull-request.js"
 import { type ReviewRequest, requestKey } from "../src/domain/review-request.js"
 import { myUpdate, myUpdateText } from "../src/shared/notifications/notification-text.js"
-import { filterItems, needingYou, nextFilter } from "../src/shared/presentation.js"
+import { adjacentFilter, filterItems, needingYou, nextFilter } from "../src/shared/presentation.js"
 import { reviewLabel } from "../src/shared/review/draft-status.js"
 
 const mine = (number: number, authored: Partial<Authored> = {}, extra: Partial<ReviewRequest> = {}): ReviewRequest => ({
@@ -95,6 +95,15 @@ describe("the Mine scope", () => {
     expect(nextFilter("current", true)).toBe("mine")
     expect(nextFilter("current", false)).toBe("all")
     expect(nextFilter("mine", true)).toBe("all")
+  })
+
+  it("moves left and right through the scopes, stopping at either end", () => {
+    expect(adjacentFilter("all", 1, true)).toBe("current")
+    expect(adjacentFilter("current", 1, true)).toBe("mine")
+    expect(adjacentFilter("mine", 1, true)).toBe("mine")
+    expect(adjacentFilter("mine", -1, true)).toBe("current")
+    expect(adjacentFilter("all", -1, true)).toBe("all")
+    expect(adjacentFilter("current", 1, false)).toBe("current")
   })
 
   it("words one update, and a batch", () => {
