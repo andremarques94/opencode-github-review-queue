@@ -5,13 +5,13 @@ review in the TUI and Desktop app.
 
 ## Layout
 
-- `src/domain`: review request (with readiness), queue, review draft, and review history (what was last
-  posted) types and rules, and the pull request diff parser
+- `src/domain`: review request (with readiness), queue, review draft, review history (what was last posted), and
+  snooze types and rules, and the pull request diff parser
 - `src/shared`: runtime-neutral code: options, presentation (row readiness marks), the RPC contract,
-  `notifications/`, and `review/` (draft status and row labels, post preview, and the start/post/reset
-  flows; both UIs run these through their flow host)
+  `notifications/`, and `review/` (draft status and row labels, post preview, the start/post/reset flows, and
+  snooze; both UIs run these through their flow host)
 - `src/server`: server entry, the polling state machine, the lease that picks the one instance that polls
-  (`queue-lease.ts`), and plain keyed storage (`keyed-store.ts`), plus:
+  (`queue-lease.ts`), plain keyed storage (`keyed-store.ts`) and snooze pruning, plus:
   - `github/`: `gh` runner, review search, pull requests (including batched states), repository lookup
   - `git/`: `git` runner, remotes, worktrees
   - `review/`: draft storage, review sessions (start, follow-up, reset, post, prune), findings, checkouts, models,
@@ -27,8 +27,8 @@ Use relative imports (`./header/panel-header.js`, `../../shared/rpc.js`). OpenCo
 resolver that honours neither `tsconfig.json` paths nor `package.json` imports, so an alias such as `@/` fails at
 load time even when TypeScript, Vite and Vitest accept it. Adding an alias means adding a build step first.
 
-Plugin storage keys: `baseline` (the queue), `lease` (which instance polls), `draft/<key>`, and `reviewed/<key>`.
-Only the lease holder fetches from GitHub and prunes; the others re-read `baseline` each interval.
+Plugin storage keys: `baseline` (the queue), `lease` (which instance polls), `draft/<key>`, `reviewed/<key>`, and
+`snooze/<key>`. Only the lease holder fetches from GitHub and prunes; the others re-read `baseline` each interval.
 
 Keep runtime-specific code out of `src/domain` and `src/shared`. `src/server/github/cli.ts` spawns `gh` without a
 shell; never interpolate pull request data into a command or persist credentials.

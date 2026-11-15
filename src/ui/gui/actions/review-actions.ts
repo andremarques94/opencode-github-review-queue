@@ -2,14 +2,18 @@ import type { Context } from "@opencode/plugin/gui"
 import type { ReviewDraft } from "../../../domain/review-draft.js"
 import type { ReviewedRecord } from "../../../domain/review-history.js"
 import type { ReviewRequest } from "../../../domain/review-request.js"
+import { fullReference } from "../../../shared/presentation.js"
 import { postReviewFlow, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
-import { errorMessage } from "../../../shared/rpc.js"
+import { snoozeFlow } from "../../../shared/review/snooze.js"
+import { errorMessage, type LocalReviews, ReviewQueue } from "../../../shared/rpc.js"
 import { createFlowHost } from "./flow-host.js"
 
 export type ReviewActions = {
   review(item: ReviewRequest, resuming: boolean, previous: ReviewedRecord | undefined): Promise<void>
   post(draft: ReviewDraft): Promise<void>
   reset(draft: ReviewDraft): Promise<void>
+  snooze(item: ReviewRequest): Promise<void>
+  wake(item: ReviewRequest): Promise<void>
 }
 
 export function attempting(context: Context) {
@@ -31,6 +35,7 @@ export function createReviewActions(input: {
   context: Context
   server: () => string
   directory: () => string | undefined
+  updateLocal(local: LocalReviews): void
 }): ReviewActions {
   const { context } = input
   const host = createFlowHost(context)
@@ -66,5 +71,17 @@ export function createReviewActions(input: {
           context.toast.show({ variant: "success", title: "Review reset" })
         }
       }, "Could not reset the review"),
+    snooze: (item) =>
+      attempt(async () => {
+        const local = await snoozeFlow(host, item)
+        if (local) {
+          input.updateLocal(local)
+        }
+      }, "Could not snooze the pull request"),
+    wake: (item) =>
+      attempt(async () => {
+        input.updateLocal(await context.client.rpc(ReviewQueue).wake({ key: item.key }))
+        context.toast.show({ variant: "success", title: `${fullReference(item)} is back in the queue` })
+      }, "Could not wake the pull request"),
   }
 }

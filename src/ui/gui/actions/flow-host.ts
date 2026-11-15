@@ -1,6 +1,7 @@
 import type { Context, ServerRef } from "@opencode/plugin/gui"
 import type { FindingFlowHost } from "../../../shared/review/finding-flows.js"
 import type { ReviewFlowHost } from "../../../shared/review/flows.js"
+import type { SnoozeFlowHost } from "../../../shared/review/snooze.js"
 import { ReviewQueue } from "../../../shared/rpc.js"
 import { editFindingBody } from "../components/edit-finding-dialog.js"
 import { confirmPost } from "../components/post-review-dialog.js"
@@ -18,7 +19,7 @@ export function createFindingFlowHost(context: Context, server: () => ServerRef)
   }
 }
 
-export function createFlowHost(context: Context): ReviewFlowHost {
+export function createFlowHost(context: Context): ReviewFlowHost & SnoozeFlowHost {
   const rpc = () => context.client.rpc(ReviewQueue)
   return {
     confirm: (options) =>
@@ -35,5 +36,7 @@ export function createFlowHost(context: Context): ReviewFlowHost {
     startReview: (request) => rpc().startReview(request),
     postReview: (request) => rpc().postReview(request),
     resetReview: (request) => rpc().resetReview(request),
+    prompt: (options) => context.dialogs.prompt({ ...options, submit: "Snooze" }),
+    snooze: (request) => rpc().snooze(request),
   }
 }

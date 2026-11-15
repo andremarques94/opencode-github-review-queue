@@ -3,6 +3,7 @@ import { followUpOf, type ReviewedRecord as Reviewed, reviewedFor } from "../../
 import type { ReviewRequest } from "../../domain/review-request.js"
 import type { LocalReviews } from "../rpc.js"
 import { VERDICT_LABELS } from "./preview.js"
+import { activeSnooze, snoozeLabel } from "./snooze.js"
 
 export function draftLabel(draft: ReviewDraft | undefined): string | undefined {
   if (!draft) {
@@ -51,8 +52,12 @@ export function draftActions(draft: ReviewDraft | undefined): DraftAction[] {
 
 export const draftFor = (drafts: readonly ReviewDraft[], key: string) => drafts.find((draft) => draft.key === key)
 
-export const rowLabel = (item: ReviewRequest, local: LocalReviews) =>
-  reviewLabel(item, draftFor(local.drafts, item.key), reviewedFor(local.reviewed, item.key))
+export function rowLabel(item: ReviewRequest, local: LocalReviews, now: number): string | undefined {
+  const snooze = activeSnooze(local.snoozes, item, now)
+  const review = reviewLabel(item, draftFor(local.drafts, item.key), reviewedFor(local.reviewed, item.key))
+  const labels = [snooze ? `snoozed ${snoozeLabel(snooze, now)}` : undefined, review].filter(Boolean)
+  return labels.length > 0 ? labels.join(" · ") : undefined
+}
 
 export const draftForSession = (drafts: readonly ReviewDraft[], sessionID: string) =>
   drafts.find((draft) => draft.sessionID === sessionID)

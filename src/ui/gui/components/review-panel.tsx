@@ -1,8 +1,9 @@
 import type { Context } from "@opencode/plugin/gui"
-import { createEffect, createMemo, createSignal, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js"
 import type { Store } from "solid-js/store"
 import type { QueueSnapshot } from "../../../domain/review-queue.js"
 import { filterItems, type QueueFilter } from "../../../shared/presentation.js"
+import { hideSnoozed, watchClock } from "../../../shared/review/snooze.js"
 import { type LocalReviews, ReviewQueue } from "../../../shared/rpc.js"
 import { createReviewActions } from "../actions/review-actions.js"
 import { EmptyState } from "./feedback/empty-state.js"
@@ -16,6 +17,7 @@ export type ReviewPanelProps = {
   directory: string | undefined
   server: string
   local: LocalReviews
+  updateLocal(local: LocalReviews): void
   repositories: Map<string, string | undefined>
   state: Store<QueueSnapshot>
   update(snapshot: QueueSnapshot): void
@@ -23,12 +25,16 @@ export type ReviewPanelProps = {
 
 export function ReviewPanel(props: ReviewPanelProps) {
   const [filter, setFilter] = createSignal<QueueFilter>("all")
+  const [showSnoozed, setShowSnoozed] = createSignal(false)
+  const [now, setNow] = createSignal(Date.now())
+  onCleanup(watchClock(setNow))
   const [repository, setRepository] = createSignal<string | undefined>()
   const rpc = () => props.context.client.rpc(ReviewQueue)
   const actions = createReviewActions({
     context: props.context,
     server: () => props.server,
     directory: () => props.directory,
+    updateLocal: (local) => props.updateLocal(local),
   })
 
   createEffect(() => {
@@ -50,7 +56,9 @@ export function ReviewPanel(props: ReviewPanelProps) {
       })
   })
 
-  const items = createMemo(() => filterItems(props.state.items, filter(), repository()))
+  const view = createMemo(() =>
+    hideSnoozed(filterItems(props.state.items, filter(), repository()), props.local.snoozes, showSnoozed(), now()),
+  )
   const refresh = () => {
     void rpc()
       .refresh({})
@@ -68,7 +76,10 @@ export function ReviewPanel(props: ReviewPanelProps) {
       <PanelHeader
         context={props.context}
         state={props.state}
-        count={items().length}
+        count={view().items.length}
+        view={view()}
+        showSnoozed={showSnoozed()}
+        toggleSnoozed={() => setShowSnoozed((shown) => !shown)}
         filter={filter()}
         repository={repository()}
         setFilter={setFilter}
@@ -76,14 +87,15 @@ export function ReviewPanel(props: ReviewPanelProps) {
       />
       <Show when={props.state.error}>{(error) => <ErrorBanner message={error().message} />}</Show>
       <Show
-        when={items().length > 0}
-        fallback={<EmptyState context={props.context} state={props.state} filter={filter()} />}
+        when={view().items.length > 0}
+        fallback={<EmptyState context={props.context} state={props.state} filter={filter()} snoozed={view().snoozed} />}
       >
         <ReviewList
           context={props.context}
-          items={items()}
+          items={view().items}
           newKeys={props.state.newKeys}
           local={props.local}
+          now={now()}
           actions={actions}
           grouped={filter() === "all"}
           copy={copy}

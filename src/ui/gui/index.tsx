@@ -33,7 +33,7 @@ export default Plugin.define({
   setup(ctx) {
     const options = parseOptions(ctx.options)
     const [state, setState] = createStore<QueueSnapshot>(emptySnapshot())
-    const [drafts, setDrafts] = createStore<LocalReviews>({ drafts: [], reviewed: [] })
+    const [drafts, setDrafts] = createStore<LocalReviews>({ drafts: [], reviewed: [], snoozes: [] })
     const repositories = new Map<string, string | undefined>()
     const rpc = () => ctx.client.rpc(ReviewQueue)
     const update = (snapshot: QueueSnapshot) => setState(snapshot)
@@ -138,6 +138,7 @@ export default Plugin.define({
           directory={props.session.location?.directory}
           server={props.session.server.id}
           local={drafts}
+          updateLocal={setDrafts}
           repositories={repositories}
           state={state}
           update={update}
