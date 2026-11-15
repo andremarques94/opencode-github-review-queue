@@ -1,11 +1,18 @@
 import type { Context } from "@opencode/plugin/gui"
-import { For, Show } from "solid-js"
+import { createSignal, createUniqueId, For, Show } from "solid-js"
 import { canAddress } from "../../../../domain/my-pull-request.js"
 import { postBlocker } from "../../../../domain/review-draft.js"
 import { reviewedFor } from "../../../../domain/review-history.js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
 import { parseOptions } from "../../../../shared/options.js"
-import { fullReference, readinessMarks, sizeMark, teamRequest, waitMark } from "../../../../shared/presentation.js"
+import {
+  fullReference,
+  pullRequestDetails,
+  readinessMarks,
+  sizeMark,
+  teamRequest,
+  waitMark,
+} from "../../../../shared/presentation.js"
 import {
   type DraftAction,
   draftActions,
@@ -16,6 +23,7 @@ import {
 import { activeSnooze, snoozeLabel } from "../../../../shared/review/snooze.js"
 import type { LocalReviews } from "../../../../shared/rpc.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
+import { RowDetails } from "./row-details.js"
 
 export type ReviewRowProps = {
   context: Context
@@ -42,6 +50,10 @@ const CLICK_SEQUENCE = [
 
 export function ReviewRow(props: ReviewRowProps) {
   let actions: HTMLDivElement | undefined
+  const [expanded, setExpanded] = createSignal(false)
+  const detailsID = createUniqueId()
+  const detailsLabel = () => (expanded() ? "Hide details" : "Show details")
+  const details = () => pullRequestDetails(props.item, reviewedFor(props.local.reviewed, props.item.key), props.now)
   const draft = () => draftFor(props.local.drafts, props.item.key)
   const snooze = () => activeSnooze(props.local.snoozes, props.item, props.now)
   const wait = () => waitMark(props.item, parseOptions(props.context.options).staleAfterMs, props.now)
@@ -90,53 +102,69 @@ export function ReviewRow(props: ReviewRowProps) {
   return (
     <article class="grq-row" onContextMenu={openMenu}>
       <span class="grq-dot" data-hidden={props.isNew ? undefined : ""} title={props.isNew ? "New" : undefined} />
-      <button type="button" class="grq-row-main" title={props.item.title} onClick={review}>
-        <div class="grq-row-title">{props.item.title}</div>
-        <div class="grq-row-meta">
-          <span class="grq-number">#{props.item.number}</span>
-          <For each={readinessMarks(props.item)}>
-            {(mark) => (
-              <span class="grq-mark" data-tone={mark.tone} role="img" title={mark.detail} aria-label={mark.detail}>
-                {mark.label}
-              </span>
-            )}
-          </For>
-          <Show when={sizeMark(props.item)}>
-            {(size) => (
-              <span class="grq-number" title={size().detail}>
-                {size().label}
-              </span>
-            )}
-          </Show>
-          <Show when={!props.item.authored}>
+      <div class="grq-row-body">
+        <button type="button" class="grq-row-main" title={props.item.title} onClick={review}>
+          <div class="grq-row-title">{props.item.title}</div>
+          <div class="grq-row-meta">
+            <span class="grq-number">#{props.item.number}</span>
+            <For each={readinessMarks(props.item)}>
+              {(mark) => (
+                <span class="grq-mark" data-tone={mark.tone} role="img" title={mark.detail} aria-label={mark.detail}>
+                  {mark.label}
+                </span>
+              )}
+            </For>
+            <Show when={sizeMark(props.item)}>
+              {(size) => (
+                <span class="grq-number" title={size().detail}>
+                  {size().label}
+                </span>
+              )}
+            </Show>
+            <Show when={!props.item.authored}>
+              <span class="grq-sep">·</span>
+              <span>@{props.item.author}</span>
+            </Show>
+            <Show when={teamRequest(props.item)}>
+              {(team) => (
+                <span class="grq-team" title={team().detail}>
+                  {team().label}
+                </span>
+              )}
+            </Show>
             <span class="grq-sep">·</span>
-            <span>@{props.item.author}</span>
-          </Show>
-          <Show when={teamRequest(props.item)}>
-            {(team) => (
-              <span class="grq-team" title={team().detail}>
-                {team().label}
-              </span>
-            )}
-          </Show>
-          <span class="grq-sep">·</span>
-          <span class="grq-number" data-stale={wait().stale ? "" : undefined} title={wait().detail}>
-            {wait().label}
-          </span>
-          <Show when={props.item.draft}>
-            <span class="grq-badge">Draft</span>
-          </Show>
-          <Show when={rowLabel(props.item, props.local, props.now)}>
-            {(label) => (
-              <span
-                class="grq-badge grq-badge-review"
-                title={(resumable(draft()) && postBlockerOf(draft())) || label()}
-              >
-                {label()}
-              </span>
-            )}
-          </Show>
-        </div>
+            <span class="grq-number" data-stale={wait().stale ? "" : undefined} title={wait().detail}>
+              {wait().label}
+            </span>
+            <Show when={props.item.draft}>
+              <span class="grq-badge">Draft</span>
+            </Show>
+            <Show when={rowLabel(props.item, props.local, props.now)}>
+              {(label) => (
+                <span
+                  class="grq-badge grq-badge-review"
+                  title={(resumable(draft()) && postBlockerOf(draft())) || label()}
+                >
+                  {label()}
+                </span>
+              )}
+            </Show>
+          </div>
+        </button>
+        <Show when={expanded()}>
+          <RowDetails id={detailsID} details={details()} />
+        </Show>
+      </div>
+      <button
+        type="button"
+        class="grq-disclosure"
+        aria-expanded={expanded()}
+        aria-controls={detailsID}
+        aria-label={detailsLabel()}
+        title={detailsLabel()}
+        onClick={() => setExpanded((open) => !open)}
+      >
+        <props.context.ui.Icon name="outline-chevron-down" size="small" />
       </button>
       <div
         class="grq-row-actions"
@@ -147,6 +175,11 @@ export function ReviewRow(props: ReviewRowProps) {
         <props.context.ui.Menu
           label="Pull request actions"
           items={[
+            {
+              label: detailsLabel(),
+              icon: "info",
+              onSelect: () => setExpanded((open) => !open),
+            },
             { label: "Open on GitHub", icon: "github", onSelect: open },
             {
               label: "Copy reference",

@@ -2,7 +2,7 @@
 import { Plugin } from "@opencode/plugin/tui"
 import { Show } from "solid-js"
 import type { ReviewDraft } from "../../domain/review-draft.js"
-import { emptySnapshot, type QueueSnapshot } from "../../domain/review-queue.js"
+import { emptySnapshot, type QueueSnapshot, replaceSnapshot } from "../../domain/review-queue.js"
 import type { ReviewRequest } from "../../domain/review-request.js"
 import { createDiscoveryBatcher } from "../../shared/notifications/discovery-batcher.js"
 import {
@@ -26,7 +26,7 @@ export default Plugin.define({
     const rpc = context.client.rpc(ReviewQueue)
     const initial: TuiState = { ...emptySnapshot(), drafts: [], reviewed: [], snoozes: [] }
     const [state, updateState] = context.storage.memory<TuiState>("queue", { initial })
-    const update = (snapshot: QueueSnapshot) => updateState((draft) => Object.assign(draft, snapshot))
+    const update = (snapshot: QueueSnapshot) => updateState((draft) => replaceSnapshot(draft, snapshot))
 
     const directory = (context.location ?? context.data.location.default()).directory
     void rpc.repository({ directory }).then((result) =>

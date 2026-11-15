@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { compareQueues, type PersistedQueue } from "../src/domain/review-queue.js"
+import { compareQueues, type PersistedQueue, replaceSnapshot } from "../src/domain/review-queue.js"
 import { type ReviewRequest, requestKey } from "../src/domain/review-request.js"
 import { StorageLease } from "../src/server/queue-lease.js"
 import { type PollerEvent, type QueuePersistence, ReviewQueuePoller } from "../src/server/review-queue-poller.js"
@@ -27,6 +27,27 @@ function memoryPersistence(initial?: PersistedQueue) {
 }
 
 const options = { intervalMs: 60_000, timeoutMs: 5_000, maxBackoffMs: 15 * 60_000 }
+
+describe("replaceSnapshot", () => {
+  it("drops what the new snapshot leaves out, such as an error that has cleared", () => {
+    const failed = {
+      items: [],
+      newKeys: [],
+      authored: [item("acme/api", 1)],
+      initialized: true,
+      loading: false,
+      stale: true,
+      lastSuccessAt: "2026-01-01T00:00:00.000Z",
+      error: { kind: "offline" as const, message: "GitHub is unreachable." },
+    }
+    const recovered = { items: [item("acme/api", 2)], newKeys: [], initialized: true, loading: false, stale: false }
+    const store = structuredClone(failed)
+
+    replaceSnapshot(store, recovered)
+
+    expect(store).toEqual(recovered)
+  })
+})
 
 describe("review queue comparison", () => {
   it("finds additions and removals by repository-qualified key", () => {
@@ -237,6 +258,40 @@ describe("ReviewQueuePoller", () => {
     expect(poller.snapshot().error?.message).toBe("offline")
     expect(saved.read()).toEqual({ ...baseline, error: { kind: "unknown", message: "offline" } })
     poller.stop()
+  })
+
+  it("shows a failing host without marking the other hosts' queue stale", async () => {
+    const saved = memoryPersistence()
+    const partial = { kind: "offline" as const, message: "ghe.acme.com: unreachable", hosts: ["ghe.acme.com"] }
+    const results = [{ items: [item("acme/api", 1)], error: partial }, { items: [item("acme/api", 1)] }]
+    const contexts: unknown[] = []
+    const poller = new ReviewQueuePoller(
+      async (_signal, context) => {
+        contexts.push(context.manual)
+        return results.shift() ?? { items: [] }
+      },
+      saved.persistence,
+      options,
+    )
+    const follower = new ReviewQueuePoller(async () => ({ items: [] }), saved.persistence, options, Date.now, {
+      acquire: async () => false,
+      claim: async () => {},
+      release: async () => {},
+    })
+
+    await poller.start()
+    await follower.start()
+
+    expect(poller.snapshot()).toMatchObject({ stale: false, error: partial })
+    expect(saved.read()?.error).toEqual(partial)
+    expect(follower.snapshot()).toMatchObject({ stale: false, error: partial })
+
+    await poller.refresh()
+
+    expect(poller.snapshot()).not.toHaveProperty("error")
+    expect(contexts).toEqual([false, true])
+    poller.stop()
+    follower.stop()
   })
 
   it("coalesces overlapping refreshes", async () => {

@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs"
 import { mkdir, realpath } from "node:fs/promises"
 import { dirname } from "node:path"
+import { qualifiedRepository, type RepositoryRef } from "../../domain/review-request.js"
 import { runGit } from "./cli.js"
 import { remoteFor } from "./remotes.js"
 
@@ -20,9 +21,18 @@ export async function linkedWorktrees(directory: string, signal: AbortSignal): P
   return (await registeredWorktrees(directory, signal)).slice(1)
 }
 
+async function requireRemote(checkout: string, target: RepositoryRef, signal: AbortSignal): Promise<string> {
+  const remote = await remoteFor(checkout, target, signal)
+  if (!remote) {
+    throw new Error(`${checkout} has no remote for ${qualifiedRepository(target)}.`)
+  }
+  return remote
+}
+
 /** Fetches the pull request head into a detached worktree and returns the commit it checked out. */
 export async function createWorktree(input: {
   checkout: string
+  host?: string | undefined
   repository: string
   number: number
   worktree: string
@@ -31,10 +41,7 @@ export async function createWorktree(input: {
   if (existsSync(input.worktree)) {
     throw new Error(`A review worktree already exists at ${input.worktree}. Reset the review to start over.`)
   }
-  const remote = await remoteFor(input.checkout, input.repository, input.signal)
-  if (!remote) {
-    throw new Error(`${input.checkout} has no remote for ${input.repository}.`)
-  }
+  const remote = await requireRemote(input.checkout, input, input.signal)
   await runGit(input.checkout, ["fetch", "--no-tags", remote, `pull/${input.number}/head`], input.signal)
   const sha = await runGit(input.checkout, ["rev-parse", "FETCH_HEAD"], input.signal)
   await mkdir(dirname(input.worktree), { recursive: true })
@@ -56,6 +63,7 @@ const hasLocalBranch = (checkout: string, branch: string, signal: AbortSignal) =
 /** Git refuses a branch checked out elsewhere, and that refusal is the error the user sees. */
 export async function createBranchWorktree(input: {
   checkout: string
+  host?: string | undefined
   repository: string
   branch: string
   worktree: string
@@ -67,10 +75,7 @@ export async function createBranchWorktree(input: {
     }
     return
   }
-  const remote = await remoteFor(input.checkout, input.repository, input.signal)
-  if (!remote) {
-    throw new Error(`${input.checkout} has no remote for ${input.repository}.`)
-  }
+  const remote = await requireRemote(input.checkout, input, input.signal)
   await runGit(input.checkout, ["fetch", "--no-tags", remote, input.branch], input.signal)
   await mkdir(dirname(input.worktree), { recursive: true })
   if (await hasLocalBranch(input.checkout, input.branch, input.signal)) {
@@ -84,8 +89,8 @@ export async function createBranchWorktree(input: {
   )
 }
 
-export async function fetchCommit(checkout: string, repository: string, sha: string, signal: AbortSignal) {
-  const remote = await remoteFor(checkout, repository, signal)
+export async function fetchCommit(checkout: string, target: RepositoryRef, sha: string, signal: AbortSignal) {
+  const remote = await remoteFor(checkout, target, signal)
   if (remote) {
     await runGit(checkout, ["fetch", "--no-tags", remote, sha], signal)
   }

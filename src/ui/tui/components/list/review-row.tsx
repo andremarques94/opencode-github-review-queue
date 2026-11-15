@@ -5,8 +5,16 @@ import type { MouseEvent } from "@opentui/core"
 import { createSignal, For, Show } from "solid-js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
 import { parseOptions } from "../../../../shared/options.js"
-import { fitLine, readinessMarks, sizeMark, teamRequest, waitMark } from "../../../../shared/presentation.js"
+import {
+  type Detail,
+  fitLine,
+  readinessMarks,
+  sizeMark,
+  teamRequest,
+  waitMark,
+} from "../../../../shared/presentation.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
+import { RowDetails } from "./row-details.js"
 
 const RIGHT_BUTTON = 2
 
@@ -18,6 +26,8 @@ export function ReviewRow(props: {
   selected: boolean
   isNew: boolean
   review: string | undefined
+  /** Shown under the row while it is selected. */
+  details: Detail[] | undefined
   width: number
   actions: ReviewActions
 }) {
@@ -96,6 +106,7 @@ export function ReviewRow(props: {
             {(review) => <span style={{ fg: theme.text.action.primary.base }}> · {review()}</span>}
           </Show>
         </text>
+        <Show when={props.selected && props.details}>{(details) => <RowDetails details={details()} />}</Show>
       </box>
     </box>
   )

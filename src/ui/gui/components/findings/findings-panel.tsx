@@ -1,18 +1,20 @@
-import type { Comments, Context } from "@opencode/plugin/gui"
+import type { Context, MountedSession, SessionScreen } from "@opencode/plugin/gui"
 import { For, Show } from "solid-js"
 import { type ReviewDraft, walkthroughOrder } from "../../../../domain/review-draft.js"
 import type { FindingActions } from "../../actions/finding-actions.js"
 import { findingStyles } from "../styles.js"
 import { FindingCard } from "./finding-card.js"
+import { OpenWorktree } from "./open-worktree.js"
 import { ReviewProgress } from "./review-progress.js"
 
 export function FindingsPanel(props: {
   context: Context
+  session: MountedSession
+  screen: SessionScreen
   draft: ReviewDraft | undefined
-  comments: Comments
   actions: FindingActions
 }) {
-  const comments = () => props.comments.list()
+  const comments = () => props.screen.comment.list()
   return (
     <section class="grq-findings">
       <style>{findingStyles}</style>
@@ -23,8 +25,13 @@ export function FindingsPanel(props: {
         {(draft) => (
           <>
             <header class="grq-findings-header">
-              <div class="grq-findings-title">
-                {draft().repository}#{draft().number} · {draft().title}
+              <div class="grq-findings-heading">
+                <div class="grq-findings-title">
+                  {draft().repository}#{draft().number} · {draft().title}
+                </div>
+                <Show when={draft().status !== "posted"}>
+                  <OpenWorktree context={props.context} session={props.session} screen={props.screen} />
+                </Show>
               </div>
               <ReviewProgress context={props.context} draft={draft()} actions={props.actions} />
               <Show when={draft().status !== "posted" && comments().length > 0}>
@@ -37,7 +44,7 @@ export function FindingsPanel(props: {
                       size="small"
                       variant="neutral"
                       onClick={() =>
-                        void props.actions.addLineComments(draft(), comments(), (id) => props.comments.remove(id))
+                        void props.actions.addLineComments(draft(), comments(), (id) => props.screen.comment.remove(id))
                       }
                     >
                       Add as findings

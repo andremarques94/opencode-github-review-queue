@@ -50,10 +50,10 @@ export class AddressSessions {
     }
     if (place.worktree) {
       const { checkout, branch, worktree } = place
-      await createBranchWorktree({ checkout, branch, worktree, repository: item.repository, signal })
+      await createBranchWorktree({ checkout, branch, worktree, host: item.host, repository: item.repository, signal })
     }
     const directory = place.worktree ?? place.checkout
-    const threads = await fetchOpenThreads(item.repository, item.number, signal)
+    const threads = await fetchOpenThreads(item, signal)
     const session = await input.sessions.create({
       title: `Address review of ${item.repository}#${item.number}`,
       location: { directory: directory as Location.PublicRef["directory"] },
@@ -75,8 +75,8 @@ export class AddressSessions {
       throw new Error("Only your own pull requests have a review to address.")
     }
     const [pullRequest, checkout] = await Promise.all([
-      fetchPullRequestBranch(item.repository, item.number, signal),
-      sessionCheckout({ repository: item.repository, directory, signal }),
+      fetchPullRequestBranch(item, signal),
+      sessionCheckout({ host: item.host, repository: item.repository, directory, signal }),
     ])
     if (pullRequest.state !== "OPEN") {
       throw new Error(
@@ -98,7 +98,7 @@ export class AddressSessions {
       checkout,
       branch,
       current,
-      worktree: addressWorktreePath(this.cacheDirectory, item.repository, item.number),
+      worktree: addressWorktreePath(this.cacheDirectory, item, item.number),
     }
   }
 

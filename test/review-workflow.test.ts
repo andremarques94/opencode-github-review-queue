@@ -129,7 +129,12 @@ describe("review workflow", () => {
 
     expect(added).toMatchObject({ id: 1, decision: "pending" })
     expect(github.fetchCompareDiff).toHaveBeenCalledTimes(1)
-    expect(github.fetchCompareDiff).toHaveBeenCalledWith("acme/api", BASE, HEAD, expect.any(AbortSignal))
+    expect(github.fetchCompareDiff).toHaveBeenCalledWith(
+      expect.objectContaining({ repository: "acme/api" }),
+      BASE,
+      HEAD,
+      expect.any(AbortSignal),
+    )
     expect(github.fetchDiff).not.toHaveBeenCalled()
   })
 
@@ -149,7 +154,10 @@ describe("review workflow", () => {
 
     await findings.add("ses_1", finding)
 
-    expect(github.fetchDiff).toHaveBeenCalledWith("acme/api", 7, expect.any(AbortSignal))
+    expect(github.fetchDiff).toHaveBeenCalledWith(
+      expect.objectContaining({ repository: "acme/api", number: 7 }),
+      expect.any(AbortSignal),
+    )
     expect(github.fetchCompareDiff).not.toHaveBeenCalled()
   })
 
@@ -187,7 +195,7 @@ describe("review workflow", () => {
     const result = await sessions.post(base.key, false, signal)
 
     expect(result).toEqual({ status: "posted", url: "https://github.com/acme/api/pull/7#pullrequestreview-1" })
-    expect(github.postReview.mock.calls[0]?.[2]).toMatchObject({ commit_id: HEAD, event: "COMMENT" })
+    expect(github.postReview.mock.calls[0]?.[1]).toMatchObject({ commit_id: HEAD, event: "COMMENT" })
     expect(checkout.removeWorktree).toHaveBeenCalledWith(base.checkout, base.worktree, signal)
     expect((await store.get(base.key))?.status).toBe("posted")
     await expect(findings.add("ses_1", finding)).rejects.toThrow(/already posted/)
@@ -238,7 +246,7 @@ describe("review workflow", () => {
     await store.put(draft(8, "posted"))
     await store.put(draft(9, "ready"))
     await store.put(draft(10, "ready"))
-    github.fetchPullRequest.mockImplementation(async (_repository: string, number: number) => ({
+    github.fetchPullRequest.mockImplementation(async ({ number }: { number: number }) => ({
       headRefOid: HEAD,
       state: number === 9 ? "MERGED" : "OPEN",
     }))

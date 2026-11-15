@@ -8,6 +8,7 @@ import { cleanUpCheckout, managedClonePath, worktreePath } from "../src/server/r
 
 const git = (...args: string[]) => execFileSync("git", args, { stdio: "ignore" })
 const signal = new AbortController().signal
+const ACME = { repository: "acme/api" }
 
 let root: string
 let cache: string
@@ -17,11 +18,11 @@ async function managedClone(...numbers: number[]): Promise<string> {
   const source = join(root, "source")
   git("init", "-q", source)
   git("-C", source, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init")
-  const clone = managedClonePath(cache, "acme/api")
+  const clone = managedClonePath(cache, ACME)
   await mkdir(join(clone, ".."), { recursive: true })
   git("clone", "-q", "--bare", source, clone)
   for (const number of numbers) {
-    git("-C", clone, "worktree", "add", "-q", "--detach", worktreePath(cache, "acme/api", number), "HEAD")
+    git("-C", clone, "worktree", "add", "-q", "--detach", worktreePath(cache, ACME, number), "HEAD")
   }
   return clone
 }
@@ -41,7 +42,7 @@ describe("cleanUpCheckout", () => {
 
     await cleanUpCheckout({
       checkout: clone,
-      worktree: worktreePath(cache, "acme/api", 7),
+      worktree: worktreePath(cache, ACME, 7),
       cacheDirectory: cache,
       keepClones: false,
       signal,
@@ -56,15 +57,15 @@ describe("cleanUpCheckout", () => {
 
     await cleanUpCheckout({
       checkout: clone,
-      worktree: worktreePath(cache, "acme/api", 7),
+      worktree: worktreePath(cache, ACME, 7),
       cacheDirectory: cache,
       keepClones: false,
       signal,
     })
 
     expect(existsSync(clone)).toBe(true)
-    expect(existsSync(worktreePath(cache, "acme/api", 8))).toBe(true)
-    expect(existsSync(worktreePath(cache, "acme/api", 7))).toBe(false)
+    expect(existsSync(worktreePath(cache, ACME, 8))).toBe(true)
+    expect(existsSync(worktreePath(cache, ACME, 7))).toBe(false)
   })
 
   it("keeps clones when asked to", async () => {
@@ -72,7 +73,7 @@ describe("cleanUpCheckout", () => {
 
     await cleanUpCheckout({
       checkout: clone,
-      worktree: worktreePath(cache, "acme/api", 7),
+      worktree: worktreePath(cache, ACME, 7),
       cacheDirectory: cache,
       keepClones: true,
       signal,
@@ -85,7 +86,7 @@ describe("cleanUpCheckout", () => {
     const checkout = join(root, "my-checkout")
     git("init", "-q", checkout)
     git("-C", checkout, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init")
-    const worktree = worktreePath(cache, "acme/api", 7)
+    const worktree = worktreePath(cache, ACME, 7)
     git("-C", checkout, "worktree", "add", "-q", "--detach", worktree, "HEAD")
 
     await cleanUpCheckout({ checkout, worktree, cacheDirectory: cache, keepClones: false, signal })

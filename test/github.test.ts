@@ -8,6 +8,7 @@ vi.mock("../src/server/github/cli.js", async (importOriginal) => ({
 }))
 
 const { classifyGhError } = await import("../src/server/github/cli.js")
+const { checkGhVersion, discoverHosts, ghVersion } = await import("../src/server/github/hosts.js")
 const { fetchOpenThreads, fetchPullRequestBranch } = await import("../src/server/github/pull-request.js")
 const { fetchAuthoredPullRequests, fetchReviewRequests, fetchReviewedPullRequests } = await import(
   "../src/server/github/review-requests.js"
@@ -36,7 +37,7 @@ describe("fetchReviewRequests", () => {
   it("collects every page sorted by creation time", async () => {
     respond([page([node(2, "2026-01-02T00:00:00Z")]), page([node(1, "2026-01-01T00:00:00Z")])])
 
-    const result = await fetchReviewRequests(signal)
+    const result = await fetchReviewRequests("github.com", signal)
 
     expect(result.items.map((entry) => [entry.key, entry.author])).toEqual([
       ["acme/api#1", "octocat"],
@@ -47,8 +48,8 @@ describe("fetchReviewRequests", () => {
 
   it("passes each search as a variable, never inside the query", async () => {
     respond([page([])])
-    await fetchReviewRequests(signal)
-    await fetchReviewedPullRequests(signal)
+    await fetchReviewRequests("github.com", signal)
+    await fetchReviewedPullRequests("github.com", signal)
 
     const searches = runGh.mock.calls.map((call) => (call[0] as string[]).find((arg) => arg.startsWith("search=")))
     expect(searches).toEqual([
@@ -60,13 +61,13 @@ describe("fetchReviewRequests", () => {
   it("reports the reset time when the rate limit is exhausted", async () => {
     respond([page([], { remaining: 0, resetAt: "2026-01-01T01:00:00Z" })])
 
-    expect((await fetchReviewRequests(signal)).retryAt).toBe("2026-01-01T01:00:00Z")
+    expect((await fetchReviewRequests("github.com", signal)).retryAt).toBe("2026-01-01T01:00:00Z")
   })
 
   it("falls back to ghost for deleted authors", async () => {
     respond([page([{ ...node(3, "2026-01-01T00:00:00Z"), author: null }])])
 
-    expect((await fetchReviewRequests(signal)).items[0]?.author).toBe("ghost")
+    expect((await fetchReviewRequests("github.com", signal)).items[0]?.author).toBe("ghost")
   })
 
   it("reads readiness and leaves out what GitHub does not know", async () => {
@@ -89,7 +90,7 @@ describe("fetchReviewRequests", () => {
       ]),
     ])
 
-    const [first, second] = (await fetchReviewRequests(signal)).items
+    const [first, second] = (await fetchReviewRequests("github.com", signal)).items
 
     expect(first).toMatchObject({
       headSha: "head1",
@@ -123,7 +124,7 @@ describe("fetchReviewRequests", () => {
       },
     ])
 
-    const [direct, teams, unknown] = (await fetchReviewRequests(signal)).items
+    const [direct, teams, unknown] = (await fetchReviewRequests("github.com", signal)).items
 
     expect(direct?.requestedVia).toEqual({ kind: "you" })
     expect(teams?.requestedVia).toEqual({ kind: "team", teams: ["acme/web", "acme/api"] })
@@ -160,7 +161,7 @@ describe("fetchReviewRequests", () => {
       },
     ])
 
-    const [mine, teams] = (await fetchReviewRequests(signal)).items
+    const [mine, teams] = (await fetchReviewRequests("github.com", signal)).items
 
     expect(mine).toMatchObject({
       additions: 10,
@@ -203,7 +204,7 @@ describe("fetchReviewRequests", () => {
       },
     ])
 
-    const [blocked, ready, unknown] = (await fetchAuthoredPullRequests(signal)).items
+    const [blocked, ready, unknown] = (await fetchAuthoredPullRequests("github.com", signal)).items
 
     expect(blocked?.authored).toEqual({
       reviewDecision: "CHANGES_REQUESTED",
@@ -214,6 +215,53 @@ describe("fetchReviewRequests", () => {
     expect(ready?.authored).toEqual({ mergeReady: true, waitingOn: [], changesRequestedBy: [] })
     expect(unknown?.authored).toEqual({ waitingOn: [], changesRequestedBy: [] })
     expect(runGh.mock.calls[0]?.[0]).toContain("search=is:pr is:open author:@me")
+  })
+
+  it("reads each reviewer's latest review, without pending ones or deleted authors", async () => {
+    const review = (state: string, login: string | null, submittedAt?: string) => ({
+      state,
+      submittedAt: submittedAt ?? null,
+      author: login ? { login } : null,
+    })
+    respond([
+      page([
+        {
+          ...node(1, "2026-01-01T00:00:00Z"),
+          latestReviews: {
+            nodes: [
+              review("APPROVED", "alice", "2026-01-02T00:00:00Z"),
+              review("COMMENTED", "bob"),
+              review("PENDING", "me"),
+              review("APPROVED", null),
+            ],
+          },
+        },
+        node(2, "2026-01-02T00:00:00Z"),
+      ]),
+    ])
+
+    const [reviewed, unknown] = (await fetchReviewRequests("github.com", signal)).items
+
+    expect(reviewed?.reviews).toEqual([
+      { author: "alice", state: "APPROVED", submittedAt: "2026-01-02T00:00:00Z" },
+      { author: "bob", state: "COMMENTED" },
+    ])
+    expect(unknown).not.toHaveProperty("reviews")
+  })
+
+  it("reads the review status, and a branch behind its base, on every pull request", async () => {
+    respond([
+      page([
+        { ...node(1, "2026-01-01T00:00:00Z"), reviewDecision: "APPROVED", mergeStateStatus: "BEHIND" },
+        { ...node(2, "2026-01-02T00:00:00Z"), reviewDecision: "SOMETHING_NEW", mergeStateStatus: "CLEAN" },
+      ]),
+    ])
+
+    const [behind, clean] = (await fetchReviewRequests("github.com", signal)).items
+
+    expect(behind).toMatchObject({ reviewDecision: "APPROVED", behind: true })
+    expect(clean).not.toHaveProperty("reviewDecision")
+    expect(clean).not.toHaveProperty("behind")
   })
 
   it("claims no source without the viewer's login", async () => {
@@ -228,7 +276,7 @@ describe("fetchReviewRequests", () => {
       ]),
     ])
 
-    expect((await fetchReviewRequests(signal)).items[0]).not.toHaveProperty("requestedVia")
+    expect((await fetchReviewRequests("github.com", signal)).items[0]).not.toHaveProperty("requestedVia")
   })
 
   it("marks the thread count as a lower bound past the first page", async () => {
@@ -243,7 +291,7 @@ describe("fetchReviewRequests", () => {
       ]),
     ])
 
-    const [some, none] = (await fetchReviewRequests(signal)).items
+    const [some, none] = (await fetchReviewRequests("github.com", signal)).items
 
     expect(some).toMatchObject({ unresolvedThreads: 1, unresolvedThreadsCapped: true })
     expect(none).not.toHaveProperty("unresolvedThreads")
@@ -259,9 +307,155 @@ describe("fetchReviewRequests", () => {
   ])("rejects %s without replacing the queue", async (_, stdout, problem) => {
     runGh.mockResolvedValue({ stdout, stderr: "" })
 
-    await expect(fetchReviewRequests(signal)).rejects.toMatchObject({
+    await expect(fetchReviewRequests("github.com", signal)).rejects.toMatchObject({
       detail: { kind: "unknown", message: `GitHub returned ${problem}; the saved queue was left unchanged.` },
     })
+  })
+})
+
+describe("other hosts", () => {
+  it("targets the host and qualifies the keys of its pull requests", async () => {
+    respond([page([node(1, "2026-01-01T00:00:00Z")])])
+
+    const [onEnterprise] = (await fetchReviewRequests("GHE.acme.com", signal)).items
+    const [onGitHub] = (await fetchReviewRequests("github.com", signal)).items
+
+    expect(onEnterprise).toMatchObject({ key: "ghe.acme.com/acme/api#1", host: "ghe.acme.com" })
+    expect(onGitHub?.key).toBe("acme/api#1")
+    expect(onGitHub).not.toHaveProperty("host")
+    expect(runGh.mock.calls.map((call) => (call[0] as string[]).slice(0, 4))).toEqual([
+      ["api", "graphql", "--hostname", "GHE.acme.com"],
+      ["api", "graphql", "--hostname", "github.com"],
+    ])
+  })
+
+  it("reads a reduced Enterprise Server node, without the readiness it lacks", async () => {
+    respond([
+      page([
+        {
+          ...node(1, "2026-01-01T00:00:00Z"),
+          mergeable: "MERGEABLE",
+          timelineItems: { nodes: [{}] },
+          reviewRequests: null,
+          reviewThreads: { nodes: [{ isResolved: false }] },
+        },
+      ]),
+    ])
+
+    const [item] = (await fetchReviewRequests("ghe.acme.com", signal)).items
+
+    expect(item).toMatchObject({ host: "ghe.acme.com", conflicts: false, unresolvedThreads: 1 })
+    for (const field of ["checks", "additions", "requestedAt", "requestedVia", "unresolvedThreadsCapped"]) {
+      expect(item).not.toHaveProperty(field)
+    }
+  })
+
+  it("names the host in every pull request command", async () => {
+    respond({ state: "OPEN", headRefName: "main", isCrossRepository: false })
+    await fetchPullRequestBranch({ host: "ghe.acme.com", repository: "acme/api", number: 7 }, signal)
+    await fetchPullRequestBranch({ repository: "acme/api", number: 7 }, signal)
+
+    expect(runGh.mock.calls.map((call) => (call[0] as string[])[4])).toEqual([
+      "ghe.acme.com/acme/api",
+      "github.com/acme/api",
+    ])
+  })
+})
+
+describe("discoverHosts", () => {
+  const account = (host: string, state: string, active = true) => ({
+    host,
+    login: "me",
+    active,
+    state,
+    token: "never read",
+    scopes: "repo",
+  })
+
+  it("keeps each host by its active account, and a failed one with its error", async () => {
+    respond({
+      hosts: {
+        "github.com": [account("github.com", "error", false), account("github.com", "success")],
+        "ghe.acme.com": [{ ...account("ghe.acme.com", "error"), error: "HTTP 401: Bad credentials" }],
+      },
+    })
+
+    expect(await discoverHosts(signal)).toEqual([
+      { host: "github.com" },
+      {
+        host: "ghe.acme.com",
+        error: {
+          kind: "authentication",
+          message: "GitHub authentication failed for ghe.acme.com. Run `gh auth login --hostname ghe.acme.com`.",
+        },
+      },
+    ])
+    expect(runGh.mock.calls[0]?.[0]).toEqual(["auth", "status", "--json", "hosts"])
+  })
+
+  it("tells a host it cannot reach from a rejected login", async () => {
+    respond({
+      hosts: {
+        "github.com": [{ ...account("github.com", "error"), error: "dial tcp: lookup api.github.com: no such host" }],
+        "ghe.acme.com": [account("ghe.acme.com", "timeout")],
+        "ghe.other.com": [{ ...account("ghe.other.com", "error"), error: "HTTP 401: Bad credentials" }],
+      },
+    })
+
+    const kinds = (await discoverHosts(signal)).map((host) => [host.host, host.error?.kind])
+
+    expect(kinds).toEqual([
+      ["github.com", "offline"],
+      ["ghe.acme.com", "offline"],
+      ["ghe.other.com", "authentication"],
+    ])
+  })
+
+  it("asks to log in when gh knows no host", async () => {
+    respond({ hosts: {} })
+
+    await expect(discoverHosts(signal)).rejects.toMatchObject({ detail: { kind: "authentication" } })
+  })
+
+  it.each([
+    ["malformed JSON", "{"],
+    ["an unexpected shape", JSON.stringify({ hosts: "none" })],
+  ])("rejects %s", async (_, stdout) => {
+    runGh.mockResolvedValue({ stdout, stderr: "" })
+
+    await expect(discoverHosts(signal)).rejects.toMatchObject({ detail: { kind: "unknown" } })
+  })
+})
+
+describe("checkGhVersion", () => {
+  const version = (stdout: string) => runGh.mockResolvedValue({ stdout, stderr: "" })
+
+  it("refuses gh before 2.81.0 with the version it found", async () => {
+    version("gh version 2.74.0 (2025-06-01)\nhttps://github.com/cli/cli/releases/tag/v2.74.0\n")
+
+    await expect(checkGhVersion(signal)).rejects.toMatchObject({
+      detail: {
+        kind: "outdated-gh",
+        message:
+          "GitHub CLI 2.81.0 or later is required (found 2.74.0). Run `brew upgrade gh` or see https://cli.github.com.",
+      },
+    })
+  })
+
+  it.each(["gh version 2.81.0 (2025-10-01)", "gh version 3.0.0", "gh version 2.104.0 (2026-11-12)", "gh devel"])(
+    "accepts %j",
+    async (stdout) => {
+      version(stdout)
+
+      await expect(checkGhVersion(signal)).resolves.toBeUndefined()
+    },
+  )
+
+  it.each([
+    ["gh version 2.80.9", [2, 80, 9]],
+    ["not gh", undefined],
+  ])("parses %j", (output, expected) => {
+    expect(ghVersion(output)).toEqual(expected)
   })
 })
 
@@ -291,7 +485,7 @@ describe("addressing a review", () => {
       },
     })
 
-    expect(await fetchOpenThreads("acme/api", 7, signal)).toEqual([
+    expect(await fetchOpenThreads({ repository: "acme/api", number: 7 }, signal)).toEqual([
       {
         path: "src/app.ts",
         line: 3,
@@ -310,10 +504,12 @@ describe("addressing a review", () => {
     const branch = (headRefName: string) => respond({ state: "OPEN", headRefName, isCrossRepository: false })
 
     branch("feature/b")
-    expect((await fetchPullRequestBranch("acme/api", 7, signal)).headRefName).toBe("feature/b")
+    expect((await fetchPullRequestBranch({ repository: "acme/api", number: 7 }, signal)).headRefName).toBe("feature/b")
     for (const name of ["--upload-pack=evil", "a..b", "feature/", "x.lock", "has space"]) {
       branch(name)
-      await expect(fetchPullRequestBranch("acme/api", 7, signal)).rejects.toThrow(/unexpected response/)
+      await expect(fetchPullRequestBranch({ repository: "acme/api", number: 7 }, signal)).rejects.toThrow(
+        /unexpected response/,
+      )
     }
   })
 })

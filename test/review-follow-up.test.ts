@@ -99,7 +99,12 @@ describe("follow-up reviews", () => {
 
     const draft = await drafts.get(item.key)
     expect(draft).toMatchObject({ headSha: NEW_HEAD, sinceSha: OLD_HEAD, baseSha: "c".repeat(40) })
-    expect(git.fetchCommit).toHaveBeenCalledWith("/repos/acme/api", "acme/api", OLD_HEAD, signal)
+    expect(git.fetchCommit).toHaveBeenCalledWith(
+      "/repos/acme/api",
+      expect.objectContaining({ repository: "acme/api" }),
+      OLD_HEAD,
+      signal,
+    )
     const instructions = agent.instructions.entry.put.mock.calls[0]?.[0].value as string
     expect(instructions).toContain(`git diff ${OLD_HEAD} ${NEW_HEAD}`)
     expect(instructions).toContain('select(.user.login == "reviewer")')

@@ -33,6 +33,7 @@ export type ReviewActions = {
   copy(kind: CopyKind): void
   snooze(): Promise<void>
   toggleSnoozed(): void
+  toggleDetails(): void
   summarize(): Promise<void>
   address(): Promise<void>
   menu(): Promise<void>
@@ -81,6 +82,8 @@ export function useReviewActions(input: {
   snoozed: Accessor<number>
   showSnoozed: Accessor<boolean>
   setShowSnoozed: Setter<boolean>
+  showDetails: Accessor<boolean>
+  setShowDetails: Setter<boolean>
 }): ReviewActions {
   const context = usePlugin()
   const rpc = context.client.rpc(ReviewQueue)
@@ -175,6 +178,9 @@ export function useReviewActions(input: {
     toggleSnoozed() {
       input.setShowSnoozed((shown) => !shown)
     },
+    toggleDetails() {
+      input.setShowDetails((shown) => !shown)
+    },
     address: () =>
       attempt(async () => {
         const item = input.current()
@@ -200,7 +206,13 @@ export function useReviewActions(input: {
         title: item ? `#${item.number} ${item.title}` : "Review queue",
         options: [
           ...(item
-            ? pullRequestOptions(actions, item, currentDraft(), activeSnooze(input.local().snoozes, item, input.now()))
+            ? pullRequestOptions(
+                actions,
+                item,
+                currentDraft(),
+                activeSnooze(input.local().snoozes, item, input.now()),
+                input.showDetails(),
+              )
             : []),
           ...queueOptions(actions, {
             nextFilter: nextFilter(input.filter(), parseOptions(context.options).myPullRequests),
@@ -244,6 +256,12 @@ export function useReviewActions(input: {
       { id: "github-review-queue.menu", title: "Pull request actions", bind: "m", run: actions.menu },
       { id: "github-review-queue.post", title: "Post review", bind: "p", run: actions.post },
       { id: "github-review-queue.summarize", title: "Summarize pull request", bind: "i", run: actions.summarize },
+      {
+        id: "github-review-queue.details",
+        title: "Show or hide pull request details",
+        bind: "d",
+        run: actions.toggleDetails,
+      },
       {
         id: "github-review-queue.address",
         title: "Address the review of your pull request",

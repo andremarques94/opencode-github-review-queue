@@ -27,8 +27,15 @@ export type FetchResult = {
   items: ReviewRequest[]
   authored?: ReviewRequest[]
   retryAt?: string
+  /** Some hosts failed while others refreshed; the result already holds their last items. */
+  error?: QueueError
 }
-export type FetchQueue = (signal: AbortSignal) => Promise<FetchResult>
+export type FetchContext = {
+  /** The user asked for this refresh. */
+  manual: boolean
+  previous: Pick<QueueSnapshot, "items" | "authored">
+}
+export type FetchQueue = (signal: AbortSignal, context: FetchContext) => Promise<FetchResult>
 export type PollerEvent =
   | { type: "state"; state: QueueSnapshot }
   | { type: "discovered"; item: ReviewRequest; eventID: string }
@@ -99,7 +106,7 @@ export class ReviewQueuePoller {
       if (await this.lease.acquire().catch(() => false)) {
         await this.lead()
         if (this.now() >= this.nextFetchAt) {
-          await this.run(() => this.performRefresh())
+          await this.run(() => this.performRefresh(false))
         }
         return
       }
@@ -115,7 +122,7 @@ export class ReviewQueuePoller {
     return this.run(async () => {
       await this.lease.claim().catch(() => undefined)
       await this.lead()
-      return this.performRefresh()
+      return this.performRefresh(true)
     })
   }
 
@@ -189,7 +196,7 @@ export class ReviewQueuePoller {
       ...(saved.authored ? { authored: saved.authored } : {}),
       initialized: saved.initialized,
       loading: false,
-      stale: saved.initialized && saved.error !== undefined,
+      stale: saved.initialized && saved.error !== undefined && !saved.error.hosts,
       ...(saved.lastSuccessAt ? { lastSuccessAt: saved.lastSuccessAt } : {}),
       ...(saved.error ? { error: saved.error } : {}),
     }
@@ -203,13 +210,15 @@ export class ReviewQueuePoller {
     }
   }
 
-  private async performRefresh(): Promise<QueueSnapshot> {
+  private async performRefresh(manual: boolean): Promise<QueueSnapshot> {
     this.state = { ...this.state, loading: true }
     this.emit({ type: "state", state: this.snapshot() })
     this.controller = new AbortController()
     const timeout = setTimeout(() => this.controller?.abort(), this.options.timeoutMs)
     try {
-      const result = await this.fetchQueue(this.controller.signal)
+      const previous = { items: this.state.items, ...(this.state.authored ? { authored: this.state.authored } : {}) }
+      const result = await this.fetchQueue(this.controller.signal, { manual, previous })
+      const error = result.error ? { error: result.error } : {}
       const firstSuccess = !this.state.initialized
       const now = this.now()
       const timestamp = new Date(now).toISOString()
@@ -225,6 +234,7 @@ export class ReviewQueuePoller {
         loading: false,
         stale: false,
         lastSuccessAt: timestamp,
+        ...error,
       }
       await this.persistence.save({
         version: 1,
@@ -235,6 +245,7 @@ export class ReviewQueuePoller {
         seen,
         newKeys,
         ...this.persistedNotices(notices),
+        ...error,
       })
       this.notices = notices
       this.failures = 0

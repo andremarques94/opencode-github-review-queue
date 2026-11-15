@@ -143,4 +143,8 @@ describe("reviewProgress", () => {
     })
     expect(reviewProgress({ ...draft, status: "investigating" }).label).toBe("Investigating")
   })
+
+  it("says there are no findings rather than counting none", () => {
+    expect(reviewProgress({ ...draft, findings: [], verdict: "APPROVE" }).label).toBe("No findings · Approve")
+  })
 })

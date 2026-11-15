@@ -94,8 +94,9 @@ export function reviewProgress(draft: ReviewDraft): ReviewProgress {
     case "ready": {
       const decided = draft.findings.length - pendingFindings(draft).length
       const verdict = draft.verdict ? ` · ${VERDICT_LABELS[draft.verdict]}` : ""
+      const count = draft.findings.length === 0 ? "No findings" : `${decided} of ${draft.findings.length} decided`
       return {
-        label: `${decided} of ${draft.findings.length} decided${verdict}`,
+        label: `${count}${verdict}`,
         tone: blocker ? "warning" : "success",
         blocker,
       }

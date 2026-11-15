@@ -162,9 +162,10 @@ export const panelStyles = `${badgeStyles}
   background: var(--icon-interactive-base);
 }
 .grq-dot[data-hidden] { visibility: hidden; }
+.grq-row-body { flex: 1; min-width: 0; }
 .grq-row-main {
-  flex: 1;
-  min-width: 0;
+  display: block;
+  width: 100%;
   padding: 0;
   border: 0;
   background: none;
@@ -204,6 +205,38 @@ export const panelStyles = `${badgeStyles}
 .grq-mark[data-tone="success"] { color: var(--icon-success-base); }
 .grq-mark[data-tone="error"] { color: var(--icon-critical-base); }
 .grq-mark[data-tone="warning"] { color: var(--icon-warning-base); }
+.grq-disclosure {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-top: -3px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--icon-weak-base);
+  cursor: pointer;
+}
+.grq-disclosure:hover { background: var(--surface-raised-base-hover); color: var(--text-strong); }
+.grq-disclosure:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+.grq-disclosure svg { transition: transform 120ms; }
+.grq-disclosure[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.grq-details {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 12px;
+  margin: 8px 0 2px;
+  font-size: 12px;
+  line-height: 16px;
+}
+.grq-details dt { color: var(--text-weaker); white-space: nowrap; }
+.grq-details dd { margin: 0; min-width: 0; color: var(--text-base); overflow-wrap: anywhere; }
+.grq-details dd[data-tone="success"] { color: var(--icon-success-base); }
+.grq-details dd[data-tone="error"] { color: var(--icon-critical-base); }
+.grq-details dd[data-tone="warning"] { color: var(--icon-warning-base); }
 .grq-row-actions { flex-shrink: 0; margin-top: -3px; opacity: 0; transition: opacity 120ms; }
 .grq-row:hover .grq-row-actions,
 .grq-row:focus-within .grq-row-actions,
@@ -272,8 +305,16 @@ const actionStyles = `
 `
 
 export const progressStyles = `${actionStyles}
-/* The host insets the popover heading further than its content; this lines the content up under it. */
-.grq-progress { display: flex; flex-direction: column; gap: 10px; min-width: 240px; padding: 0 15px 6px; font-size: 13px; }
+/* The host's popover already insets its content as far as its heading. */
+.grq-progress { display: flex; flex-direction: column; gap: 10px; min-width: 240px; padding: 0 0 6px; font-size: 13px; }
+.grq-progress-open {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-weaker-base);
+}
 `
 
 export const findingStyles = `${badgeStyles}${actionStyles}
@@ -294,7 +335,8 @@ export const findingStyles = `${badgeStyles}${actionStyles}
   padding: 12px 12px 10px;
   border-bottom: 1px solid var(--border-weaker-base);
 }
-.grq-findings-title { color: var(--text-strong); font-weight: var(--font-weight-medium); }
+.grq-findings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.grq-findings-title { min-width: 0; color: var(--text-strong); font-weight: var(--font-weight-medium); }
 .grq-findings-list {
   flex: 1;
   min-height: 0;

@@ -3,7 +3,7 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { createEffect, For } from "solid-js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
-import type { RepositoryGroup } from "../../../../shared/presentation.js"
+import type { Detail, RepositoryGroup } from "../../../../shared/presentation.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
 import { ReviewGroup } from "./review-group.js"
 import { rowID } from "./review-row.js"
@@ -14,6 +14,7 @@ export function ReviewList(props: {
   selectedKey: string | undefined
   newKeys: readonly string[]
   label(item: ReviewRequest): string | undefined
+  details: Detail[] | undefined
   width: number
   actions: ReviewActions
 }) {
@@ -42,6 +43,7 @@ export function ReviewList(props: {
             selectedKey={props.selectedKey}
             newKeys={props.newKeys}
             label={props.label}
+            details={props.details}
             width={props.width}
             actions={props.actions}
           />
