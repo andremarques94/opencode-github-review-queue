@@ -198,6 +198,7 @@ export const panelStyles = `${badgeStyles}
 .grq-row-meta > span { overflow: hidden; text-overflow: ellipsis; }
 .grq-number { flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .grq-sep { flex-shrink: 0; color: var(--text-weaker); }
+.grq-team { color: var(--text-weaker); }
 .grq-mark { flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .grq-mark[data-tone="success"] { color: var(--icon-success-base); }
 .grq-mark[data-tone="error"] { color: var(--icon-critical-base); }

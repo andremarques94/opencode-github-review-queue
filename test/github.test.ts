@@ -89,6 +89,47 @@ describe("fetchReviewRequests", () => {
     }
   })
 
+  it("tells direct requests from team requests", async () => {
+    const reviewers = (...requestedReviewer: unknown[]) => ({
+      reviewRequests: { nodes: requestedReviewer.map((entry) => ({ requestedReviewer: entry })) },
+    })
+    const team = (slug: string) => ({ __typename: "Team", slug, organization: { login: "acme" } })
+    const viewer = { __typename: "User", login: "Me" }
+    respond([
+      {
+        data: {
+          ...page([
+            { ...node(1, "2026-01-01T00:00:00Z"), ...reviewers(team("web"), viewer) },
+            { ...node(2, "2026-01-02T00:00:00Z"), ...reviewers(team("web"), team("api")) },
+            { ...node(3, "2026-01-03T00:00:00Z"), ...reviewers(null, { __typename: "Bot", login: "copilot" }) },
+          ]).data,
+          viewer: { login: "me" },
+        },
+      },
+    ])
+
+    const [direct, teams, unknown] = (await fetchReviewRequests(signal)).items
+
+    expect(direct?.requestedVia).toEqual({ kind: "you" })
+    expect(teams?.requestedVia).toEqual({ kind: "team", teams: ["acme/web", "acme/api"] })
+    expect(unknown).not.toHaveProperty("requestedVia")
+  })
+
+  it("claims no source without the viewer's login", async () => {
+    respond([
+      page([
+        {
+          ...node(1, "2026-01-01T00:00:00Z"),
+          reviewRequests: {
+            nodes: [{ requestedReviewer: { __typename: "Team", slug: "web", organization: { login: "acme" } } }],
+          },
+        },
+      ]),
+    ])
+
+    expect((await fetchReviewRequests(signal)).items[0]).not.toHaveProperty("requestedVia")
+  })
+
   it("marks the thread count as a lower bound past the first page", async () => {
     const threads = (isResolved: boolean) => ({
       pageInfo: { hasNextPage: true },

@@ -1,5 +1,5 @@
 import * as v from "valibot"
-import { type Checks, type ReviewRequest, requestKey } from "../../domain/review-request.js"
+import { type Checks, type RequestedVia, type ReviewRequest, requestKey } from "../../domain/review-request.js"
 import { GhError, runGh } from "./cli.js"
 
 const QUERY = `query($endCursor: String) {
@@ -12,9 +12,13 @@ const QUERY = `query($endCursor: String) {
         repository { nameWithOwner }
         commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
         reviewThreads(first: 100) { pageInfo { hasNextPage } nodes { isResolved } }
+        reviewRequests(first: 100) {
+          nodes { requestedReviewer { __typename ... on User { login } ... on Team { slug organization { login } } } }
+        }
       }
     }
   }
+  viewer { login }
   rateLimit { remaining resetAt }
 }`
 
@@ -50,6 +54,33 @@ function threadReadiness(threads: v.InferOutput<typeof ReviewThreads> | null | u
   return unresolvedThreads > 0 ? { unresolvedThreads, unresolvedThreadsCapped: true } : {}
 }
 
+/** Bots, mannequins, and teams the token cannot read come back as something else, or null; they say nothing. */
+const Reviewer = v.fallback(
+  v.nullable(
+    v.variant("__typename", [
+      v.object({ __typename: v.literal("User"), login: v.string() }),
+      v.object({ __typename: v.literal("Team"), slug: v.string(), organization: v.object({ login: v.string() }) }),
+    ]),
+  ),
+  null,
+)
+type Reviewer = v.InferOutput<typeof Reviewer>
+
+const ReviewRequests = v.object({ nodes: v.array(v.object({ requestedReviewer: Reviewer })) })
+
+/** A direct request wins over a team one: the user is asked personally either way. */
+function requestedVia(reviewers: readonly Reviewer[], viewer: string): RequestedVia | undefined {
+  const named = viewer.toLowerCase()
+  if (reviewers.some((reviewer) => reviewer?.__typename === "User" && reviewer.login.toLowerCase() === named)) {
+    return { kind: "you" }
+  }
+  const teams = reviewers.flatMap((reviewer) =>
+    reviewer?.__typename === "Team" ? [`${reviewer.organization.login}/${reviewer.slug}`] : [],
+  )
+  const [first, ...rest] = teams
+  return first ? { kind: "team", teams: [first, ...rest] } : undefined
+}
+
 const PullRequest = v.pipe(
   v.object({
     number: v.number(),
@@ -64,10 +95,11 @@ const PullRequest = v.pipe(
     mergeable: optional(v.string()),
     commits: optional(Commits),
     reviewThreads: optional(ReviewThreads),
+    reviewRequests: optional(ReviewRequests),
   }),
-  v.transform((node): ReviewRequest => {
+  v.transform((node): { request: ReviewRequest; reviewers: Reviewer[] } => {
     const checks = CHECKS[node.commits?.nodes[0]?.commit.statusCheckRollup?.state ?? ""]
-    return {
+    const request: ReviewRequest = {
       key: requestKey(node.repository.nameWithOwner, node.number),
       repository: node.repository.nameWithOwner,
       number: node.number,
@@ -84,6 +116,7 @@ const PullRequest = v.pipe(
         : {}),
       ...threadReadiness(node.reviewThreads),
     }
+    return { request, reviewers: node.reviewRequests?.nodes.map((entry) => entry.requestedReviewer) ?? [] }
   }),
 )
 
@@ -92,6 +125,7 @@ const GraphQLErrors = v.object({ errors: v.pipe(v.array(v.unknown()), v.nonEmpty
 const SearchPage = v.object({
   data: v.object({
     search: v.object({ nodes: v.array(v.unknown()) }),
+    viewer: v.fallback(v.optional(v.object({ login: v.string() })), undefined),
     rateLimit: v.fallback(v.optional(v.object({ remaining: v.number(), resetAt: v.string() })), undefined),
   }),
 })
@@ -112,7 +146,7 @@ function parsePages(stdout: string): unknown[] {
   return parsed
 }
 
-function readPage(page: unknown): { nodes: unknown[]; retryAt?: string } {
+function readPage(page: unknown): { nodes: unknown[]; viewer?: string; retryAt?: string } {
   if (v.is(GraphQLErrors, page)) {
     throw unchanged("a partial GraphQL response")
   }
@@ -120,22 +154,30 @@ function readPage(page: unknown): { nodes: unknown[]; retryAt?: string } {
   if (!parsed.success) {
     throw unchanged("a partial response")
   }
-  const { search, rateLimit } = parsed.output.data
-  return { nodes: search.nodes, ...(rateLimit?.remaining === 0 ? { retryAt: rateLimit.resetAt } : {}) }
+  const { search, viewer, rateLimit } = parsed.output.data
+  return {
+    nodes: search.nodes,
+    ...(viewer ? { viewer: viewer.login } : {}),
+    ...(rateLimit?.remaining === 0 ? { retryAt: rateLimit.resetAt } : {}),
+  }
 }
 
-function readNode(node: unknown): ReviewRequest {
+/** Without the viewer's login a direct request cannot be told from a team one, so neither is claimed. */
+function readNode(node: unknown, viewer: string | undefined): ReviewRequest {
   const parsed = v.safeParse(PullRequest, node)
   if (!parsed.success) {
     throw unchanged("a partial pull request")
   }
-  return parsed.output
+  const { request, reviewers } = parsed.output
+  const via = viewer ? requestedVia(reviewers, viewer) : undefined
+  return via ? { ...request, requestedVia: via } : request
 }
 
 export async function fetchReviewRequests(signal: AbortSignal): Promise<{ items: ReviewRequest[]; retryAt?: string }> {
   const result = await runGh(["api", "graphql", "--paginate", "--slurp", "-f", `query=${QUERY}`], { signal })
   const pages = parsePages(result.stdout).map(readPage)
-  const items = pages.flatMap((page) => page.nodes.map(readNode))
+  const viewer = pages.find((page) => page.viewer)?.viewer
+  const items = pages.flatMap((page) => page.nodes.map((node) => readNode(node, viewer)))
   items.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   const retryAt = pages.reduce<string | undefined>((last, page) => page.retryAt ?? last, undefined)
   return { items, ...(retryAt ? { retryAt } : {}) }

@@ -1,4 +1,5 @@
 import { Plugin } from "@opencode/plugin"
+import { applyQueueRules } from "../domain/queue-filter.js"
 import { ReviewedRecord } from "../domain/review-history.js"
 import { Snooze } from "../domain/snooze.js"
 import { type PluginOptions, parseOptions } from "../shared/options.js"
@@ -82,7 +83,10 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
     LEASE_INTERVALS * options.intervalMs + options.timeoutMs,
   )
   const poller = new ReviewQueuePoller(
-    fetchReviewRequests,
+    async (signal) => {
+      const result = await fetchReviewRequests(signal)
+      return { ...result, items: applyQueueRules(result.items, options) }
+    },
     {
       load: () => storage.get("baseline"),
       save: (value) => storage.set("baseline", value),

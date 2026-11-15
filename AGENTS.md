@@ -5,8 +5,8 @@ review in the TUI and Desktop app.
 
 ## Layout
 
-- `src/domain`: review request (with readiness), queue, review draft, review history (what was last posted), and
-  snooze types and rules, and the pull request diff parser
+- `src/domain`: review request (with readiness and who it was requested from), queue and its filter rules, review
+  draft, review history (what was last posted), and snooze types and rules, and the pull request diff parser
 - `src/shared`: runtime-neutral code: options, presentation (row readiness marks), the RPC contract,
   `notifications/`, and `review/` (draft status and row labels, post preview, the start/post/reset flows, snooze,
   summary, and Desktop line comments; both UIs run these through their flow host)

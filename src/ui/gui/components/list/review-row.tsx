@@ -3,7 +3,7 @@ import { For, Show } from "solid-js"
 import { postBlocker } from "../../../../domain/review-draft.js"
 import { reviewedFor } from "../../../../domain/review-history.js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
-import { ago, fullReference, readinessMarks } from "../../../../shared/presentation.js"
+import { ago, fullReference, readinessMarks, teamRequest } from "../../../../shared/presentation.js"
 import {
   type DraftAction,
   draftActions,
@@ -98,6 +98,13 @@ export function ReviewRow(props: ReviewRowProps) {
           </For>
           <span class="grq-sep">·</span>
           <span>@{props.item.author}</span>
+          <Show when={teamRequest(props.item)}>
+            {(team) => (
+              <span class="grq-team" title={team().detail}>
+                {team().label}
+              </span>
+            )}
+          </Show>
           <span class="grq-sep">·</span>
           <span class="grq-number">{ago(props.item.createdAt)}</span>
           <Show when={props.item.draft}>
