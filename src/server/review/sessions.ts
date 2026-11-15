@@ -8,6 +8,7 @@ import { createWorktree, fetchCommit } from "../git/worktrees.js"
 import { fetchPullRequest, postReview, pullRequestStates, viewerLogin } from "../github/pull-request.js"
 import type { KeyedStore } from "../keyed-store.js"
 import { DEFAULT_GUIDELINES, reviewInstructions, startPrompt } from "./agent/instructions.js"
+import { REVIEW_PERMISSIONS } from "./agent/permissions.js"
 import { cleanUpCheckout, cloneRepository, findCheckout, managedClonePath, worktreePath } from "./checkout.js"
 import type { DraftStore } from "./draft-store.js"
 
@@ -101,7 +102,7 @@ export class ReviewSessions {
         title: `Review ${item.repository}#${item.number}`,
         location: { directory: worktree as Location.PublicRef["directory"] },
         ...(input.model ? { model: input.model as SessionModel } : {}),
-        permissions: [{ action: "edit", resource: "*", effect: "deny" }],
+        permissions: REVIEW_PERMISSIONS,
       })
       const now = new Date().toISOString()
       const draft = await this.store.put({

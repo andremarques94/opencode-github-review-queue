@@ -5,6 +5,7 @@ import { createBranchWorktree, currentBranch } from "../git/worktrees.js"
 import { fetchOpenThreads, fetchPullRequestBranch } from "../github/pull-request.js"
 import type { KeyedStore } from "../keyed-store.js"
 import { addressInstructions, addressPrompt } from "./agent/address-instructions.js"
+import { ADDRESS_PERMISSIONS } from "./agent/permissions.js"
 import { addressWorktreePath, checkoutProblem, sessionCheckout } from "./checkout.js"
 
 type SessionModel = NonNullable<NonNullable<Parameters<Plugin.Context["session"]["create"]>[0]>["model"]>
@@ -15,11 +16,6 @@ export type AddressResult =
   | { status: "needs-model" }
 
 const INSTRUCTIONS_KEY = "github-review-queue.address"
-
-/** Edits stay allowed; what reaches GitHub, including resolving a thread through GraphQL, stays with the user. */
-const PERMISSIONS = ["git push *", "gh pr merge *", "gh pr review *", "gh pr comment *", "gh api graphql *"].map(
-  (resource) => ({ action: "shell", resource, effect: "deny" as const }),
-)
 
 export class AddressSessions {
   constructor(
@@ -58,7 +54,7 @@ export class AddressSessions {
       title: `Address review of ${item.repository}#${item.number}`,
       location: { directory: directory as Location.PublicRef["directory"] },
       model: input.model as SessionModel,
-      permissions: PERMISSIONS,
+      permissions: ADDRESS_PERMISSIONS,
     })
     await input.sessions.instructions.entry.put({
       sessionID: session.id,
