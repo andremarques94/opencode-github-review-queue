@@ -5,6 +5,7 @@ import type { ReviewRequest } from "../../../domain/review-request.js"
 import { fullReference } from "../../../shared/presentation.js"
 import { postReviewFlow, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
 import { snoozeFlow } from "../../../shared/review/snooze.js"
+import { summaryFlow } from "../../../shared/review/summary.js"
 import { errorMessage, type LocalReviews, ReviewQueue } from "../../../shared/rpc.js"
 import { createFlowHost } from "./flow-host.js"
 
@@ -14,6 +15,7 @@ export type ReviewActions = {
   reset(draft: ReviewDraft): Promise<void>
   snooze(item: ReviewRequest): Promise<void>
   wake(item: ReviewRequest): Promise<void>
+  summarize(item: ReviewRequest): Promise<void>
 }
 
 export function attempting(context: Context) {
@@ -83,5 +85,6 @@ export function createReviewActions(input: {
         input.updateLocal(await context.client.rpc(ReviewQueue).wake({ key: item.key }))
         context.toast.show({ variant: "success", title: `${fullReference(item)} is back in the queue` })
       }, "Could not wake the pull request"),
+    summarize: (item) => attempt(() => summaryFlow(host, item), "Could not summarize the pull request"),
   }
 }

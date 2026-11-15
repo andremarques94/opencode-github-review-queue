@@ -14,12 +14,14 @@ import { DraftStore } from "./review/draft-store.js"
 import { Findings } from "./review/findings.js"
 import { rememberModel, reviewModels } from "./review/models.js"
 import { ReviewSessions } from "./review/sessions.js"
+import { summarize } from "./review/summary.js"
 import { triage } from "./review/triage.js"
 import { type PollerEvent, ReviewQueuePoller } from "./review-queue-poller.js"
 import { pruneSnoozes } from "./snoozes.js"
 
 // Cloning and fetching a large repository can take far longer than one GitHub API call.
 const CHECKOUT_TIMEOUT_MS = 10 * 60_000
+const SUMMARY_TIMEOUT_MS = 5 * 60_000
 const DRAFT_PREFIX = "draft/"
 const REVIEWED_PREFIX = "reviewed/"
 const SNOOZE_PREFIX = "snooze/"
@@ -168,6 +170,13 @@ export default Plugin.define({
       decideFinding: (input, rpcContext) => reported(rpcContext, () => panel.decide(input)),
       editFinding: (input, rpcContext) => reported(rpcContext, () => panel.edit(input)),
       askAboutFinding: (input, rpcContext) => reported(rpcContext, () => panel.ask(input)),
+      summarize: (input, rpcContext) =>
+        reported(rpcContext, async () => {
+          // Always the model the user picked: without one, the server falls back to a default they never chose.
+          const generate = async (prompt: string, signal: AbortSignal) =>
+            (await ctx.experimental.generate.text({ prompt, model: input.model }, { signal })).text
+          return summarize(await queued(input.key), generate, timeout(rpcContext.signal, SUMMARY_TIMEOUT_MS))
+        }),
       snooze: (input, rpcContext) =>
         reported(rpcContext, async () => {
           const item = await queued(input.key)

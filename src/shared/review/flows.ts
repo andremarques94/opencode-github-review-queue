@@ -18,9 +18,9 @@ export type ReviewFlowHost = {
   resetReview(input: RpcInput<"resetReview">): Promise<unknown>
 }
 
-type ModelOption = RpcOutput<"models">["models"][number]
+export type ModelOption = RpcOutput<"models">["models"][number]
 
-async function pickModel(
+export async function pickModel(
   host: Pick<ReviewFlowHost, "models" | "select">,
   title: string,
 ): Promise<ModelOption | undefined> {

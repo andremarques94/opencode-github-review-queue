@@ -9,6 +9,7 @@ import { fullReference, type QueueFilter } from "../../../shared/presentation.js
 import { draftFor, resumable } from "../../../shared/review/draft-status.js"
 import { postReviewFlow, type ReviewFlowHost, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
 import { activeSnooze, snoozeFlow } from "../../../shared/review/snooze.js"
+import { summaryFlow } from "../../../shared/review/summary.js"
 import { errorMessage, type LocalReviews, ReviewQueue } from "../../../shared/rpc.js"
 import { createFlowHost } from "./flow-host.js"
 import { pullRequestOptions, queueOptions } from "./menu-options.js"
@@ -29,6 +30,7 @@ export type ReviewActions = {
   copy(kind: CopyKind): void
   snooze(): Promise<void>
   toggleSnoozed(): void
+  summarize(): Promise<void>
   menu(): Promise<void>
   refresh(): Promise<void>
   setFilter(filter: QueueFilter): void
@@ -165,6 +167,13 @@ export function useReviewActions(input: {
     toggleSnoozed() {
       input.setShowSnoozed((shown) => !shown)
     },
+    summarize: () =>
+      attempt(async () => {
+        const item = input.current()
+        if (item) {
+          await summaryFlow(host, item)
+        }
+      }, "Could not summarize the pull request"),
     async menu() {
       const item = input.current()
       const choice = await context.ui.dialog.select<() => unknown>({
@@ -214,6 +223,7 @@ export function useReviewActions(input: {
       { id: "github-review-queue.open", title: "Open pull request on GitHub", bind: "o", run: actions.open },
       { id: "github-review-queue.menu", title: "Pull request actions", bind: "m", run: actions.menu },
       { id: "github-review-queue.post", title: "Post review", bind: "p", run: actions.post },
+      { id: "github-review-queue.summarize", title: "Summarize pull request", bind: "i", run: actions.summarize },
       { id: "github-review-queue.snooze", title: "Snooze or wake pull request", bind: "s", run: actions.snooze },
       {
         id: "github-review-queue.show-snoozed",
