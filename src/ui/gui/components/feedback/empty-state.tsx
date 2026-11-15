@@ -4,10 +4,18 @@ import type { Store } from "solid-js/store"
 import type { QueueSnapshot } from "../../../../domain/review-queue.js"
 import type { QueueFilter } from "../../../../shared/presentation.js"
 
-export function EmptyState(props: { context: Context; state: Store<QueueSnapshot>; filter: QueueFilter }) {
+export function EmptyState(props: {
+  context: Context
+  state: Store<QueueSnapshot>
+  filter: QueueFilter
+  snoozed: number
+}) {
   const message = () => {
     if (!props.state.initialized) {
       return "Waiting for the first successful GitHub refresh."
+    }
+    if (props.snoozed > 0) {
+      return "Everything left is snoozed."
     }
     return props.filter === "current" ? "No review requests in this repository." : "You're all caught up."
   }

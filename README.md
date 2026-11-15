@@ -29,6 +29,7 @@ in the background, with a notification only when something actually needs you.
   unresolved review threads.
 - **Re-reviews that focus on what changed.** When a pull request you reviewed comes back with new commits, the row
   says so, and the next review can cover only the commits since.
+- **Snooze** a pull request until its checks finish, until the author pushes, or until a time you pick.
 - **Grouped by repository**, with a **Current** scope for the repository in the session.
 - **Notifications that respect you.** New requests are batched into one notification; a request that briefly drops
   out of GitHub's search index does not notify twice.
@@ -79,6 +80,8 @@ Then open the queue with `/reviews`, or **Show GitHub review requests** from the
 | `Enter`   | Start a review of the selected pull request, or resume it     |
 | `o`       | Open the pull request on GitHub                               |
 | `p`       | Post the selected review, after a preview                     |
+| `s`       | Snooze the selected pull request, or wake it                  |
+| `z`       | Show or hide snoozed pull requests                            |
 | `m`       | Actions menu, listing every action with its key               |
 | `y`       | Copy `owner/repo#123`                                         |
 | `u`       | Copy the URL                                                  |
@@ -89,16 +92,17 @@ Then open the queue with `/reviews`, or **Show GitHub review requests** from the
 
 The footer only shows `enter` and `m`, so it fits a narrow panel; the actions menu lists the rest. With mouse support
 enabled in your terminal, click a request to select it, click it again to start or resume its review, and right-click
-for the actions menu. **All** / **Current** and the footer hints are clickable, and the wheel scrolls
-the list. The actions menu's **Open on GitHub** entry spells out the row's readiness.
+for the actions menu. **All** / **Current**, the footer hints, and **N snoozed** in the header are clickable, and the
+wheel scrolls the list. The actions menu's **Open on GitHub** entry spells out the row's readiness.
 Copying uses OSC 52, so it needs a terminal that supports it.
 
 ### Desktop
 
 Open the pinned **Review requests** tab in the side panel, or **Show GitHub review requests** from the command palette.
 Click a row to start or resume its review. Its menu (or a right-click) opens it on GitHub, copies its reference or
-link, and posts or resets its review. Hover a readiness mark for its meaning. New requests also raise a toast with a
-**Show reviews** button.
+link, snoozes or wakes it, and posts or resets its review. Hover a readiness mark for its meaning, and
+click **N snoozed** under the title to show snoozed requests. New requests also raise a toast with a **Show reviews**
+button.
 
 ### Readiness
 
@@ -106,6 +110,14 @@ Rows show what GitHub reports about the pull request's last commit and mergeabil
 pass, fail, or are still running, _conflicts_ when it cannot merge cleanly, and _N threads_ for unresolved review
 threads. Anything GitHub does not know yet, such as a pull request without checks or mergeability still being
 computed, shows nothing.
+
+### Snooze
+
+**Snooze** hides a pull request until a condition is met: **Until checks finish** (offered while checks are running),
+**Until the author pushes**, **For 1 hour**, **Until tomorrow** (9:00), or **Until…** a duration (`45m`, `3h`, `2d`),
+a time (`14:30`), or a date (`2026-11-20 09:00`). A snoozed request comes back on its own when its condition is met.
+The header counts the snoozed requests; show them to see what each waits for, or to wake one early. A snooze is
+dropped when its pull request leaves the queue.
 
 ### Reviews
 

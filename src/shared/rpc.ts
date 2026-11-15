@@ -4,6 +4,7 @@ import { FindingFields, ReviewDraft } from "../domain/review-draft.js"
 import { ReviewedRecord } from "../domain/review-history.js"
 import { QueueSnapshot } from "../domain/review-queue.js"
 import { ReviewRequest } from "../domain/review-request.js"
+import { Snooze, SnoozeUntil } from "../domain/snooze.js"
 
 const empty = v.strictObject({})
 const byKey = v.strictObject({ key: v.string() })
@@ -11,6 +12,7 @@ const byKey = v.strictObject({ key: v.string() })
 const drafts = v.strictObject({
   drafts: v.array(ReviewDraft),
   reviewed: v.array(ReviewedRecord),
+  snoozes: v.array(Snooze),
 })
 export type LocalReviews = v.InferOutput<typeof drafts>
 const draft = v.strictObject({ draft: ReviewDraft })
@@ -75,6 +77,8 @@ export const ReviewQueue = Rpc.define({
       errors,
     },
     askAboutFinding: { input: v.strictObject(byFinding), output: empty, errors },
+    snooze: { input: v.strictObject({ key: v.string(), until: SnoozeUntil }), output: drafts, errors },
+    wake: { input: byKey, output: drafts, errors },
   },
   events: {
     state: { schema: QueueSnapshot },

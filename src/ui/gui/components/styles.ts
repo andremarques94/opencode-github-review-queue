@@ -63,6 +63,16 @@ export const panelStyles = `${badgeStyles}
   text-overflow: ellipsis;
 }
 .grq-status-stale { color: var(--icon-warning-base); }
+.grq-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-interactive-base, var(--text-base));
+  font: inherit;
+  cursor: pointer;
+}
+.grq-link:hover { text-decoration: underline; }
+.grq-link:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
 
 .grq-segment {
   display: inline-flex;

@@ -3,12 +3,16 @@ import { Show } from "solid-js"
 import type { Store } from "solid-js/store"
 import type { QueueSnapshot } from "../../../../domain/review-queue.js"
 import { type QueueFilter, refreshLabel } from "../../../../shared/presentation.js"
+import { type QueueView, snoozedToggleLabel } from "../../../../shared/review/snooze.js"
 import { ScopeToggle } from "./scope-toggle.js"
 
 export function PanelHeader(props: {
   context: Context
   state: Store<QueueSnapshot>
   count: number
+  view: QueueView
+  showSnoozed: boolean
+  toggleSnoozed(): void
   filter: QueueFilter
   repository: string | undefined
   setFilter(filter: QueueFilter): void
@@ -43,6 +47,18 @@ export function PanelHeader(props: {
         {status()}
         <Show when={props.state.stale}>
           <span class="grq-status-stale"> · stale</span>
+        </Show>
+        <Show when={props.view.snoozed > 0}>
+          <span class="grq-sep"> · </span>
+          <button
+            type="button"
+            class="grq-link"
+            aria-pressed={props.showSnoozed}
+            title={props.showSnoozed ? "Hide snoozed pull requests" : "Show snoozed pull requests"}
+            onClick={props.toggleSnoozed}
+          >
+            {snoozedToggleLabel(props.view, props.showSnoozed)}
+          </button>
         </Show>
       </div>
     </header>

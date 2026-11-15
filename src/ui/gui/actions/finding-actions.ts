@@ -27,6 +27,7 @@ export function createFindingActions(input: {
     context,
     server: () => input.session().server.id,
     directory: () => undefined,
+    updateLocal: input.reload,
   })
 
   return {

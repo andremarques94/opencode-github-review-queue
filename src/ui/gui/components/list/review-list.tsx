@@ -11,6 +11,7 @@ export function ReviewList(props: {
   items: ReviewRequest[]
   newKeys: readonly string[]
   local: LocalReviews
+  now: number
   actions: ReviewActions
   grouped: boolean
   copy(text: string, name: string): void
@@ -27,6 +28,7 @@ export function ReviewList(props: {
             showHeader={props.grouped}
             newKeys={props.newKeys}
             local={props.local}
+            now={props.now}
             actions={props.actions}
             copy={props.copy}
           />

@@ -18,7 +18,7 @@ export default Plugin.define({
   async setup(context) {
     const options = parseOptions(context.options)
     const rpc = context.client.rpc(ReviewQueue)
-    const initial: TuiState = { ...emptySnapshot(), drafts: [], reviewed: [] }
+    const initial: TuiState = { ...emptySnapshot(), drafts: [], reviewed: [], snoozes: [] }
     const [state, updateState] = context.storage.memory<TuiState>("queue", { initial })
     const update = (snapshot: QueueSnapshot) => updateState((draft) => Object.assign(draft, snapshot))
 
@@ -35,6 +35,7 @@ export default Plugin.define({
       updateState((store) => {
         store.drafts = local.drafts
         store.reviewed = local.reviewed
+        store.snoozes = local.snoozes
       })
     void rpc.snapshot({}).then((snapshot) => update(snapshot))
     // Another location (the review session's) may write a draft, so re-read drafts with every queue update too.
@@ -76,7 +77,7 @@ export default Plugin.define({
       render: (panel) => (
         <>
           <Show when={panel.name === "github-review-queue.main"}>
-            <ReviewPanel panel={panel} state={state} update={update} />
+            <ReviewPanel panel={panel} state={state} update={update} updateLocal={updateDrafts} />
           </Show>
           <Show when={panel.name === FINDINGS_PANEL}>
             <FindingsPanel

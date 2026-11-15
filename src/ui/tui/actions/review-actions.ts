@@ -8,6 +8,7 @@ import type { ReviewRequest } from "../../../domain/review-request.js"
 import { fullReference, type QueueFilter } from "../../../shared/presentation.js"
 import { draftFor, resumable } from "../../../shared/review/draft-status.js"
 import { postReviewFlow, type ReviewFlowHost, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
+import { activeSnooze, snoozeFlow } from "../../../shared/review/snooze.js"
 import { errorMessage, type LocalReviews, ReviewQueue } from "../../../shared/rpc.js"
 import { createFlowHost } from "./flow-host.js"
 import { pullRequestOptions, queueOptions } from "./menu-options.js"
@@ -26,6 +27,8 @@ export type ReviewActions = {
   post(): Promise<void>
   reset(): Promise<void>
   copy(kind: CopyKind): void
+  snooze(): Promise<void>
+  toggleSnoozed(): void
   menu(): Promise<void>
   refresh(): Promise<void>
   setFilter(filter: QueueFilter): void
@@ -61,12 +64,17 @@ export async function postDraft(
 export function useReviewActions(input: {
   panel: PanelInput
   update(state: QueueSnapshot): void
+  updateLocal(local: LocalReviews): void
   ordered: Accessor<ReviewRequest[]>
   current: Accessor<ReviewRequest | undefined>
   local: Accessor<LocalReviews>
+  now: Accessor<number>
   setSelected: Setter<number>
   filter: Accessor<QueueFilter>
   setFilter: Setter<QueueFilter>
+  snoozed: Accessor<number>
+  showSnoozed: Accessor<boolean>
+  setShowSnoozed: Setter<boolean>
 }): ReviewActions {
   const context = usePlugin()
   const rpc = context.client.rpc(ReviewQueue)
@@ -138,13 +146,39 @@ export function useReviewActions(input: {
         variant: copied ? "success" : "warning",
       })
     },
+    snooze: () =>
+      attempt(async () => {
+        const item = input.current()
+        if (!item) {
+          return
+        }
+        if (activeSnooze(input.local().snoozes, item, input.now())) {
+          input.updateLocal(await rpc.wake({ key: item.key }))
+          context.ui.toast.show({ message: `${fullReference(item)} is back in the queue`, variant: "success" })
+          return
+        }
+        const local = await snoozeFlow(host, item)
+        if (local) {
+          input.updateLocal(local)
+        }
+      }, "Could not snooze the pull request"),
+    toggleSnoozed() {
+      input.setShowSnoozed((shown) => !shown)
+    },
     async menu() {
       const item = input.current()
       const choice = await context.ui.dialog.select<() => unknown>({
         title: item ? `#${item.number} ${item.title}` : "Review queue",
         options: [
-          ...(item ? pullRequestOptions(actions, item, currentDraft()) : []),
-          ...queueOptions(actions, input.filter(), input.panel.toggleFullscreen),
+          ...(item
+            ? pullRequestOptions(actions, item, currentDraft(), activeSnooze(input.local().snoozes, item, input.now()))
+            : []),
+          ...queueOptions(actions, {
+            filter: input.filter(),
+            snoozed: input.snoozed(),
+            showSnoozed: input.showSnoozed(),
+            toggleFullscreen: input.panel.toggleFullscreen,
+          }),
         ],
       })
       await choice?.()
@@ -180,6 +214,13 @@ export function useReviewActions(input: {
       { id: "github-review-queue.open", title: "Open pull request on GitHub", bind: "o", run: actions.open },
       { id: "github-review-queue.menu", title: "Pull request actions", bind: "m", run: actions.menu },
       { id: "github-review-queue.post", title: "Post review", bind: "p", run: actions.post },
+      { id: "github-review-queue.snooze", title: "Snooze or wake pull request", bind: "s", run: actions.snooze },
+      {
+        id: "github-review-queue.show-snoozed",
+        title: "Show or hide snoozed pull requests",
+        bind: "z",
+        run: actions.toggleSnoozed,
+      },
       {
         id: "github-review-queue.copy-reference",
         title: "Copy qualified PR reference",

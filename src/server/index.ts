@@ -1,5 +1,6 @@
 import { Plugin } from "@opencode/plugin"
 import { ReviewedRecord } from "../domain/review-history.js"
+import { Snooze } from "../domain/snooze.js"
 import { type PluginOptions, parseOptions } from "../shared/options.js"
 import { type LocalReviews, ReviewQueue } from "../shared/rpc.js"
 import { openReview, repositoryForDirectory } from "./github/repository.js"
@@ -15,11 +16,13 @@ import { rememberModel, reviewModels } from "./review/models.js"
 import { ReviewSessions } from "./review/sessions.js"
 import { triage } from "./review/triage.js"
 import { type PollerEvent, ReviewQueuePoller } from "./review-queue-poller.js"
+import { pruneSnoozes } from "./snoozes.js"
 
 // Cloning and fetching a large repository can take far longer than one GitHub API call.
 const CHECKOUT_TIMEOUT_MS = 10 * 60_000
 const DRAFT_PREFIX = "draft/"
 const REVIEWED_PREFIX = "reviewed/"
+const SNOOZE_PREFIX = "snooze/"
 // Missing a few renewals, such as while the machine sleeps, should not hand the lease over.
 const LEASE_INTERVALS = 3
 
@@ -27,6 +30,7 @@ type Shared = {
   poller: ReviewQueuePoller
   drafts: DraftStore
   reviewed: KeyedStore<ReviewedRecord>
+  snoozes: KeyedStore<Snooze>
   reviews: ReviewSessions
   findings: Findings
   refs: number
@@ -58,8 +62,12 @@ async function reported<T, E>(
 }
 
 async function localReviews(current: Shared): Promise<LocalReviews> {
-  const [drafts, reviewed] = await Promise.all([current.drafts.list(), current.reviewed.list()])
-  return { drafts, reviewed }
+  const [drafts, reviewed, snoozes] = await Promise.all([
+    current.drafts.list(),
+    current.reviewed.list(),
+    current.snoozes.list(),
+  ])
+  return { drafts, reviewed, snoozes }
 }
 
 function createShared(storage: Plugin.Context["storage"], options: PluginOptions): Shared {
@@ -88,6 +96,7 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
     remove: (key) => storage.remove(`${DRAFT_PREFIX}${key}`),
   })
   const reviewed = new KeyedStore(ReviewedRecord, prefixed(storage, REVIEWED_PREFIX))
+  const snoozes = new KeyedStore(Snooze, prefixed(storage, SNOOZE_PREFIX))
   const reviews = new ReviewSessions(drafts, reviewed, {
     cacheDirectory: options.cacheDirectory ? expandHome(options.cacheDirectory) : defaultCacheDirectory(),
     guidelinesFile: options.reviewGuidelines && expandHome(options.reviewGuidelines),
@@ -97,9 +106,10 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
   poller.on((event) => {
     if (event.type === "fetched") {
       void reviews.pruneAfterRefresh(event.state, AbortSignal.timeout(options.timeoutMs))
+      void pruneSnoozes(snoozes, event.state.items, Date.now()).catch(() => undefined)
     }
   })
-  return { poller, drafts, reviewed, reviews, findings: new Findings(drafts, options.timeoutMs), refs: 0 }
+  return { poller, drafts, reviewed, snoozes, reviews, findings: new Findings(drafts, options.timeoutMs), refs: 0 }
 }
 
 export default Plugin.define({
@@ -158,6 +168,22 @@ export default Plugin.define({
       decideFinding: (input, rpcContext) => reported(rpcContext, () => panel.decide(input)),
       editFinding: (input, rpcContext) => reported(rpcContext, () => panel.edit(input)),
       askAboutFinding: (input, rpcContext) => reported(rpcContext, () => panel.ask(input)),
+      snooze: (input, rpcContext) =>
+        reported(rpcContext, async () => {
+          const item = await queued(input.key)
+          await current.snoozes.put({
+            version: 1,
+            key: item.key,
+            until: input.until,
+            createdAt: new Date().toISOString(),
+          })
+          return localReviews(current)
+        }),
+      wake: (input, rpcContext) =>
+        reported(rpcContext, async () => {
+          await current.snoozes.remove(input.key)
+          return localReviews(current)
+        }),
     })
     const tools = await ctx.tool.transform((editor) => addReviewTools(editor, current.findings))
     const reminder = await ctx.session.hook("context", async (event) => {

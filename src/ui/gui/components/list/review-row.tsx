@@ -11,6 +11,7 @@ import {
   resumable,
   rowLabel,
 } from "../../../../shared/review/draft-status.js"
+import { activeSnooze, snoozeLabel } from "../../../../shared/review/snooze.js"
 import type { LocalReviews } from "../../../../shared/rpc.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
 
@@ -19,6 +20,7 @@ export type ReviewRowProps = {
   item: ReviewRequest
   isNew: boolean
   local: LocalReviews
+  now: number
   actions: ReviewActions
   copy(text: string, name: string): void
 }
@@ -39,6 +41,7 @@ const CLICK_SEQUENCE = [
 export function ReviewRow(props: ReviewRowProps) {
   let actions: HTMLDivElement | undefined
   const draft = () => draftFor(props.local.drafts, props.item.key)
+  const snooze = () => activeSnooze(props.local.snoozes, props.item, props.now)
   const open = () => props.context.system.openExternal(props.item.url)
   const openMenu = (event: MouseEvent) => {
     const trigger = actions?.querySelector("button")
@@ -53,6 +56,16 @@ export function ReviewRow(props: ReviewRowProps) {
 
   const review = () =>
     void props.actions.review(props.item, resumable(draft()), reviewedFor(props.local.reviewed, props.item.key))
+  const snoozeItem = () => {
+    const current = snooze()
+    return current
+      ? {
+          label: `Wake up (snoozed ${snoozeLabel(current, props.now)})`,
+          icon: "outline-eye" as const,
+          onSelect: () => void props.actions.wake(props.item),
+        }
+      : { label: "Snooze…", icon: "outline-eye-slash" as const, onSelect: () => void props.actions.snooze(props.item) }
+  }
   const draftItem = (action: DraftAction) => {
     if (action.kind === "reset") {
       return { label: action.label, icon: "trash" as const, onSelect: () => void props.actions.reset(action.draft) }
@@ -90,7 +103,7 @@ export function ReviewRow(props: ReviewRowProps) {
           <Show when={props.item.draft}>
             <span class="grq-badge">Draft</span>
           </Show>
-          <Show when={rowLabel(props.item, props.local)}>
+          <Show when={rowLabel(props.item, props.local, props.now)}>
             {(label) => (
               <span
                 class="grq-badge grq-badge-review"
@@ -118,6 +131,7 @@ export function ReviewRow(props: ReviewRowProps) {
               onSelect: () => props.copy(fullReference(props.item), "Reference"),
             },
             { label: "Copy link", icon: "link", onSelect: () => props.copy(props.item.url, "Link") },
+            snoozeItem(),
             ...draftItems(),
           ]}
         />
