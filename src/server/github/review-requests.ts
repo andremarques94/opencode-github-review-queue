@@ -188,7 +188,6 @@ const PullRequest = v.pipe(
     latestReviews: optional(LatestReviews),
   }),
   v.transform((node): { request: ReviewRequest; reviewers: Reviewer[]; events: RequestEvent[] } => {
-    const commit = node.commits?.nodes[0]?.commit
     const request: ReviewRequest = {
       key: requestKey(node.repository.nameWithOwner, node.number),
       repository: node.repository.nameWithOwner,
@@ -200,26 +199,45 @@ const PullRequest = v.pipe(
       author: node.author.login,
       ...known("headSha", node.headRefOid),
       ...known("baseSha", node.baseRefOid),
-      ...known("checks", CHECKS[commit?.statusCheckRollup?.state ?? ""]),
-      ...known("conflicts", MERGEABLE[node.mergeable ?? ""]),
-      ...known("behind", BEHIND[node.mergeStateStatus ?? ""]),
+      ...mergeState(node),
       ...known("reviewDecision", node.reviewDecision),
       ...threadReadiness(node.reviewThreads),
       ...known("additions", node.additions),
       ...known("deletions", node.deletions),
       ...known("changedFiles", node.changedFiles),
-      ...known("lastCommitAt", commit?.committedDate),
       ...reviewsOf(node.latestReviews),
     }
-    return {
-      request,
-      reviewers: node.reviewRequests?.nodes.map((entry) => entry.requestedReviewer) ?? [],
-      events: (node.timelineItems?.nodes ?? []).flatMap((event) =>
-        event ? [{ at: event.createdAt, reviewer: event.requestedReviewer }] : [],
-      ),
-    }
+    return { request, ...requestHistory(node) }
   }),
 )
+
+/** Checks on the last commit, and whether the branch conflicts with or is behind its base. */
+function mergeState(node: {
+  mergeable?: string | null | undefined
+  mergeStateStatus?: string | null | undefined
+  commits?: v.InferOutput<typeof Commits> | null | undefined
+}) {
+  const commit = node.commits?.nodes[0]?.commit
+  return {
+    ...known("checks", CHECKS[commit?.statusCheckRollup?.state ?? ""]),
+    ...known("conflicts", MERGEABLE[node.mergeable ?? ""]),
+    ...known("behind", BEHIND[node.mergeStateStatus ?? ""]),
+    ...known("lastCommitAt", commit?.committedDate),
+  }
+}
+
+/** Who is still asked to review, and when each was asked. */
+function requestHistory(node: {
+  reviewRequests?: v.InferOutput<typeof ReviewRequests> | null | undefined
+  timelineItems?: v.InferOutput<typeof RequestEvents> | null | undefined
+}): { reviewers: Reviewer[]; events: RequestEvent[] } {
+  return {
+    reviewers: node.reviewRequests?.nodes.map((entry) => entry.requestedReviewer) ?? [],
+    events: (node.timelineItems?.nodes ?? []).flatMap((event) =>
+      event ? [{ at: event.createdAt, reviewer: event.requestedReviewer }] : [],
+    ),
+  }
+}
 
 const GraphQLErrors = v.object({ errors: v.pipe(v.array(v.unknown()), v.nonEmpty()) })
 

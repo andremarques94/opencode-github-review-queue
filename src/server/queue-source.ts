@@ -110,6 +110,36 @@ export function queueSource(
     })
   }
 
+  const refreshHost = async (
+    { host, error }: GitHubHost,
+    context: { manual: boolean; discovered: boolean; retained: HostQueue; records: ReviewedRecord[] },
+    signal: AbortSignal,
+  ): Promise<HostOutcome> => {
+    const { retained } = context
+    if (error) {
+      // Counted once per check, so the backoff that gates the next check can lapse.
+      if (context.discovered) {
+        record(host, error)
+      }
+      return { host, queue: retained, error }
+    }
+    if (!due(host, context.manual)) {
+      const last = health.get(host)?.error
+      return { host, queue: retained, ...(last ? { error: last } : {}) }
+    }
+    try {
+      const queue = await fetchHost(host, options, context.records, signal)
+      record(host, queue)
+      return { host, queue }
+    } catch (failure) {
+      if (signal.aborted) {
+        throw failure
+      }
+      record(host, detail(failure))
+      return { host, queue: retained, error: detail(failure) }
+    }
+  }
+
   return async (signal, { manual, previous }) => {
     if (!versionChecked) {
       await checkGhVersion(signal)
@@ -121,53 +151,46 @@ export function queueSource(
     }
     const current = hosts ?? []
     const records = options.followUps ? await reviewed.list() : []
-    const onHost = <T extends { host?: string }>(list: readonly T[] | undefined, host: string) =>
-      (list ?? []).filter((entry) => hostOf(entry) === hostOf(hostField(host)))
 
     const outcomes = await Promise.all(
-      current.map(async ({ host, error }): Promise<{ host: string; queue: HostQueue; error?: QueueError }> => {
-        const retained = { items: onHost(previous.items, host), authored: onHost(previous.authored, host) }
-        if (error) {
-          // Counted once per check, so the backoff that gates the next check can lapse.
-          if (discovered) {
-            record(host, error)
-          }
-          return { host, queue: retained, error }
-        }
-        if (!due(host, manual)) {
-          const last = health.get(host)?.error
-          return { host, queue: retained, ...(last ? { error: last } : {}) }
-        }
-        const own = onHost(records, host)
-        try {
-          const queue = await fetchHost(host, options, own, signal)
-          record(host, queue)
-          return { host, queue }
-        } catch (failure) {
-          if (signal.aborted) {
-            throw failure
-          }
-          record(host, detail(failure))
-          return { host, queue: retained, error: detail(failure) }
-        }
-      }),
+      current.map((entry) =>
+        refreshHost(
+          entry,
+          {
+            manual,
+            discovered,
+            retained: { items: onHost(previous.items, entry.host), authored: onHost(previous.authored, entry.host) },
+            records: onHost(records, entry.host),
+          },
+          signal,
+        ),
+      ),
     )
-
-    const failures = outcomes.flatMap(({ host, error }) => (error ? [{ host, error }] : []))
-    const [first, ...rest] = failures
-    if (first && failures.length === outcomes.length) {
-      throw new GhError(combined([first, ...rest], false))
-    }
-    const items = outcomes.flatMap(({ queue }) => queue.items)
-    const authored = outcomes.flatMap(({ queue }) => queue.authored ?? [])
     // The poller only waits for a rate limit when every host is held back by one.
     const limits = current.map(({ host }) => health.get(host)?.retryAt)
     const retryAt = limits.every((limit) => limit !== undefined) ? limits.sort()[0] : undefined
-    return {
-      items: sortQueue(items, options.sort),
-      ...(options.myPullRequests ? { authored: sortQueue(authored, options.sort) } : {}),
-      ...(retryAt ? { retryAt } : {}),
-      ...(first ? { error: combined([first, ...rest], true) } : {}),
-    } satisfies FetchResult
+    return merge(outcomes, retryAt, options)
+  }
+}
+
+type HostOutcome = { host: string; queue: HostQueue; error?: QueueError }
+
+const onHost = <T extends { host?: string }>(list: readonly T[] | undefined, host: string) =>
+  (list ?? []).filter((entry) => hostOf(entry) === hostOf(hostField(host)))
+
+/** One queue from every host's; throws only when every host failed. */
+function merge(outcomes: readonly HostOutcome[], retryAt: string | undefined, options: PluginOptions): FetchResult {
+  const failures = outcomes.flatMap(({ host, error }) => (error ? [{ host, error }] : []))
+  const [first, ...rest] = failures
+  if (first && failures.length === outcomes.length) {
+    throw new GhError(combined([first, ...rest], false))
+  }
+  const items = outcomes.flatMap(({ queue }) => queue.items)
+  const authored = outcomes.flatMap(({ queue }) => queue.authored ?? [])
+  return {
+    items: sortQueue(items, options.sort),
+    ...(options.myPullRequests ? { authored: sortQueue(authored, options.sort) } : {}),
+    ...(retryAt ? { retryAt } : {}),
+    ...(first ? { error: combined([first, ...rest], true) } : {}),
   }
 }

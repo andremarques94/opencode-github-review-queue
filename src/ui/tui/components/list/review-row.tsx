@@ -2,23 +2,50 @@
 
 import { usePlugin } from "@opencode/plugin/tui"
 import type { MouseEvent } from "@opentui/core"
-import { createSignal, For, Show } from "solid-js"
+import { createSignal, Show } from "solid-js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
-import { parseOptions } from "../../../../shared/options.js"
-import {
-  type Detail,
-  fitLine,
-  readinessMarks,
-  sizeMark,
-  teamRequest,
-  waitMark,
-} from "../../../../shared/presentation.js"
+import { type Detail, fitLine } from "../../../../shared/presentation.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
 import { RowDetails } from "./row-details.js"
+import { RowGutter } from "./row-gutter.js"
+import { RowMeta } from "./row-meta.js"
 
 const RIGHT_BUTTON = 2
 
 export const rowID = (key: string) => `github-review-queue:${key}`
+
+/** Selected rows are highlighted and wrap their title; the others fit it on one line. */
+function rowLook(selected: boolean, title: string, width: number, theme: ReturnType<typeof usePlugin>["theme"]) {
+  if (selected) {
+    return {
+      background: theme.background.raised.base,
+      bar: theme.text.action.primary.base,
+      wrap: "word" as const,
+      title,
+    }
+  }
+  return { background: undefined, bar: theme.text.faint, wrap: "none" as const, title: fitLine(title, width) }
+}
+
+// Dialogs open on release: opened on press, the release would land outside them and close them again.
+function rowClicks(row: { readonly selected: boolean; readonly item: ReviewRequest; readonly actions: ReviewActions }) {
+  let pressedSelected = false
+  return {
+    press() {
+      pressedSelected = row.selected
+      row.actions.select(row.item.key)
+    },
+    release(event: MouseEvent) {
+      if (event.button === RIGHT_BUTTON) {
+        void row.actions.menu()
+        return
+      }
+      if (pressedSelected) {
+        void row.actions.review()
+      }
+    },
+  }
+}
 
 export function ReviewRow(props: {
   item: ReviewRequest
@@ -33,39 +60,10 @@ export function ReviewRow(props: {
 }) {
   const plugin = usePlugin()
   const theme = plugin.theme
-  const staleAfterMs = parseOptions(plugin.options).staleAfterMs
-  const wait = () => waitMark(props.item, staleAfterMs)
   const [hovered, setHovered] = createSignal(false)
-  const look = () =>
-    props.selected
-      ? {
-          background: theme.background.raised.base,
-          bar: theme.text.action.primary.base,
-          wrap: "word" as const,
-          title: props.item.title,
-        }
-      : {
-          background: undefined,
-          bar: theme.text.faint,
-          wrap: "none" as const,
-          title: fitLine(props.item.title, props.width),
-        }
+  const look = () => rowLook(props.selected, props.item.title, props.width, theme)
 
-  // Dialogs open on release: opened on press, the release would land outside them and close them again.
-  let pressedSelected = false
-  const press = () => {
-    pressedSelected = props.selected
-    props.actions.select(props.item.key)
-  }
-  const release = (event: MouseEvent) => {
-    if (event.button === RIGHT_BUTTON) {
-      void props.actions.menu()
-      return
-    }
-    if (pressedSelected) {
-      void props.actions.review()
-    }
-  }
+  const { press, release } = rowClicks(props)
 
   return (
     <box
@@ -78,37 +76,12 @@ export function ReviewRow(props: {
       onMouseOver={() => setHovered(true)}
       onMouseOut={() => setHovered(false)}
     >
-      <text width={2}>
-        <span style={{ fg: look().bar }}>{props.selected || hovered() ? "▌" : " "}</span>
-        <span style={{ fg: theme.text.action.primary.base }}>{props.isNew ? "●" : " "}</span>
-      </text>
+      <RowGutter selected={props.selected} hovered={hovered()} isNew={props.isNew} bar={look().bar} />
       <box flexDirection="column" flexGrow={1} paddingRight={1}>
         <text fg={theme.text.base} wrapMode={look().wrap}>
           <b>{look().title}</b>
         </text>
-        <text fg={theme.text.muted} wrapMode="none">
-          #{props.item.number}
-          {/* Before the author and age, so a narrow panel cuts those first. */}
-          <For each={readinessMarks(props.item)}>
-            {(mark) => <span style={{ fg: theme.text.feedback[mark.tone].base }}> {mark.label}</span>}
-          </For>
-          <Show when={sizeMark(props.item)}>{(size) => ` ${size().label}`}</Show>
-          <Show when={!props.item.authored}>
-            {" · "}
-            <b>@{props.item.author}</b>
-          </Show>
-          <Show when={teamRequest(props.item)}>
-            {(team) => <span style={{ fg: theme.text.faint }}> {team().label}</span>}
-          </Show>
-          {" · "}
-          <span style={{ fg: wait().stale ? theme.text.feedback.warning.base : theme.text.muted }}>{wait().label}</span>
-          <Show when={props.item.draft}>
-            <span style={{ fg: theme.text.feedback.warning.base }}> · draft</span>
-          </Show>
-          <Show when={props.review}>
-            {(review) => <span style={{ fg: theme.text.action.primary.base }}> · {review()}</span>}
-          </Show>
-        </text>
+        <RowMeta item={props.item} review={props.review} />
         <Show when={props.selected && props.details}>{(details) => <RowDetails details={details()} />}</Show>
       </box>
     </box>

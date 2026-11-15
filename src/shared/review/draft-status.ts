@@ -24,6 +24,10 @@ export function draftLabel(draft: ReviewDraft | undefined): string | undefined {
 
 export const resumable = (draft: ReviewDraft | undefined) => draft !== undefined && draft.status !== "posted"
 
+/** Starting a review of your own pull request opens it on GitHub instead, unless a review of it is in progress. */
+export const opensOnGitHub = (item: ReviewRequest, draft: ReviewDraft | undefined) =>
+  item.authored !== undefined && !resumable(draft)
+
 /** A draft in progress wins; otherwise new commits matter more than a review that is already posted. */
 export function reviewLabel(
   item: ReviewRequest,

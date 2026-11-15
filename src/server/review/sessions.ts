@@ -12,6 +12,7 @@ import { REVIEW_PERMISSIONS } from "./agent/permissions.js"
 import { cleanUpCheckout, cloneRepository, findCheckout, managedClonePath, worktreePath } from "./checkout.js"
 import type { DraftStore } from "./draft-store.js"
 
+type PullRequest = Awaited<ReturnType<typeof fetchPullRequest>>
 type SessionModel = NonNullable<NonNullable<Parameters<Plugin.Context["session"]["create"]>[0]>["model"]>
 
 export type ReviewMode = "full" | "changes"
@@ -55,14 +56,7 @@ export class ReviewSessions {
       return { status: "resumed", sessionID: existing.sessionID }
     }
     const cacheDirectory = this.options.cacheDirectory
-    const found = await findCheckout({
-      host: item.host,
-      repository: item.repository,
-      directory: input.directory,
-      cacheDirectory,
-      signal,
-    })
-    const checkout = found ?? (input.clone ? await cloneRepository(item, cacheDirectory, signal) : undefined)
+    const checkout = await this.checkout(input)
     if (!checkout) {
       return {
         status: "needs-clone",
@@ -98,44 +92,97 @@ export class ReviewSessions {
     )
 
     try {
-      const session = await input.sessions.create({
-        title: `Review ${item.repository}#${item.number}`,
-        location: { directory: worktree as Location.PublicRef["directory"] },
-        ...(input.model ? { model: input.model as SessionModel } : {}),
-        permissions: REVIEW_PERMISSIONS,
-      })
-      const now = new Date().toISOString()
-      const draft = await this.store.put({
-        version: 1,
-        key: item.key,
-        ...hostField(hostOf(item)),
-        repository: item.repository,
-        number: item.number,
-        title: pullRequest.title,
-        headSha,
-        baseSha: pullRequest.baseRefOid,
-        ...(since ? { sinceSha: since.headSha } : {}),
-        ownPullRequest: pullRequest.author.login.toLowerCase() === viewer.toLowerCase(),
+      const sessionID = await this.openSession(input, {
+        pullRequest,
+        viewer,
+        guidelines,
+        since,
         checkout,
         worktree,
-        sessionID: session.id,
-        status: "investigating",
-        findings: [],
-        createdAt: now,
-        updatedAt: now,
+        headSha,
       })
-      await input.sessions.instructions.entry.put({
-        sessionID: session.id,
-        key: INSTRUCTIONS_KEY,
-        value: reviewInstructions(draft, pullRequest.baseRefName, guidelines, since && { record: since, viewer }),
-      })
-      await input.sessions.prompt({ sessionID: session.id, text: startPrompt(draft) })
-      return { status: "started", sessionID: session.id }
+      return { status: "started", sessionID }
     } catch (error) {
       await this.store.remove(item.key)
       await this.cleanUp({ checkout, worktree }, AbortSignal.timeout(this.options.timeoutMs)).catch(() => undefined)
       throw error
     }
+  }
+
+  /** The user's clone of the repository, or a managed one when allowed to clone. */
+  private async checkout(input: {
+    item: ReviewRequest
+    directory?: string | undefined
+    clone: boolean
+    signal: AbortSignal
+  }): Promise<string | undefined> {
+    const { item, signal } = input
+    const cacheDirectory = this.options.cacheDirectory
+    const found = await findCheckout({
+      host: item.host,
+      repository: item.repository,
+      directory: input.directory,
+      cacheDirectory,
+      signal,
+    })
+    if (found || !input.clone) {
+      return found
+    }
+    return cloneRepository(item, cacheDirectory, signal)
+  }
+
+  /** Creates the session, saves its draft, and sends the first prompt. */
+  private async openSession(
+    input: {
+      item: ReviewRequest
+      model?: { providerID: string; id: string } | undefined
+      sessions: Plugin.Context["session"]
+    },
+    review: {
+      pullRequest: PullRequest
+      viewer: string
+      guidelines: string
+      since: ReviewedRecord | undefined
+      checkout: string
+      worktree: string
+      headSha: string
+    },
+  ): Promise<string> {
+    const { item } = input
+    const { pullRequest, viewer, since } = review
+    const session = await input.sessions.create({
+      title: `Review ${item.repository}#${item.number}`,
+      location: { directory: review.worktree as Location.PublicRef["directory"] },
+      ...(input.model ? { model: input.model as SessionModel } : {}),
+      permissions: REVIEW_PERMISSIONS,
+    })
+    const now = new Date().toISOString()
+    const draft = await this.store.put({
+      version: 1,
+      key: item.key,
+      ...hostField(hostOf(item)),
+      repository: item.repository,
+      number: item.number,
+      title: pullRequest.title,
+      headSha: review.headSha,
+      baseSha: pullRequest.baseRefOid,
+      ...(since ? { sinceSha: since.headSha } : {}),
+      ownPullRequest: pullRequest.author.login.toLowerCase() === viewer.toLowerCase(),
+      checkout: review.checkout,
+      worktree: review.worktree,
+      sessionID: session.id,
+      status: "investigating",
+      findings: [],
+      createdAt: now,
+      updatedAt: now,
+    })
+    await input.sessions.instructions.entry.put({
+      sessionID: session.id,
+      key: INSTRUCTIONS_KEY,
+      value: reviewInstructions(draft, pullRequest.baseRefName, review.guidelines, since && { record: since, viewer }),
+    })
+    await input.sessions.prompt({ sessionID: session.id, text: startPrompt(draft) })
+    return session.id
   }
 
   private async followUp(

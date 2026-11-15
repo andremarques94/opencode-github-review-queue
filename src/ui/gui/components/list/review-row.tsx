@@ -1,29 +1,21 @@
 import type { Context } from "@opencode/plugin/gui"
-import { createUniqueId, For, Show } from "solid-js"
+import { createUniqueId, Show } from "solid-js"
 import { canAddress } from "../../../../domain/my-pull-request.js"
-import { postBlocker } from "../../../../domain/review-draft.js"
 import { reviewedFor } from "../../../../domain/review-history.js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
-import { parseOptions } from "../../../../shared/options.js"
-import {
-  fullReference,
-  pullRequestDetails,
-  readinessMarks,
-  sizeMark,
-  teamRequest,
-  waitMark,
-} from "../../../../shared/presentation.js"
+import { fullReference, pullRequestDetails } from "../../../../shared/presentation.js"
 import {
   type DraftAction,
   draftActions,
   draftFor,
+  opensOnGitHub,
   resumable,
-  rowLabel,
 } from "../../../../shared/review/draft-status.js"
 import { activeSnooze, snoozeLabel } from "../../../../shared/review/snooze.js"
 import type { LocalReviews } from "../../../../shared/rpc.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
 import { RowDetails } from "./row-details.js"
+import { RowMeta } from "./row-meta.js"
 
 /** Which rows show their details; the panel holds it, so it can expand or collapse every row at once. */
 export type DetailsState = {
@@ -41,8 +33,6 @@ export type ReviewRowProps = {
   details: DetailsState
   copy(text: string, name: string): void
 }
-
-const postBlockerOf = (draft: ReturnType<typeof draftFor>) => (draft ? postBlocker(draft) : undefined)
 
 // The host's menu has no programmatic open, so right-click replays a real mouse click on its trigger.
 const mouse = { bubbles: true, cancelable: true, button: 0 }
@@ -64,7 +54,6 @@ export function ReviewRow(props: ReviewRowProps) {
   const detailRows = () => pullRequestDetails(props.item, reviewedFor(props.local.reviewed, props.item.key), props.now)
   const draft = () => draftFor(props.local.drafts, props.item.key)
   const snooze = () => activeSnooze(props.local.snoozes, props.item, props.now)
-  const wait = () => waitMark(props.item, parseOptions(props.context.options).staleAfterMs, props.now)
   const open = () => props.context.system.openExternal(props.item.url)
   const openMenu = (event: MouseEvent) => {
     const trigger = actions?.querySelector("button")
@@ -78,7 +67,7 @@ export function ReviewRow(props: ReviewRowProps) {
   }
 
   const review = () =>
-    props.item.authored && !resumable(draft())
+    opensOnGitHub(props.item, draft())
       ? open()
       : void props.actions.review(props.item, resumable(draft()), reviewedFor(props.local.reviewed, props.item.key))
   const snoozeItem = () => {
@@ -113,51 +102,7 @@ export function ReviewRow(props: ReviewRowProps) {
       <div class="grq-row-body">
         <button type="button" class="grq-row-main" title={props.item.title} onClick={review}>
           <div class="grq-row-title">{props.item.title}</div>
-          <div class="grq-row-meta">
-            <span class="grq-number">#{props.item.number}</span>
-            <For each={readinessMarks(props.item)}>
-              {(mark) => (
-                <span class="grq-mark" data-tone={mark.tone} role="img" title={mark.detail} aria-label={mark.detail}>
-                  {mark.label}
-                </span>
-              )}
-            </For>
-            <Show when={sizeMark(props.item)}>
-              {(size) => (
-                <span class="grq-number" title={size().detail}>
-                  {size().label}
-                </span>
-              )}
-            </Show>
-            <Show when={!props.item.authored}>
-              <span class="grq-sep">·</span>
-              <span class="grq-author">@{props.item.author}</span>
-            </Show>
-            <Show when={teamRequest(props.item)}>
-              {(team) => (
-                <span class="grq-team" title={team().detail}>
-                  {team().label}
-                </span>
-              )}
-            </Show>
-            <span class="grq-sep">·</span>
-            <span class="grq-number" data-stale={wait().stale ? "" : undefined} title={wait().detail}>
-              {wait().label}
-            </span>
-            <Show when={props.item.draft}>
-              <span class="grq-badge">Draft</span>
-            </Show>
-            <Show when={rowLabel(props.item, props.local, props.now)}>
-              {(label) => (
-                <span
-                  class="grq-badge grq-badge-review"
-                  title={(resumable(draft()) && postBlockerOf(draft())) || label()}
-                >
-                  {label()}
-                </span>
-              )}
-            </Show>
-          </div>
+          <RowMeta context={props.context} item={props.item} local={props.local} now={props.now} />
         </button>
         <Show when={expanded()}>
           <RowDetails id={detailsID} details={detailRows()} />

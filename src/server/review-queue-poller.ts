@@ -47,6 +47,18 @@ export type PollerEvent =
  * Every OpenCode location runs its own instance. The one holding the lease polls GitHub and persists the queue; the
  * others follow the persisted queue, and take the lease over once it lapses.
  */
+/** When each saved item was last seen; items without a saved time count from `fallback`. */
+function seenTimes(saved: PersistedQueue, fallback: number): Map<string, number> {
+  const seen = new Map(saved.items.map((item) => [item.key, fallback]))
+  for (const [key, at] of Object.entries(saved.seen ?? {})) {
+    const time = Date.parse(at)
+    if (Number.isFinite(time)) {
+      seen.set(key, time)
+    }
+  }
+  return seen
+}
+
 export class ReviewQueuePoller {
   private state: QueueSnapshot = emptySnapshot()
   private listeners = new Set<(event: PollerEvent) => void>()
@@ -160,15 +172,23 @@ export class ReviewQueuePoller {
       return
     }
     const fresh = saved.lastSuccessAt !== this.state.lastSuccessAt
-    if (!fresh && saved.error?.message === this.state.error?.message && !this.state.loading) {
+    if (!fresh && !this.changedBesidesItems(saved)) {
       return
     }
     const announce = fresh && this.state.initialized
     this.adopt(saved, announce ? (saved.newKeys ?? []) : this.state.newKeys)
     this.emit({ type: "state", state: this.snapshot() })
-    if (!announce) {
-      return
+    if (announce) {
+      this.announceSaved(saved)
     }
+  }
+
+  /** The saved error differs from the shown one, or this instance still shows a refresh in progress. */
+  private changedBesidesItems(saved: PersistedQueue): boolean {
+    return saved.error?.message !== this.state.error?.message || this.state.loading
+  }
+
+  private announceSaved(saved: PersistedQueue): void {
     for (const item of this.state.items.filter((candidate) => this.state.newKeys.includes(candidate.key))) {
       this.emit({ type: "discovered", item, eventID: `${item.key}:${saved.lastSuccessAt}` })
     }
@@ -200,14 +220,7 @@ export class ReviewQueuePoller {
       ...(saved.lastSuccessAt ? { lastSuccessAt: saved.lastSuccessAt } : {}),
       ...(saved.error ? { error: saved.error } : {}),
     }
-    const fallback = saved.lastSuccessAt ? Date.parse(saved.lastSuccessAt) : this.now()
-    this.seen = new Map(saved.items.map((item) => [item.key, fallback]))
-    for (const [key, at] of Object.entries(saved.seen ?? {})) {
-      const time = Date.parse(at)
-      if (Number.isFinite(time)) {
-        this.seen.set(key, time)
-      }
-    }
+    this.seen = seenTimes(saved, saved.lastSuccessAt ? Date.parse(saved.lastSuccessAt) : this.now())
   }
 
   private async performRefresh(manual: boolean): Promise<QueueSnapshot> {

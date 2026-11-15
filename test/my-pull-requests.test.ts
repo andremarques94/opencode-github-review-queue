@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { type Authored, myNotices, myStatus, myStatusLabel } from "../src/domain/my-pull-request.js"
+import type { ReviewDraft } from "../src/domain/review-draft.js"
 import { type ReviewRequest, requestKey } from "../src/domain/review-request.js"
 import { myUpdate, myUpdateText } from "../src/shared/notifications/notification-text.js"
 import { adjacentFilter, filterItems, needingYou, nextFilter } from "../src/shared/presentation.js"
-import { reviewLabel } from "../src/shared/review/draft-status.js"
+import { opensOnGitHub, reviewLabel } from "../src/shared/review/draft-status.js"
 
 const mine = (number: number, authored: Partial<Authored> = {}, extra: Partial<ReviewRequest> = {}): ReviewRequest => ({
   key: requestKey("acme/api", number),
@@ -95,6 +96,16 @@ describe("the Mine scope", () => {
     expect(nextFilter("current", true)).toBe("mine")
     expect(nextFilter("current", false)).toBe("all")
     expect(nextFilter("mine", true)).toBe("all")
+  })
+
+  it("opens your own pull request on GitHub unless its review is in progress", () => {
+    const { authored: _, ...request } = mine(1)
+    const inProgress = { status: "investigating" } as ReviewDraft
+
+    expect(opensOnGitHub(mine(1), undefined)).toBe(true)
+    expect(opensOnGitHub(mine(1), { status: "posted" } as ReviewDraft)).toBe(true)
+    expect(opensOnGitHub(mine(1), inProgress)).toBe(false)
+    expect(opensOnGitHub(request, undefined)).toBe(false)
   })
 
   it("moves left and right through the scopes, stopping at either end", () => {
