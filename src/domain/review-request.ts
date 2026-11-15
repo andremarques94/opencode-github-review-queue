@@ -28,6 +28,8 @@ export const ReviewRequest = v.object({
   /** Only the first page of threads was counted, so `unresolvedThreads` is a lower bound. */
   unresolvedThreadsCapped: v.exactOptional(v.boolean()),
   requestedVia: v.exactOptional(RequestedVia),
+  /** Queued for new commits since the user's posted review, not because GitHub asks for a review. */
+  followUp: v.exactOptional(v.literal(true)),
 })
 export type ReviewRequest = v.InferOutput<typeof ReviewRequest>
 

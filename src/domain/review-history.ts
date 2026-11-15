@@ -28,3 +28,19 @@ export function followUpOf(item: ReviewRequest, record: ReviewedRecord | undefin
   }
   return record
 }
+
+/**
+ * Adds the reviewed pull requests that moved on since the user's posted review. A request wins over a follow-up, and
+ * a follow-up drops the teams GitHub still lists: nobody is asking the user anything.
+ */
+export function withFollowUps(
+  requested: readonly ReviewRequest[],
+  reviewed: readonly ReviewRequest[],
+  records: readonly ReviewedRecord[],
+): ReviewRequest[] {
+  const keys = new Set(requested.map((item) => item.key))
+  const followUps = reviewed
+    .filter((item) => !keys.has(item.key) && followUpOf(item, reviewedFor(records, item.key)))
+    .map(({ requestedVia: _, ...item }): ReviewRequest => ({ ...item, followUp: true }))
+  return [...requested, ...followUps].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}

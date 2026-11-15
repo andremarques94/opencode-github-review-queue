@@ -27,8 +27,8 @@ in the background, with a notification only when something actually needs you.
   one OpenCode location polls GitHub however many review sessions are open.
 - **Readiness at a glance.** Each row shows its checks (✓ passing, ✗ failing, ● running), merge conflicts, and
   unresolved review threads.
-- **Re-reviews that focus on what changed.** When a pull request you reviewed comes back with new commits, the row
-  says so, and the next review can cover only the commits since.
+- **Re-reviews that focus on what changed.** A pull request you reviewed comes back to the queue when the author
+  pushes, even without a re-request, and the next review can cover only the commits since.
 - **Snooze** a pull request until its checks finish, until the author pushes, or until a time you pick.
 - **Summaries on demand:** a pull request's intent, main changes, and what to inspect, without starting a review.
 - **Grouped by repository**, with a **Current** scope for the repository in the session.
@@ -152,10 +152,12 @@ The agent's comments are checked against the exact commits under review, so a pu
 the lines it may comment on.
 
 After you post, the plugin remembers the commit you reviewed and your verdict until the pull request is closed or
-merged. When the author pushes and the request comes back, the row shows _new commits since your review_, and
-starting a review offers **Review changes since last review** (the default) or **Full review**. A follow-up review
+merged. When the author pushes, the pull request comes back to the queue even if nobody re-requests your review, and
+you are notified once. The row shows _new commits since your review_, and starting a review offers **Review changes since last review** (the default) or **Full review**. A follow-up review
 fetches both commits, looks only at the changes between them, reads your earlier comments on GitHub, and its summary
-says which of them the changes address and which they leave unresolved.
+says which of them the changes address and which they leave unresolved. Once you post the follow-up, the pull request
+leaves the queue until the next push. **Snooze › Until the author pushes** sets one aside, and `"followUps": false`
+turns this off. Only reviews posted from the plugin are followed up.
 
 Each finding ends with a question: **Keep**, **Edit wording**, **Drop**, **Explain**, or **Investigate**, with the
 agent's recommendation first. Click one or type a reply. Explain and Investigate answer about that finding and ask
@@ -215,6 +217,7 @@ Set `"notifications": false` to keep the in-app toasts but silence native ones.
         "cacheDirectory": "~/.cache/opencode-github-review-queue",
         "reviewGuidelines": "/path/to/review-guidelines.md",
         "keepClones": false,
+        "followUps": true,
         "includeDrafts": true,
         "excludeAuthors": ["dependabot", "renovate"],
         "excludeRepositories": ["acme/legacy", "archive-org/*"],
@@ -234,6 +237,7 @@ Set `"notifications": false` to keep the in-app toasts but silence native ones.
 | `cacheDirectory` | `$XDG_CACHE_HOME/opencode-github-review-queue` | Plugin-made clones and review worktrees; falls back to `~/.cache` |
 | `reviewGuidelines` | built-in | Path to a Markdown file that replaces the review quality bar and tone |
 | `keepClones` | `false` | Keep the plugin's clones after their last review instead of deleting them |
+| `followUps` | `true` | Queue pull requests you reviewed when new commits arrive, without waiting for a re-request |
 | `includeDrafts` | `true` | Show draft pull requests |
 | `excludeAuthors` | `[]` | Hide pull requests by these logins; bots match with or without `[bot]` |
 | `excludeRepositories` | `[]` | Hide these repositories: `owner/repo`, or `owner/*` for every repository of an owner |

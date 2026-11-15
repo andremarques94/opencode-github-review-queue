@@ -11,7 +11,8 @@ review in the TUI and Desktop app.
   `notifications/`, and `review/` (draft status and row labels, post preview, the start/post/reset flows, snooze,
   summary, and Desktop line comments; both UIs run these through their flow host)
 - `src/server`: server entry, the polling state machine, the lease that picks the one instance that polls
-  (`queue-lease.ts`), plain keyed storage (`keyed-store.ts`) and snooze pruning, plus:
+  (`queue-lease.ts`), the searches and rules that make up the queue (`queue-source.ts`), plain keyed storage
+  (`keyed-store.ts`) and snooze pruning, plus:
   - `github/`: `gh` runner, review search, pull requests (states, compare diffs), repository lookup
   - `git/`: `git` runner, remotes, worktrees
   - `review/`: draft storage, review sessions (start, follow-up, reset, post, prune), findings, checkouts, models,

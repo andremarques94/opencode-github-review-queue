@@ -6,6 +6,7 @@ export type PluginOptions = QueueRules & {
   maxBackoffMs: number
   notifications: boolean
   keepClones: boolean
+  followUps: boolean
   cacheDirectory?: string
   reviewGuidelines?: string
 }
@@ -30,6 +31,7 @@ export function parseOptions(input: Readonly<Record<string, unknown>>): PluginOp
     maxBackoffMs: Math.max(60_000, numberOption(input.maxBackoffMs, 15 * 60_000)),
     notifications: input.notifications !== false,
     keepClones: input.keepClones === true,
+    followUps: input.followUps !== false,
     includeDrafts: input.includeDrafts !== false,
     excludeAuthors: listOption(input.excludeAuthors),
     excludeRepositories: listOption(input.excludeRepositories),

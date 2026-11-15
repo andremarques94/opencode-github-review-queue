@@ -8,7 +8,7 @@ vi.mock("../src/server/github/cli.js", async (importOriginal) => ({
 }))
 
 const { classifyGhError } = await import("../src/server/github/cli.js")
-const { fetchReviewRequests } = await import("../src/server/github/review-requests.js")
+const { fetchReviewRequests, fetchReviewedPullRequests } = await import("../src/server/github/review-requests.js")
 
 const node = (number: number, createdAt: string) => ({
   number,
@@ -40,6 +40,18 @@ describe("fetchReviewRequests", () => {
       ["acme/api#2", "octocat"],
     ])
     expect(result.retryAt).toBeUndefined()
+  })
+
+  it("passes each search as a variable, never inside the query", async () => {
+    respond([page([])])
+    await fetchReviewRequests(signal)
+    await fetchReviewedPullRequests(signal)
+
+    const searches = runGh.mock.calls.map((call) => (call[0] as string[]).find((arg) => arg.startsWith("search=")))
+    expect(searches).toEqual([
+      "search=is:pr is:open review-requested:@me",
+      "search=is:pr is:open reviewed-by:@me -review-requested:@me",
+    ])
   })
 
   it("reports the reset time when the rate limit is exhausted", async () => {
