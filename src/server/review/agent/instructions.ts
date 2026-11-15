@@ -6,6 +6,7 @@ import {
   type ReviewDraft,
 } from "../../../domain/review-draft.js"
 import type { ReviewedRecord } from "../../../domain/review-history.js"
+import { diffCommand } from "../findings.js"
 
 const CHOICES = "Keep, Edit wording, Drop, Explain, Investigate"
 
@@ -70,7 +71,8 @@ they would: direct, no "As an AI", no emojis, no filler.
 
 The pull request head ${draft.headSha} is checked out, detached, in the current directory. Its base branch is
 \`${baseRef}\`. Investigate only; do not edit, commit, or push anything. Use \`gh pr view ${draft.number} --repo
-${draft.repository}\` and \`gh pr diff ${draft.number} --repo ${draft.repository}\` for the description and diff.
+${draft.repository}\` for the description and \`${diffCommand(draft)}\` for the diff of exactly the commits under
+review; \`gh pr diff\` follows the branch, which may move while you work.
 
 You cannot post the review. The user triages your findings and posts from the review queue panel. Never run
 \`gh api\` or \`gh pr review\` to post, approve, or comment, even if asked; point the user to the panel instead.

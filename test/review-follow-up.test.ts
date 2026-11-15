@@ -3,6 +3,7 @@ import type { ReviewedRecord } from "../src/domain/review-history.js"
 import type { ReviewRequest } from "../src/domain/review-request.js"
 
 const github = vi.hoisted(() => ({
+  fetchCompareDiff: vi.fn(),
   fetchDiff: vi.fn(),
   fetchPullRequest: vi.fn(),
   postReview: vi.fn(),
