@@ -1,4 +1,4 @@
-import type { ReviewRequest } from "../../domain/review-request.js"
+import { changedLines, type ReviewRequest } from "../../domain/review-request.js"
 import { fullReference } from "../presentation.js"
 import { errorMessage, type RpcInput, type RpcOutput } from "../rpc.js"
 import { pickModel, type ReviewFlowHost } from "./flows.js"
@@ -11,8 +11,19 @@ export type SummaryFlowHost = Pick<ReviewFlowHost, "models" | "select"> & {
   showSummary(view: SummaryView): void
 }
 
+/** Roughly what fits in the server's 80,000-character diff: some 50 characters a changed line, context included. */
+const SUMMARY_LINE_BUDGET = 1_500
+
+function pickTitle(item: ReviewRequest): string {
+  const lines = changedLines(item)
+  if (lines === undefined || lines <= SUMMARY_LINE_BUDGET) {
+    return `Summarize ${fullReference(item)}? Pick the model`
+  }
+  return `Summarize ${fullReference(item)}? It changes ${lines.toLocaleString("en-US")} lines, so only part of the diff will fit. Pick the model`
+}
+
 export async function summaryFlow(host: SummaryFlowHost, item: ReviewRequest): Promise<void> {
-  const model = await pickModel(host, `Summarize ${fullReference(item)}? Pick the model`)
+  const model = await pickModel(host, pickTitle(item))
   if (!model) {
     return
   }

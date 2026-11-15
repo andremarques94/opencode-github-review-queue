@@ -199,6 +199,7 @@ export const panelStyles = `${badgeStyles}
 .grq-number { flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .grq-sep { flex-shrink: 0; color: var(--text-weaker); }
 .grq-team { color: var(--text-weaker); }
+.grq-number[data-stale] { color: var(--icon-warning-base); }
 .grq-mark { flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .grq-mark[data-tone="success"] { color: var(--icon-success-base); }
 .grq-mark[data-tone="error"] { color: var(--icon-critical-base); }

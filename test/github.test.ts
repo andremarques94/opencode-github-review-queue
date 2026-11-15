@@ -127,6 +127,48 @@ describe("fetchReviewRequests", () => {
     expect(unknown).not.toHaveProperty("requestedVia")
   })
 
+  it("reads the size, the last commit, and when the user or their team was last asked", async () => {
+    const user = (login: string) => ({ __typename: "User", login })
+    const team = { __typename: "Team", slug: "web", organization: { login: "acme" } }
+    const asked = (createdAt: string, requestedReviewer: unknown) => ({ createdAt, requestedReviewer })
+    respond([
+      {
+        data: {
+          ...page([
+            {
+              ...node(1, "2026-01-01T00:00:00Z"),
+              additions: 10,
+              deletions: 2,
+              changedFiles: 3,
+              commits: { nodes: [{ commit: { committedDate: "2026-01-05T00:00:00Z", statusCheckRollup: null } }] },
+              reviewRequests: { nodes: [{ requestedReviewer: user("me") }] },
+              timelineItems: {
+                nodes: [asked("2026-01-02T00:00:00Z", user("me")), asked("2026-01-03T00:00:00Z", user("other")), {}],
+              },
+            },
+            {
+              ...node(2, "2026-01-01T00:00:00Z"),
+              reviewRequests: { nodes: [{ requestedReviewer: team }] },
+              timelineItems: { nodes: [asked("2026-01-04T00:00:00Z", team), asked("2026-01-06T00:00:00Z", null)] },
+            },
+          ]).data,
+          viewer: { login: "me" },
+        },
+      },
+    ])
+
+    const [mine, teams] = (await fetchReviewRequests(signal)).items
+
+    expect(mine).toMatchObject({
+      additions: 10,
+      deletions: 2,
+      changedFiles: 3,
+      lastCommitAt: "2026-01-05T00:00:00Z",
+      requestedAt: "2026-01-02T00:00:00Z",
+    })
+    expect(teams?.requestedAt).toBe("2026-01-04T00:00:00Z")
+  })
+
   it("claims no source without the viewer's login", async () => {
     respond([
       page([

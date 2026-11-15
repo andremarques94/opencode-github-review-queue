@@ -3,7 +3,8 @@ import { For, Show } from "solid-js"
 import { postBlocker } from "../../../../domain/review-draft.js"
 import { reviewedFor } from "../../../../domain/review-history.js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
-import { ago, fullReference, readinessMarks, teamRequest } from "../../../../shared/presentation.js"
+import { parseOptions } from "../../../../shared/options.js"
+import { fullReference, readinessMarks, sizeMark, teamRequest, waitMark } from "../../../../shared/presentation.js"
 import {
   type DraftAction,
   draftActions,
@@ -42,6 +43,7 @@ export function ReviewRow(props: ReviewRowProps) {
   let actions: HTMLDivElement | undefined
   const draft = () => draftFor(props.local.drafts, props.item.key)
   const snooze = () => activeSnooze(props.local.snoozes, props.item, props.now)
+  const wait = () => waitMark(props.item, parseOptions(props.context.options).staleAfterMs, props.now)
   const open = () => props.context.system.openExternal(props.item.url)
   const openMenu = (event: MouseEvent) => {
     const trigger = actions?.querySelector("button")
@@ -96,6 +98,13 @@ export function ReviewRow(props: ReviewRowProps) {
               </span>
             )}
           </For>
+          <Show when={sizeMark(props.item)}>
+            {(size) => (
+              <span class="grq-number" title={size().detail}>
+                {size().label}
+              </span>
+            )}
+          </Show>
           <span class="grq-sep">·</span>
           <span>@{props.item.author}</span>
           <Show when={teamRequest(props.item)}>
@@ -106,7 +115,9 @@ export function ReviewRow(props: ReviewRowProps) {
             )}
           </Show>
           <span class="grq-sep">·</span>
-          <span class="grq-number">{ago(props.item.createdAt)}</span>
+          <span class="grq-number" data-stale={wait().stale ? "" : undefined} title={wait().detail}>
+            {wait().label}
+          </span>
           <Show when={props.item.draft}>
             <span class="grq-badge">Draft</span>
           </Show>

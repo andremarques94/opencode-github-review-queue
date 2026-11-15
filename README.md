@@ -32,6 +32,8 @@ in the background, with a notification only when something actually needs you.
 - **Snooze** a pull request until its checks finish, until the author pushes, or until a time you pick.
 - **Summaries on demand:** a pull request's intent, main changes, and what to inspect, without starting a review.
 - **Grouped by repository**, with a **Current** scope for the repository in the session.
+- **Size and wait at a glance.** Rows show lines added and removed, and how long the pull request has waited on you;
+  sort by the longest wait, the smallest change, or ready to merge first, and highlight what waited too long.
 - **Only what you want to see.** Hide drafts, bots, repositories, or requests made to a team rather than to you;
   team requests are marked _via @team_.
 - **Notifications that respect you.** New requests are batched into one notification; a request that briefly drops
@@ -116,6 +118,10 @@ threads. Anything GitHub does not know yet, such as a pull request without check
 computed, shows nothing. On a pull request with more than 100 review threads only the first 100 are counted, so the
 mark reads _N+ threads_.
 
+Next come the lines added and removed (_+120 −30_), the author, and how long the pull request has waited on you:
+since you, or a team you are in, were last asked to review, or for a follow-up since its last commit. Hover it on the
+Desktop for the exact time.
+
 ### Snooze
 
 **Snooze** hides a pull request until a condition is met: **Until checks finish** (offered while checks are running),
@@ -129,7 +135,7 @@ dropped when its pull request leaves the queue.
 **Summarize** asks which model to use (your last review model is selected), reads the pull request's title,
 description, and diff with `gh`, and asks that model for its intent, main changes, and the areas worth inspecting. The
 Desktop shows it as Markdown, the TUI in a dialog. Diffs beyond about 80,000 characters are cut, and the dialog says
-so.
+so; for a pull request of more than about 1,500 changed lines, the model picker warns you first.
 
 ### Reviews
 
@@ -218,6 +224,8 @@ Set `"notifications": false` to keep the in-app toasts but silence native ones.
         "reviewGuidelines": "/path/to/review-guidelines.md",
         "keepClones": false,
         "followUps": true,
+        "sort": "oldest",
+        "staleAfter": "2d",
         "includeDrafts": true,
         "excludeAuthors": ["dependabot", "renovate"],
         "excludeRepositories": ["acme/legacy", "archive-org/*"],
@@ -238,6 +246,8 @@ Set `"notifications": false` to keep the in-app toasts but silence native ones.
 | `reviewGuidelines` | built-in | Path to a Markdown file that replaces the review quality bar and tone |
 | `keepClones` | `false` | Keep the plugin's clones after their last review instead of deleting them |
 | `followUps` | `true` | Queue pull requests you reviewed when new commits arrive, without waiting for a re-request |
+| `sort` | `"oldest"` | `"oldest"` (longest wait first), `"smallest"` (fewest changed lines), or `"ready"` (checks passing and no conflicts first, then smallest) |
+| `staleAfter` | none | Highlight the wait once it passes this, such as `"4h"` or `"2d"` |
 | `includeDrafts` | `true` | Show draft pull requests |
 | `excludeAuthors` | `[]` | Hide pull requests by these logins; bots match with or without `[bot]` |
 | `excludeRepositories` | `[]` | Hide these repositories: `owner/repo`, or `owner/*` for every repository of an owner |

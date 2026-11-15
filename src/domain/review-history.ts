@@ -42,5 +42,5 @@ export function withFollowUps(
   const followUps = reviewed
     .filter((item) => !keys.has(item.key) && followUpOf(item, reviewedFor(records, item.key)))
     .map(({ requestedVia: _, ...item }): ReviewRequest => ({ ...item, followUp: true }))
-  return [...requested, ...followUps].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  return [...requested, ...followUps]
 }

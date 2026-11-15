@@ -1,5 +1,5 @@
 import type { QueueSnapshot } from "../domain/review-queue.js"
-import type { ReviewRequest } from "../domain/review-request.js"
+import { type ReviewRequest, waitingSince } from "../domain/review-request.js"
 
 export type QueueFilter = "current" | "all"
 
@@ -106,6 +106,35 @@ export function readinessMarks(item: ReviewRequest): ReadinessMark[] {
     )
   }
   return marks
+}
+
+const count = new Intl.NumberFormat("en-US")
+
+export function sizeMark(item: ReviewRequest): { label: string; detail: string } | undefined {
+  if (item.additions === undefined || item.deletions === undefined) {
+    return undefined
+  }
+  const files = item.changedFiles === undefined ? "" : ` in ${plural(item.changedFiles, "file")}`
+  return {
+    label: `+${count.format(item.additions)} −${count.format(item.deletions)}`,
+    detail: `${count.format(item.additions)} added, ${count.format(item.deletions)} removed${files}`,
+  }
+}
+
+/** How long the pull request has waited on the user, flagged once it passes `staleAfterMs`. */
+export function waitMark(
+  item: ReviewRequest,
+  staleAfterMs: number | undefined,
+  now = Date.now(),
+): { label: string; detail: string; stale: boolean } {
+  const since = waitingSince(item)
+  const known = item.followUp ? item.lastCommitAt : item.requestedAt
+  const reason = !known ? "Opened" : item.followUp ? "New commits" : "Requested"
+  return {
+    label: ago(since, now),
+    detail: `${reason} ${new Date(since).toLocaleString()}`,
+    stale: staleAfterMs !== undefined && now - Date.parse(since) > staleAfterMs,
+  }
 }
 
 /** Only team requests are marked: a direct request is what the queue is for. */

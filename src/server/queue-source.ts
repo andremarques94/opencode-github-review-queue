@@ -1,4 +1,5 @@
 import { applyQueueRules } from "../domain/queue-filter.js"
+import { sortQueue } from "../domain/queue-order.js"
 import { type ReviewedRecord, withFollowUps } from "../domain/review-history.js"
 import type { PluginOptions } from "../shared/options.js"
 import { fetchReviewedPullRequests, fetchReviewRequests, type SearchResult } from "./github/review-requests.js"
@@ -9,7 +10,7 @@ const NOTHING: SearchResult = { items: [] }
 const later = (a: string | undefined, b: string | undefined) => (a && b ? (a > b ? a : b) : (a ?? b))
 
 /**
- * The review requests plus the follow-ups, filtered by the user's rules. Without a posted review there is nothing to
+ * The review requests plus the follow-ups, filtered by the user's rules and in the order they picked. Without a posted review there is nothing to
  * follow up on, so the second search only runs once one is recorded. Either search failing fails the refresh, so the
  * saved queue stays whole instead of losing its follow-ups for one poll.
  */
@@ -20,7 +21,8 @@ export function queueSource(options: PluginOptions, reviewed: { list(): Promise<
       fetchReviewRequests(signal),
       records.length > 0 ? fetchReviewedPullRequests(signal) : NOTHING,
     ])
-    const items = applyQueueRules(withFollowUps(requested.items, candidates.items, records), options)
+    const queued = applyQueueRules(withFollowUps(requested.items, candidates.items, records), options)
+    const items = sortQueue(queued, options.sort)
     const retryAt = later(requested.retryAt, candidates.retryAt)
     return { items, ...(retryAt ? { retryAt } : {}) }
   }
