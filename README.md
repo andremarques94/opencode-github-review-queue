@@ -32,6 +32,8 @@ in the background, with a notification only when something actually needs you.
 - **Snooze** a pull request until its checks finish, until the author pushes, or until a time you pick.
 - **Summaries on demand:** a pull request's intent, main changes, and what to inspect, without starting a review.
 - **Grouped by repository**, with a **Current** scope for the repository in the session.
+- **Only what you want to see.** Hide drafts, bots, repositories, or requests made to a team rather than to you;
+  team requests are marked _via @team_.
 - **Notifications that respect you.** New requests are batched into one notification; a request that briefly drops
   out of GitHub's search index does not notify twice.
 - **Keyboard and mouse.** Move, open, copy, filter and refresh, or click and right-click.
@@ -212,7 +214,11 @@ Set `"notifications": false` to keep the in-app toasts but silence native ones.
         "notifications": true,
         "cacheDirectory": "~/.cache/opencode-github-review-queue",
         "reviewGuidelines": "/path/to/review-guidelines.md",
-        "keepClones": false
+        "keepClones": false,
+        "includeDrafts": true,
+        "excludeAuthors": ["dependabot", "renovate"],
+        "excludeRepositories": ["acme/legacy", "archive-org/*"],
+        "teamRequests": "show"
       }
     }
   ]
@@ -228,6 +234,10 @@ Set `"notifications": false` to keep the in-app toasts but silence native ones.
 | `cacheDirectory` | `$XDG_CACHE_HOME/opencode-github-review-queue` | Plugin-made clones and review worktrees; falls back to `~/.cache` |
 | `reviewGuidelines` | built-in | Path to a Markdown file that replaces the review quality bar and tone |
 | `keepClones` | `false` | Keep the plugin's clones after their last review instead of deleting them |
+| `includeDrafts` | `true` | Show draft pull requests |
+| `excludeAuthors` | `[]` | Hide pull requests by these logins; bots match with or without `[bot]` |
+| `excludeRepositories` | `[]` | Hide these repositories: `owner/repo`, or `owner/*` for every repository of an owner |
+| `teamRequests` | `"show"` | `"hide"` drops requests made only to a team you are in, keeping the ones made to you |
 
 
 ## Development

@@ -108,6 +108,21 @@ export function readinessMarks(item: ReviewRequest): ReadinessMark[] {
   return marks
 }
 
+/** Only team requests are marked: a direct request is what the queue is for. */
+export function teamRequest(item: ReviewRequest): { label: string; detail: string } | undefined {
+  if (item.requestedVia?.kind !== "team") {
+    return undefined
+  }
+  const [first, ...rest] = item.requestedVia.teams
+  if (first && rest.length === 0) {
+    return { label: `via @${first.slice(first.indexOf("/") + 1)}`, detail: `Requested from @${first}` }
+  }
+  return {
+    label: "via team",
+    detail: `Requested from one of ${item.requestedVia.teams.map((team) => `@${team}`).join(", ")}`,
+  }
+}
+
 export function readinessSummary(item: ReviewRequest): string | undefined {
   const details = readinessMarks(item).map((mark) => mark.detail)
   if (item.conflicts === false) {

@@ -1,7 +1,7 @@
 import type { ReviewDraft } from "../../../domain/review-draft.js"
 import type { ReviewRequest } from "../../../domain/review-request.js"
 import type { Snooze } from "../../../domain/snooze.js"
-import { fullReference, type QueueFilter, readinessSummary } from "../../../shared/presentation.js"
+import { fullReference, type QueueFilter, readinessSummary, teamRequest } from "../../../shared/presentation.js"
 import { type DraftAction, draftActions } from "../../../shared/review/draft-status.js"
 import { snoozeLabel } from "../../../shared/review/snooze.js"
 import type { ReviewActions } from "./review-actions.js"
@@ -42,7 +42,9 @@ export function pullRequestOptions(
     {
       title: "Open on GitHub",
       value: actions.open,
-      ...withDescription(readinessSummary(item)),
+      ...withDescription(
+        [teamRequest(item)?.detail, readinessSummary(item)].filter((part) => part !== undefined).join(" · "),
+      ),
       footer: "o",
       category: PULL_REQUEST,
     },

@@ -7,6 +7,7 @@ import {
   groupByRepository,
   readinessMarks,
   readinessSummary,
+  teamRequest,
 } from "../src/shared/presentation.js"
 
 const item = (repository: string, number: number): ReviewRequest => ({
@@ -76,6 +77,15 @@ describe("readiness", () => {
 
     expect(readinessMarks(busy).map((mark) => mark.label)).toEqual(["1+ threads"])
     expect(readinessSummary(busy)).toBe("At least 1 unresolved review thread")
+  })
+
+  it("marks team requests and names the teams", () => {
+    const one = { ...item("acme/api", 1), requestedVia: { kind: "team" as const, teams: ["acme/web"] } }
+    const two = { ...item("acme/api", 2), requestedVia: { kind: "team" as const, teams: ["acme/web", "acme/api"] } }
+
+    expect(teamRequest(one)).toEqual({ label: "via @web", detail: "Requested from @acme/web" })
+    expect(teamRequest(two)).toEqual({ label: "via team", detail: "Requested from one of @acme/web, @acme/api" })
+    expect(teamRequest({ ...item("acme/api", 3), requestedVia: { kind: "you" } })).toBeUndefined()
   })
 
   it("mentions a clean merge only in the summary", () => {

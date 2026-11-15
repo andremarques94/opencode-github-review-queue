@@ -4,7 +4,7 @@ import { usePlugin } from "@opencode/plugin/tui"
 import type { MouseEvent } from "@opentui/core"
 import { createSignal, For, Show } from "solid-js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
-import { ago, fitLine, readinessMarks } from "../../../../shared/presentation.js"
+import { ago, fitLine, readinessMarks, teamRequest } from "../../../../shared/presentation.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
 
 const RIGHT_BUTTON = 2
@@ -78,7 +78,11 @@ export function ReviewRow(props: {
           <For each={readinessMarks(props.item)}>
             {(mark) => <span style={{ fg: theme.text.feedback[mark.tone].base }}> {mark.label}</span>}
           </For>
-          {` · @${props.item.author} · ${ago(props.item.createdAt)}`}
+          {` · @${props.item.author}`}
+          <Show when={teamRequest(props.item)}>
+            {(team) => <span style={{ fg: theme.text.faint }}> {team().label}</span>}
+          </Show>
+          {` · ${ago(props.item.createdAt)}`}
           <Show when={props.item.draft}>
             <span style={{ fg: theme.text.feedback.warning.base }}> · draft</span>
           </Show>
