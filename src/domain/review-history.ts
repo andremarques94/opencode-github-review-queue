@@ -9,6 +9,8 @@ const CommitSha = v.pipe(v.string(), v.hexadecimal(), v.minLength(40), v.maxLeng
 export const ReviewedRecord = v.object({
   version: v.literal(1),
   key: v.string(),
+  /** Left out for github.com. */
+  host: v.exactOptional(v.string()),
   repository: v.string(),
   number: v.number(),
   headSha: CommitSha,

@@ -3,9 +3,10 @@
 import type { PanelInput } from "@opencode/plugin/tui/context"
 import { createMemo, createSignal, onCleanup, Show } from "solid-js"
 import type { Store } from "solid-js/store"
+import { reviewedFor } from "../../../domain/review-history.js"
 import type { QueueSnapshot } from "../../../domain/review-queue.js"
 import type { ReviewRequest } from "../../../domain/review-request.js"
-import { filterItems, groupByRepository, type QueueFilter } from "../../../shared/presentation.js"
+import { filterItems, groupByRepository, pullRequestDetails, type QueueFilter } from "../../../shared/presentation.js"
 import { rowLabel } from "../../../shared/review/draft-status.js"
 import { hideSnoozed, watchClock } from "../../../shared/review/snooze.js"
 import type { LocalReviews } from "../../../shared/rpc.js"
@@ -31,6 +32,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
   const [filter, setFilter] = createSignal<QueueFilter>("all")
   const [selected, setSelected] = createSignal(0)
   const [showSnoozed, setShowSnoozed] = createSignal(false)
+  const [showDetails, setShowDetails] = createSignal(false)
   const [now, setNow] = createSignal(Date.now())
   onCleanup(watchClock(setNow))
 
@@ -54,8 +56,16 @@ export function ReviewPanel(props: ReviewPanelProps) {
     snoozed: () => view().snoozed,
     showSnoozed,
     setShowSnoozed,
+    showDetails,
+    setShowDetails,
   })
   const label = (item: ReviewRequest) => rowLabel(item, props.state, now())
+  const details = () => {
+    const item = current()
+    return showDetails() && item
+      ? pullRequestDetails(item, reviewedFor(props.state.reviewed, item.key), now())
+      : undefined
+  }
 
   return (
     <box flexDirection="column" flexGrow={1} paddingTop={1} paddingLeft={1} paddingRight={1}>
@@ -78,6 +88,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
           selectedKey={current()?.key}
           newKeys={props.state.newKeys}
           label={label}
+          details={details()}
           width={props.panel.width - ROW_INSET}
           actions={actions}
         />
@@ -85,6 +96,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
       <KeyHints
         hints={[
           { key: "enter", label: "review", run: actions.review },
+          { key: "d", label: showDetails() ? "hide details" : "details", run: actions.toggleDetails },
           { key: "m", label: "actions", run: actions.menu },
         ]}
       />

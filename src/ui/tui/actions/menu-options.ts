@@ -44,8 +44,16 @@ export function pullRequestOptions(
   item: ReviewRequest,
   draft: ReviewDraft | undefined,
   snooze: Snooze | undefined,
+  showDetails: boolean,
 ): MenuOption[] {
   return [
+    {
+      title: showDetails ? "Hide details" : "Show details",
+      value: actions.toggleDetails,
+      description: "Size, checks, reviewers, and when you were asked",
+      footer: "d",
+      category: PULL_REQUEST,
+    },
     {
       title: "Open on GitHub",
       value: actions.open,

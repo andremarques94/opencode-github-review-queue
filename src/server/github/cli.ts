@@ -1,4 +1,5 @@
 import type { QueueError, QueueErrorKind } from "../../domain/review-queue.js"
+import { GITHUB_COM, type RepositoryRef } from "../../domain/review-request.js"
 import { type CommandResult, ExitError, type RunOptions, runProcess } from "../process.js"
 
 export class GhError extends Error {
@@ -6,6 +7,12 @@ export class GhError extends Error {
     super(detail.message)
   }
 }
+
+/** Naming github.com too keeps a `GH_HOST` in the user's environment from sending a call elsewhere. */
+export const hostFlag = (host: string | undefined) => ["--hostname", host ?? GITHUB_COM]
+
+/** `--repo` takes `HOST/OWNER/REPO`. */
+export const repoName = (ref: RepositoryRef) => `${ref.host ?? GITHUB_COM}/${ref.repository}`
 
 export async function runGh(args: readonly string[], options: RunOptions): Promise<CommandResult> {
   try {
@@ -37,7 +44,16 @@ const KNOWN_FAILURES: readonly { kind: QueueErrorKind; patterns: readonly string
   },
   {
     kind: "offline",
-    patterns: ["could not resolve host", "network", "connection", "offline"],
+    patterns: [
+      "could not resolve host",
+      "network",
+      "connection",
+      "offline",
+      "error connecting",
+      "no such host",
+      "dial tcp",
+      "i/o timeout",
+    ],
     message: "GitHub is unreachable. The last successful review queue is still shown.",
   },
   {

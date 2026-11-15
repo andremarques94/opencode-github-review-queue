@@ -1,6 +1,7 @@
 import * as v from "valibot"
 import type { ReviewPayload } from "../../domain/review-draft.js"
-import { runGh } from "./cli.js"
+import { hostOf, type PullRequestRef, qualifiedRepository, type RepositoryRef } from "../../domain/review-request.js"
+import { hostFlag, repoName, runGh } from "./cli.js"
 
 const PullRequestInfo = v.object({
   title: v.string(),
@@ -25,20 +26,22 @@ function parseJson<T>(schema: v.GenericSchema<unknown, T>, stdout: string, what:
   return parsed.output
 }
 
-export async function fetchPullRequest(repository: string, number: number, signal: AbortSignal) {
+const reference = (ref: PullRequestRef) => `${qualifiedRepository(ref)}#${ref.number}`
+
+export async function fetchPullRequest(ref: PullRequestRef, signal: AbortSignal) {
   const result = await runGh(
     [
       "pr",
       "view",
-      String(number),
+      String(ref.number),
       "--repo",
-      repository,
+      repoName(ref),
       "--json",
       "title,state,headRefOid,baseRefOid,baseRefName,author",
     ],
     { signal },
   )
-  return parseJson(PullRequestInfo, result.stdout, `${repository}#${number}`)
+  return parseJson(PullRequestInfo, result.stdout, reference(ref))
 }
 
 /** Refuses a name git could read as an option or that leaves the refs namespace; GitHub's own names pass. */
@@ -54,12 +57,12 @@ const PullRequestBranch = v.object({
   isCrossRepository: v.boolean(),
 })
 
-export async function fetchPullRequestBranch(repository: string, number: number, signal: AbortSignal) {
+export async function fetchPullRequestBranch(ref: PullRequestRef, signal: AbortSignal) {
   const result = await runGh(
-    ["pr", "view", String(number), "--repo", repository, "--json", "state,headRefName,isCrossRepository"],
+    ["pr", "view", String(ref.number), "--repo", repoName(ref), "--json", "state,headRefName,isCrossRepository"],
     { signal },
   )
-  return parseJson(PullRequestBranch, result.stdout, `${repository}#${number}`)
+  return parseJson(PullRequestBranch, result.stdout, reference(ref))
 }
 
 export type OpenThread = {
@@ -106,12 +109,13 @@ const THREADS_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   }
 }`
 
-export async function fetchOpenThreads(repository: string, number: number, signal: AbortSignal) {
-  const [owner = "", name = ""] = repository.split("/")
+export async function fetchOpenThreads(ref: PullRequestRef, signal: AbortSignal) {
+  const [owner = "", name = ""] = ref.repository.split("/")
   const result = await runGh(
     [
       "api",
       "graphql",
+      ...hostFlag(ref.host),
       "-f",
       `query=${THREADS_QUERY}`,
       "-f",
@@ -119,12 +123,12 @@ export async function fetchOpenThreads(repository: string, number: number, signa
       "-f",
       `name=${name}`,
       "-F",
-      `number=${number}`,
+      `number=${ref.number}`,
     ],
     { signal },
   )
-  const threads = parseJson(ThreadsResponse, result.stdout, `the review threads of ${repository}#${number}`).data
-    .repository.pullRequest.reviewThreads.nodes
+  const threads = parseJson(ThreadsResponse, result.stdout, `the review threads of ${reference(ref)}`).data.repository
+    .pullRequest.reviewThreads.nodes
   return threads
     .filter((thread) => !thread.isResolved)
     .map(
@@ -139,30 +143,38 @@ export async function fetchOpenThreads(repository: string, number: number, signa
 
 const PullRequestText = v.object({ title: v.string(), body: v.string() })
 
-export async function fetchPullRequestText(repository: string, number: number, signal: AbortSignal) {
-  const result = await runGh(["pr", "view", String(number), "--repo", repository, "--json", "title,body"], { signal })
-  return parseJson(PullRequestText, result.stdout, `${repository}#${number}`)
+export async function fetchPullRequestText(ref: PullRequestRef, signal: AbortSignal) {
+  const result = await runGh(["pr", "view", String(ref.number), "--repo", repoName(ref), "--json", "title,body"], {
+    signal,
+  })
+  return parseJson(PullRequestText, result.stdout, reference(ref))
 }
 
-export async function viewerLogin(signal: AbortSignal): Promise<string> {
-  const result = await runGh(["api", "user", "--jq", ".login"], { signal })
+export async function viewerLogin(host: string | undefined, signal: AbortSignal): Promise<string> {
+  const result = await runGh(["api", "user", ...hostFlag(host), "--jq", ".login"], { signal })
   return result.stdout.trim()
 }
 
-export async function fetchDiff(repository: string, number: number, signal: AbortSignal): Promise<string> {
-  const result = await runGh(["pr", "diff", String(number), "--repo", repository], { signal })
+export async function fetchDiff(ref: PullRequestRef, signal: AbortSignal): Promise<string> {
+  const result = await runGh(["pr", "diff", String(ref.number), "--repo", repoName(ref)], { signal })
   return result.stdout
 }
 
 /** The diff between two exact commits; unlike `gh pr diff`, it does not move when the author pushes. */
 export async function fetchCompareDiff(
-  repository: string,
+  ref: RepositoryRef,
   base: string,
   head: string,
   signal: AbortSignal,
 ): Promise<string> {
   const result = await runGh(
-    ["api", `repos/${repository}/compare/${base}...${head}`, "-H", "Accept: application/vnd.github.diff"],
+    [
+      "api",
+      ...hostFlag(ref.host),
+      `repos/${ref.repository}/compare/${base}...${head}`,
+      "-H",
+      "Accept: application/vnd.github.diff",
+    ],
     { signal },
   )
   return result.stdout
@@ -170,14 +182,17 @@ export async function fetchCompareDiff(
 
 const PostedReview = v.object({ html_url: v.string() })
 
-export async function postReview(
-  repository: string,
-  number: number,
-  payload: ReviewPayload,
-  signal: AbortSignal,
-): Promise<string> {
+export async function postReview(ref: PullRequestRef, payload: ReviewPayload, signal: AbortSignal): Promise<string> {
   const result = await runGh(
-    ["api", `repos/${repository}/pulls/${number}/reviews`, "--method", "POST", "--input", "-"],
+    [
+      "api",
+      ...hostFlag(ref.host),
+      `repos/${ref.repository}/pulls/${ref.number}/reviews`,
+      "--method",
+      "POST",
+      "--input",
+      "-",
+    ],
     { signal, input: JSON.stringify(payload) },
   )
   return parseJson(PostedReview, result.stdout, "the posted review").html_url
@@ -188,9 +203,24 @@ const StatesResponse = v.object({
 })
 const STATES_PER_QUERY = 50
 
-/** The state of each pull request by key, in one GraphQL request per batch; unknown ones are left out. */
+/** The state of each pull request by key, in one GraphQL request per host and batch; unknown ones are left out. */
 export async function pullRequestStates(
-  pullRequests: readonly { key: string; repository: string; number: number }[],
+  pullRequests: readonly (PullRequestRef & { key: string })[],
+  signal: AbortSignal,
+): Promise<Map<string, string>> {
+  const states = new Map<string, string>()
+  for (const host of new Set(pullRequests.map(hostOf))) {
+    const onHost = pullRequests.filter((pullRequest) => hostOf(pullRequest) === host)
+    for (const [key, state] of await hostStates(host, onHost, signal)) {
+      states.set(key, state)
+    }
+  }
+  return states
+}
+
+async function hostStates(
+  host: string,
+  pullRequests: readonly (PullRequestRef & { key: string })[],
   signal: AbortSignal,
 ): Promise<Map<string, string>> {
   const states = new Map<string, string>()
@@ -207,7 +237,14 @@ export async function pullRequestStates(
       return ["-f", `o${index}=${owner}`, "-f", `r${index}=${name}`, "-F", `n${index}=${pullRequest.number}`]
     })
     const result = await runGh(
-      ["api", "graphql", "-f", `query=query(${variables.join(", ")}) { ${fields.join(" ")} }`, ...args],
+      [
+        "api",
+        "graphql",
+        ...hostFlag(host),
+        "-f",
+        `query=query(${variables.join(", ")}) { ${fields.join(" ")} }`,
+        ...args,
+      ],
       { signal },
     )
     const data = parseJson(StatesResponse, result.stdout, "pull request states").data

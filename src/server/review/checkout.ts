@@ -3,10 +3,11 @@ import { mkdir, rm, rmdir } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, isAbsolute, join, relative, sep } from "node:path"
 import * as v from "valibot"
+import { qualifiedRepository, type RepositoryRef } from "../../domain/review-request.js"
 import { runGit } from "../git/cli.js"
 import { remoteFor } from "../git/remotes.js"
 import { linkedWorktrees, removeWorktree } from "../git/worktrees.js"
-import { runGh } from "../github/cli.js"
+import { repoName, runGh } from "../github/cli.js"
 import { repositoryForDirectory } from "../github/repository.js"
 
 /** One directory name, so a repository name can never escape the cache directory. */
@@ -24,13 +25,18 @@ export function defaultCacheDirectory(): string {
   return join(process.env.XDG_CACHE_HOME || join(homedir(), ".cache"), "opencode-github-review-queue")
 }
 
-function segments(repository: string): [string, string] {
-  const parsed = v.safeParse(Repository, repository)
-  if (!parsed.success) {
-    throw new Error(`Unexpected repository name: ${repository}`)
+/** github.com keeps `owner/name`, where earlier clones live; other hosts get a folder of their own. */
+function segments(ref: RepositoryRef): string[] {
+  const parsed = v.safeParse(Repository, ref.repository)
+  const host = ref.host === undefined ? undefined : v.safeParse(PathSegment, ref.host)
+  if (!parsed.success || host?.success === false) {
+    throw new Error(`Unexpected repository name: ${qualifiedRepository(ref)}`)
   }
-  return parsed.output
+  return host ? [host.output, ...parsed.output] : parsed.output
 }
+
+const withLast = (parts: string[], last: (name: string) => string) =>
+  parts.map((part, index) => (index === parts.length - 1 ? last(part) : part))
 
 const clonesDirectory = (cacheDirectory: string) => join(cacheDirectory, "repos")
 const worktreesDirectory = (cacheDirectory: string) => join(cacheDirectory, "worktrees")
@@ -40,22 +46,20 @@ const isInside = (path: string, root: string) => {
   return fromRoot !== "" && !isAbsolute(fromRoot) && fromRoot.split(sep)[0] !== ".."
 }
 
-export function managedClonePath(cacheDirectory: string, repository: string): string {
-  const [owner, name] = segments(repository)
-  return join(clonesDirectory(cacheDirectory), owner, `${name}.git`)
+export function managedClonePath(cacheDirectory: string, ref: RepositoryRef): string {
+  return join(clonesDirectory(cacheDirectory), ...withLast(segments(ref), (name) => `${name}.git`))
 }
 
-export function worktreePath(cacheDirectory: string, repository: string, number: number): string {
-  const [owner, name] = segments(repository)
-  return join(worktreesDirectory(cacheDirectory), owner, name, `pr-${number}`)
+export function worktreePath(cacheDirectory: string, ref: RepositoryRef, number: number): string {
+  return join(worktreesDirectory(cacheDirectory), ...segments(ref), `pr-${number}`)
 }
 
-export function addressWorktreePath(cacheDirectory: string, repository: string, number: number): string {
-  const [owner, name] = segments(repository)
-  return join(cacheDirectory, "address", owner, name, `pr-${number}`)
+export function addressWorktreePath(cacheDirectory: string, ref: RepositoryRef, number: number): string {
+  return join(cacheDirectory, "address", ...segments(ref), `pr-${number}`)
 }
 
 export async function sessionCheckout(input: {
+  host?: string | undefined
   repository: string
   directory?: string | undefined
   signal: AbortSignal
@@ -63,15 +67,37 @@ export async function sessionCheckout(input: {
   if (!input.directory) {
     return undefined
   }
-  const repository = await repositoryForDirectory(input.directory, input.signal)
-  if (repository?.toLowerCase() !== input.repository.toLowerCase()) {
+  const found = await repositoryForDirectory(input.directory, input.signal)
+  if (!found || qualifiedRepository(found).toLowerCase() !== qualifiedRepository(input).toLowerCase()) {
     return undefined
   }
   const root = await runGit(input.directory, ["rev-parse", "--show-toplevel"], input.signal)
-  return (await remoteFor(root, input.repository, input.signal)) ? root : undefined
+  return (await remoteFor(root, input, input.signal)) ? root : undefined
+}
+
+/** Why `sessionCheckout` found no clone of the repository in `directory`, in words the user can act on. */
+export async function checkoutProblem(input: {
+  host?: string | undefined
+  repository: string
+  directory?: string | undefined
+  signal: AbortSignal
+}): Promise<string> {
+  const wanted = qualifiedRepository(input)
+  if (!input.directory) {
+    return `OpenCode did not say which folder this session is in. Open it in your clone of ${wanted} and try again.`
+  }
+  const found = await repositoryForDirectory(input.directory, input.signal)
+  if (!found) {
+    return `${input.directory} is not a clone of a GitHub repository that gh recognizes. Open OpenCode in your clone of ${wanted}.`
+  }
+  if (qualifiedRepository(found).toLowerCase() !== wanted.toLowerCase()) {
+    return `${input.directory} is a clone of ${qualifiedRepository(found)}, not ${wanted}. Open OpenCode in your clone of ${wanted}.`
+  }
+  return `None of the git remotes in ${input.directory} points at ${wanted}. Check \`git remote -v\` there.`
 }
 
 export async function findCheckout(input: {
+  host?: string | undefined
   repository: string
   directory?: string | undefined
   cacheDirectory: string
@@ -81,19 +107,19 @@ export async function findCheckout(input: {
   if (own) {
     return own
   }
-  const managed = managedClonePath(input.cacheDirectory, input.repository)
+  const managed = managedClonePath(input.cacheDirectory, input)
   return existsSync(managed) ? managed : undefined
 }
 
 export async function cloneRepository(
-  repository: string,
+  ref: RepositoryRef,
   cacheDirectory: string,
   signal: AbortSignal,
 ): Promise<string> {
-  const target = managedClonePath(cacheDirectory, repository)
+  const target = managedClonePath(cacheDirectory, ref)
   await mkdir(dirname(target), { recursive: true })
   // A bare, blobless clone keeps the cache small; the worktree fetches the blobs it checks out.
-  await runGh(["repo", "clone", repository, target, "--", "--bare", "--filter=blob:none"], { signal })
+  await runGh(["repo", "clone", repoName(ref), target, "--", "--bare", "--filter=blob:none"], { signal })
   return target
 }
 

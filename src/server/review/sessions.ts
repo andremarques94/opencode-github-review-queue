@@ -3,11 +3,12 @@ import type { Location, Plugin } from "@opencode/plugin"
 import { postBlocker, type ReviewDraft, reviewPayload } from "../../domain/review-draft.js"
 import type { ReviewedRecord } from "../../domain/review-history.js"
 import { everyPullRequest, type QueueSnapshot } from "../../domain/review-queue.js"
-import type { ReviewRequest } from "../../domain/review-request.js"
+import { hostField, hostOf, qualifiedRepository, type ReviewRequest } from "../../domain/review-request.js"
 import { createWorktree, fetchCommit } from "../git/worktrees.js"
 import { fetchPullRequest, postReview, pullRequestStates, viewerLogin } from "../github/pull-request.js"
 import type { KeyedStore } from "../keyed-store.js"
 import { DEFAULT_GUIDELINES, reviewInstructions, startPrompt } from "./agent/instructions.js"
+import { REVIEW_PERMISSIONS } from "./agent/permissions.js"
 import { cleanUpCheckout, cloneRepository, findCheckout, managedClonePath, worktreePath } from "./checkout.js"
 import type { DraftStore } from "./draft-store.js"
 
@@ -55,23 +56,24 @@ export class ReviewSessions {
     }
     const cacheDirectory = this.options.cacheDirectory
     const found = await findCheckout({
+      host: item.host,
       repository: item.repository,
       directory: input.directory,
       cacheDirectory,
       signal,
     })
-    const checkout = found ?? (input.clone ? await cloneRepository(item.repository, cacheDirectory, signal) : undefined)
+    const checkout = found ?? (input.clone ? await cloneRepository(item, cacheDirectory, signal) : undefined)
     if (!checkout) {
       return {
         status: "needs-clone",
-        repository: item.repository,
-        directory: managedClonePath(cacheDirectory, item.repository),
+        repository: qualifiedRepository(item),
+        directory: managedClonePath(cacheDirectory, item),
       }
     }
 
     const [pullRequest, viewer, guidelines, previous] = await Promise.all([
-      fetchPullRequest(item.repository, item.number, signal),
-      viewerLogin(signal),
+      fetchPullRequest(item, signal),
+      viewerLogin(item.host, signal),
       this.guidelines(),
       input.mode === "changes" ? this.reviewed.get(item.key) : undefined,
     ])
@@ -80,27 +82,33 @@ export class ReviewSessions {
         `${item.repository}#${item.number} is ${pullRequest.state.toLowerCase()}; there is nothing to review.`,
       )
     }
-    const worktree = worktreePath(cacheDirectory, item.repository, item.number)
+    const worktree = worktreePath(cacheDirectory, item, item.number)
     const headSha = await createWorktree({
       checkout,
+      host: item.host,
       repository: item.repository,
       number: item.number,
       worktree,
       signal,
     })
-    const since = await this.followUp(previous, { checkout, repository: item.repository, headSha }, signal)
+    const since = await this.followUp(
+      previous,
+      { checkout, host: item.host, repository: item.repository, headSha },
+      signal,
+    )
 
     try {
       const session = await input.sessions.create({
         title: `Review ${item.repository}#${item.number}`,
         location: { directory: worktree as Location.PublicRef["directory"] },
         ...(input.model ? { model: input.model as SessionModel } : {}),
-        permissions: [{ action: "edit", resource: "*", effect: "deny" }],
+        permissions: REVIEW_PERMISSIONS,
       })
       const now = new Date().toISOString()
       const draft = await this.store.put({
         version: 1,
         key: item.key,
+        ...hostField(hostOf(item)),
         repository: item.repository,
         number: item.number,
         title: pullRequest.title,
@@ -132,14 +140,14 @@ export class ReviewSessions {
 
   private async followUp(
     previous: ReviewedRecord | undefined,
-    target: { checkout: string; repository: string; headSha: string },
+    target: { checkout: string; host?: string | undefined; repository: string; headSha: string },
     signal: AbortSignal,
   ): Promise<ReviewedRecord | undefined> {
     if (!previous || previous.headSha === target.headSha) {
       return undefined
     }
     // A managed clone may have been deleted since, and a force-push leaves the old head out of the new fetch.
-    await fetchCommit(target.checkout, target.repository, previous.headSha, signal).catch(() => undefined)
+    await fetchCommit(target.checkout, target, previous.headSha, signal).catch(() => undefined)
     return previous
   }
 
@@ -159,7 +167,7 @@ export class ReviewSessions {
     if (!draft) {
       throw new Error("There is no review draft for this pull request.")
     }
-    const pullRequest = await fetchPullRequest(draft.repository, draft.number, signal)
+    const pullRequest = await fetchPullRequest(draft, signal)
     const blocker = postBlocker(draft)
     if (blocker) {
       throw new Error(blocker)
@@ -168,7 +176,7 @@ export class ReviewSessions {
     if (stale && !allowStale) {
       return { status: "stale", reason: stale }
     }
-    const url = await postReview(draft.repository, draft.number, reviewPayload(draft), signal)
+    const url = await postReview(draft, reviewPayload(draft), signal)
     await this.store.update(key, (saved) => {
       saved.status = "posted"
       saved.postedUrl = url
@@ -178,6 +186,7 @@ export class ReviewSessions {
       .put({
         version: 1,
         key,
+        ...hostField(hostOf(draft)),
         repository: draft.repository,
         number: draft.number,
         headSha: draft.headSha,
@@ -245,7 +254,7 @@ export class ReviewSessions {
     if (draft.status === "posted") {
       return true
     }
-    const pullRequest = await fetchPullRequest(draft.repository, draft.number, signal).catch(() => undefined)
+    const pullRequest = await fetchPullRequest(draft, signal).catch(() => undefined)
     return pullRequest !== undefined && pullRequest.state !== "OPEN"
   }
 

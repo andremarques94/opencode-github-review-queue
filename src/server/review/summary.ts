@@ -43,10 +43,7 @@ DIFF`
 }
 
 export async function summarize(item: ReviewRequest, generate: GenerateText, signal: AbortSignal): Promise<Summary> {
-  const [text, fullDiff] = await Promise.all([
-    fetchPullRequestText(item.repository, item.number, signal),
-    fetchDiff(item.repository, item.number, signal),
-  ])
+  const [text, fullDiff] = await Promise.all([fetchPullRequestText(item, signal), fetchDiff(item, signal)])
   const { diff, truncated } = capDiff(fullDiff)
   const summary = await generate(summaryPrompt(item, text, diff, truncated), signal)
   if (!summary.trim()) {

@@ -32,7 +32,8 @@ ${checklist}
 - When a comment should not lead to a change, say why and draft a short reply the user can post.
 - After changes, run the project's checks (lint, typecheck, tests) scoped to what you touched.
 - Never push, never resolve threads, and never reply or review on GitHub: the user does those. Commit only when the
-  user asks.
+  user asks. This session blocks \`git push\`, \`gh api\`, and the \`gh pr\` and \`gh issue\` commands that write; the
+  comments above are all you need from GitHub.
 - At the end, list each comment with what you changed, or the reply you drafted.`
 }
 

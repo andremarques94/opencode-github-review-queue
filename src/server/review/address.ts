@@ -5,7 +5,8 @@ import { createBranchWorktree, currentBranch } from "../git/worktrees.js"
 import { fetchOpenThreads, fetchPullRequestBranch } from "../github/pull-request.js"
 import type { KeyedStore } from "../keyed-store.js"
 import { addressInstructions, addressPrompt } from "./agent/address-instructions.js"
-import { addressWorktreePath, sessionCheckout } from "./checkout.js"
+import { ADDRESS_PERMISSIONS } from "./agent/permissions.js"
+import { addressWorktreePath, checkoutProblem, sessionCheckout } from "./checkout.js"
 
 type SessionModel = NonNullable<NonNullable<Parameters<Plugin.Context["session"]["create"]>[0]>["model"]>
 
@@ -15,11 +16,6 @@ export type AddressResult =
   | { status: "needs-model" }
 
 const INSTRUCTIONS_KEY = "github-review-queue.address"
-
-/** Edits stay allowed; what reaches GitHub, including resolving a thread through GraphQL, stays with the user. */
-const PERMISSIONS = ["git push *", "gh pr merge *", "gh pr review *", "gh pr comment *", "gh api graphql *"].map(
-  (resource) => ({ action: "shell", resource, effect: "deny" as const }),
-)
 
 export class AddressSessions {
   constructor(
@@ -50,15 +46,15 @@ export class AddressSessions {
     }
     if (place.worktree) {
       const { checkout, branch, worktree } = place
-      await createBranchWorktree({ checkout, branch, worktree, repository: item.repository, signal })
+      await createBranchWorktree({ checkout, branch, worktree, host: item.host, repository: item.repository, signal })
     }
     const directory = place.worktree ?? place.checkout
-    const threads = await fetchOpenThreads(item.repository, item.number, signal)
+    const threads = await fetchOpenThreads(item, signal)
     const session = await input.sessions.create({
       title: `Address review of ${item.repository}#${item.number}`,
       location: { directory: directory as Location.PublicRef["directory"] },
       model: input.model as SessionModel,
-      permissions: PERMISSIONS,
+      permissions: ADDRESS_PERMISSIONS,
     })
     await input.sessions.instructions.entry.put({
       sessionID: session.id,
@@ -75,8 +71,8 @@ export class AddressSessions {
       throw new Error("Only your own pull requests have a review to address.")
     }
     const [pullRequest, checkout] = await Promise.all([
-      fetchPullRequestBranch(item.repository, item.number, signal),
-      sessionCheckout({ repository: item.repository, directory, signal }),
+      fetchPullRequestBranch(item, signal),
+      sessionCheckout({ host: item.host, repository: item.repository, directory, signal }),
     ])
     if (pullRequest.state !== "OPEN") {
       throw new Error(
@@ -84,7 +80,7 @@ export class AddressSessions {
       )
     }
     if (!checkout) {
-      throw new Error(`Open OpenCode in your clone of ${item.repository} to address its review there.`)
+      throw new Error(await checkoutProblem({ host: item.host, repository: item.repository, directory, signal }))
     }
     const branch = pullRequest.headRefName
     const current = await currentBranch(checkout, signal)
@@ -98,7 +94,7 @@ export class AddressSessions {
       checkout,
       branch,
       current,
-      worktree: addressWorktreePath(this.cacheDirectory, item.repository, item.number),
+      worktree: addressWorktreePath(this.cacheDirectory, item, item.number),
     }
   }
 

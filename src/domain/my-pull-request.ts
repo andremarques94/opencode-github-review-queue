@@ -1,9 +1,12 @@
 import * as v from "valibot"
 import type { ReviewRequest } from "./review-request.js"
 
+export const ReviewDecision = v.picklist(["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"])
+export type ReviewDecision = v.InferOutput<typeof ReviewDecision>
+
 /** Reviewers are logins, or `org/slug` for teams. */
 export const Authored = v.object({
-  reviewDecision: v.exactOptional(v.picklist(["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"])),
+  reviewDecision: v.exactOptional(ReviewDecision),
   /** Missing while GitHub is still computing the merge state. */
   mergeReady: v.exactOptional(v.boolean()),
   waitingOn: v.array(v.string()),

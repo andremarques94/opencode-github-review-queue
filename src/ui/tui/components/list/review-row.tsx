@@ -5,8 +5,16 @@ import type { MouseEvent } from "@opentui/core"
 import { createSignal, For, Show } from "solid-js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
 import { parseOptions } from "../../../../shared/options.js"
-import { fitLine, readinessMarks, sizeMark, teamRequest, waitMark } from "../../../../shared/presentation.js"
+import {
+  type Detail,
+  fitLine,
+  readinessMarks,
+  sizeMark,
+  teamRequest,
+  waitMark,
+} from "../../../../shared/presentation.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
+import { RowDetails } from "./row-details.js"
 
 const RIGHT_BUTTON = 2
 
@@ -18,6 +26,8 @@ export function ReviewRow(props: {
   selected: boolean
   isNew: boolean
   review: string | undefined
+  /** Shown under the row while it is selected. */
+  details: Detail[] | undefined
   width: number
   actions: ReviewActions
 }) {
@@ -74,7 +84,7 @@ export function ReviewRow(props: {
       </text>
       <box flexDirection="column" flexGrow={1} paddingRight={1}>
         <text fg={theme.text.base} wrapMode={look().wrap}>
-          {look().title}
+          <b>{look().title}</b>
         </text>
         <text fg={theme.text.muted} wrapMode="none">
           #{props.item.number}
@@ -83,7 +93,10 @@ export function ReviewRow(props: {
             {(mark) => <span style={{ fg: theme.text.feedback[mark.tone].base }}> {mark.label}</span>}
           </For>
           <Show when={sizeMark(props.item)}>{(size) => ` ${size().label}`}</Show>
-          {props.item.authored ? "" : ` · @${props.item.author}`}
+          <Show when={!props.item.authored}>
+            {" · "}
+            <b>@{props.item.author}</b>
+          </Show>
           <Show when={teamRequest(props.item)}>
             {(team) => <span style={{ fg: theme.text.faint }}> {team().label}</span>}
           </Show>
@@ -96,6 +109,7 @@ export function ReviewRow(props: {
             {(review) => <span style={{ fg: theme.text.action.primary.base }}> · {review()}</span>}
           </Show>
         </text>
+        <Show when={props.selected && props.details}>{(details) => <RowDetails details={details()} />}</Show>
       </box>
     </box>
   )

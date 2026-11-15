@@ -8,8 +8,8 @@ import {
   Plugin,
 } from "@opencode/plugin/gui"
 import { createEffect, untrack } from "solid-js"
-import { createStore } from "solid-js/store"
-import { emptySnapshot, type QueueSnapshot } from "../../domain/review-queue.js"
+import { createStore, produce } from "solid-js/store"
+import { emptySnapshot, type QueueSnapshot, replaceSnapshot } from "../../domain/review-queue.js"
 import type { ReviewRequest } from "../../domain/review-request.js"
 import { createDiscoveryBatcher } from "../../shared/notifications/discovery-batcher.js"
 import {
@@ -42,7 +42,7 @@ export default Plugin.define({
     const [drafts, setDrafts] = createStore<LocalReviews>({ drafts: [], reviewed: [], snoozes: [] })
     const repositories = new Map<string, string | undefined>()
     const rpc = () => ctx.client.rpc(ReviewQueue)
-    const update = (snapshot: QueueSnapshot) => setState(snapshot)
+    const update = (snapshot: QueueSnapshot) => setState(produce((draft) => replaceSnapshot(draft, snapshot)))
 
     void rpc()
       .snapshot({})
@@ -175,8 +175,9 @@ export default Plugin.define({
       render: (props) => (
         <FindingsPanel
           context={ctx}
+          session={props.session}
+          screen={props.screen}
           draft={reviewDraft(props.session)}
-          comments={props.screen.comment}
           actions={findingActions(() => props.session)}
         />
       ),
@@ -196,12 +197,15 @@ export default Plugin.define({
           label: `Review · ${pillStatus(draft)}`,
           icon: "github",
           ...(progress.tone ? { tone: progress.tone } : {}),
-          title: `Review of ${draft.repository}#${draft.number}`,
+          // The popover is narrow: the repository's name, without its owner, keeps the heading on one line.
+          title: `Review of ${draft.repository.split("/").pop()} #${draft.number}`,
         }
       },
       menu: (input) => (
         <ProgressMenu
           context={ctx}
+          session={input.session}
+          screen={input.screen}
           draft={reviewDraft(input.session)}
           actions={findingActions(() => input.session)}
           close={input.close}

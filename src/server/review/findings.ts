@@ -13,6 +13,7 @@ import {
   splitComment,
   type Verdict,
 } from "../../domain/review-draft.js"
+import { qualifiedRepository } from "../../domain/review-request.js"
 import { fetchCompareDiff, fetchDiff } from "../github/pull-request.js"
 import type { DraftStore } from "./draft-store.js"
 
@@ -136,8 +137,8 @@ export class Findings {
     }
     const signal = AbortSignal.timeout(this.timeoutMs)
     const diff = draft.baseSha
-      ? fetchCompareDiff(draft.repository, draft.baseSha, draft.headSha, signal)
-      : fetchDiff(draft.repository, draft.number, signal)
+      ? fetchCompareDiff(draft, draft.baseSha, draft.headSha, signal)
+      : fetchDiff(draft, signal)
     const loading = diff.then(commentableLines)
     loading.catch(() => this.diffs.delete(key))
     this.diffs.set(key, loading)
@@ -146,11 +147,14 @@ export class Findings {
 }
 
 /** Drafts started before the base commit was recorded fall back to the pull request's current diff. */
-export function diffCommand(draft: Pick<ReviewDraft, "repository" | "number" | "headSha" | "baseSha">): string {
+export function diffCommand(
+  draft: Pick<ReviewDraft, "host" | "repository" | "number" | "headSha" | "baseSha">,
+): string {
   if (!draft.baseSha) {
-    return `gh pr diff ${draft.number} --repo ${draft.repository}`
+    return `gh pr diff ${draft.number} --repo ${qualifiedRepository(draft)}`
   }
-  return `gh api repos/${draft.repository}/compare/${draft.baseSha}...${draft.headSha} -H "Accept: application/vnd.github.diff"`
+  const host = draft.host ? ` --hostname ${draft.host}` : ""
+  return `gh api${host} repos/${draft.repository}/compare/${draft.baseSha}...${draft.headSha} -H "Accept: application/vnd.github.diff"`
 }
 
 function findingIn(draft: ReviewDraft, id: number): Finding {

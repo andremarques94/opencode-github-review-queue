@@ -2,6 +2,7 @@ import { Plugin } from "@opencode/plugin"
 import { AddressSession } from "../domain/my-pull-request.js"
 import { ReviewedRecord } from "../domain/review-history.js"
 import { everyPullRequest } from "../domain/review-queue.js"
+import { qualifiedRepository } from "../domain/review-request.js"
 import { Snooze } from "../domain/snooze.js"
 import { type PluginOptions, parseOptions } from "../shared/options.js"
 import { type LocalReviews, ReviewQueue } from "../shared/rpc.js"
@@ -157,9 +158,10 @@ export default Plugin.define({
     const registration = await ctx.rpc.register(ReviewQueue, {
       snapshot: async () => current.poller.snapshot(),
       refresh: () => current.poller.refresh(),
-      repository: async (input, rpcContext) => ({
-        repository: (await repositoryForDirectory(input.directory, timeout(rpcContext.signal))) ?? null,
-      }),
+      repository: async (input, rpcContext) => {
+        const found = await repositoryForDirectory(input.directory, timeout(rpcContext.signal))
+        return { repository: found ? qualifiedRepository(found) : null }
+      },
       open: (input, rpcContext) =>
         reported(rpcContext, async () => {
           await openReview(await queued(input.key), timeout(rpcContext.signal))

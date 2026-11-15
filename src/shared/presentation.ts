@@ -1,6 +1,13 @@
-import { needsYou } from "../domain/my-pull-request.js"
+import { needsYou, type ReviewDecision } from "../domain/my-pull-request.js"
+import type { Verdict } from "../domain/review-draft.js"
 import type { QueueSnapshot } from "../domain/review-queue.js"
-import { type ReviewRequest, waitingSince } from "../domain/review-request.js"
+import {
+  qualifiedRepository,
+  type Review,
+  type ReviewRequest,
+  type ReviewState,
+  waitingSince,
+} from "../domain/review-request.js"
 
 export type QueueFilter = "current" | "all" | "mine"
 
@@ -15,7 +22,9 @@ export function filterItems(
     case "mine":
       return [...(state.authored ?? [])]
     case "current":
-      return repository ? state.items.filter((item) => item.repository.toLowerCase() === repository.toLowerCase()) : []
+      return repository
+        ? state.items.filter((item) => qualifiedRepository(item).toLowerCase() === repository.toLowerCase())
+        : []
   }
 }
 
@@ -37,6 +46,16 @@ function age(createdAt: string, now = Date.now()): string {
     return `${days}d`
   }
   return `${Math.floor(days / 30)}mo`
+}
+
+/** The scopes as the TUI header lists them, left to right. */
+const scopes = (mine: boolean): QueueFilter[] => (mine ? ["all", "current", "mine"] : ["all", "current"])
+
+/** The scope beside `filter` in the header, staying put at either end. */
+export function adjacentFilter(filter: QueueFilter, direction: -1 | 1, mine: boolean): QueueFilter {
+  const order = scopes(mine)
+  const index = order.indexOf(filter)
+  return order[Math.min(order.length - 1, Math.max(0, index + direction))] ?? filter
 }
 
 export function nextFilter(filter: QueueFilter, mine: boolean): QueueFilter {
@@ -85,12 +104,12 @@ export type RepositoryGroup = {
 export function groupByRepository(items: readonly ReviewRequest[]): RepositoryGroup[] {
   const groups = new Map<string, RepositoryGroup>()
   for (const item of items) {
-    const key = item.repository.toLowerCase()
+    const key = qualifiedRepository(item).toLowerCase()
     let group = groups.get(key)
     if (!group) {
       const slash = item.repository.indexOf("/")
       group = {
-        repository: item.repository,
+        repository: qualifiedRepository(item),
         owner: slash === -1 ? "" : item.repository.slice(0, slash),
         name: slash === -1 ? item.repository : item.repository.slice(slash + 1),
         items: [],
@@ -119,6 +138,8 @@ const CHECK_MARKS = {
   pending: { label: "●", tone: "warning", detail: "Checks running" },
 } as const satisfies Record<NonNullable<ReviewRequest["checks"]>, ReadinessMark>
 
+const BEHIND = "Behind the base branch; needs a rebase or merge"
+
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`
 
 /** What GitHub knows about a pull request's readiness; anything it does not know is left out, not guessed. */
@@ -129,6 +150,9 @@ export function readinessMarks(item: ReviewRequest): ReadinessMark[] {
   }
   if (item.conflicts) {
     marks.push({ label: "conflicts", tone: "error", detail: "Conflicts with the base branch" })
+  }
+  if (item.behind && !item.conflicts) {
+    marks.push({ label: "behind", tone: "warning", detail: BEHIND })
   }
   if (item.unresolvedThreads) {
     const detail = plural(item.unresolvedThreads, "unresolved review thread")
@@ -183,9 +207,127 @@ export function teamRequest(item: ReviewRequest): { label: string; detail: strin
   }
 }
 
+export type Detail = { label: string; value: string; tone?: ReadinessMark["tone"] }
+
+const handles = (logins: readonly string[]) => logins.map((login) => `@${login}`).join(", ")
+
+const REVIEW_VERBS: Record<ReviewState, string> = {
+  APPROVED: "approved",
+  CHANGES_REQUESTED: "requested changes",
+  COMMENTED: "commented",
+  DISMISSED: "had a review dismissed",
+}
+
+const VERDICT_VERBS: Record<Verdict, string> = {
+  APPROVE: "Approved",
+  REQUEST_CHANGES: "Requested changes",
+  COMMENT: "Commented",
+}
+
+function reviewDetails(reviews: readonly Review[], now: number): Detail[] {
+  const by = (state: ReviewState) => reviews.filter((review) => review.state === state).map((review) => review.author)
+  const details: Detail[] = []
+  const rows = [
+    ["Approved by", by("APPROVED"), "success"],
+    ["Changes requested by", by("CHANGES_REQUESTED"), "error"],
+    ["Commented", by("COMMENTED"), undefined],
+  ] as const
+  for (const [label, logins, tone] of rows) {
+    if (logins.length > 0) {
+      details.push({ label, value: handles(logins), ...(tone ? { tone } : {}) })
+    }
+  }
+  const last = reviews
+    .filter((review) => review.submittedAt)
+    .sort((a, b) => (b.submittedAt ?? "").localeCompare(a.submittedAt ?? ""))[0]
+  if (last?.submittedAt) {
+    details.push({
+      label: "Last review",
+      value: `@${last.author} ${REVIEW_VERBS[last.state]} ${ago(last.submittedAt, now)}`,
+    })
+  }
+  return details
+}
+
+const DECISIONS: Record<ReviewDecision, Omit<Detail, "label">> = {
+  APPROVED: { value: "Approved", tone: "success" },
+  CHANGES_REQUESTED: { value: "Changes requested", tone: "error" },
+  REVIEW_REQUIRED: { value: "Review required" },
+}
+
+function mergeDetail(item: ReviewRequest): Detail | undefined {
+  if (item.conflicts) {
+    return { label: "Merge", value: "Conflicts with the base branch", tone: "error" }
+  }
+  if (item.behind) {
+    return { label: "Merge", value: BEHIND, tone: "warning" }
+  }
+  return item.conflicts === false ? { label: "Merge", value: "No conflicts" } : undefined
+}
+
+function requestDetail(item: ReviewRequest, now: number): Detail | undefined {
+  if (item.authored) {
+    const waiting = item.authored.waitingOn
+    return waiting.length > 0 ? { label: "Waiting on", value: handles(waiting) } : undefined
+  }
+  if (item.followUp) {
+    return { label: "Follow-up", value: "New commits since your review" }
+  }
+  const from = item.requestedVia?.kind === "you" ? "you" : teamRequest(item)?.detail.replace(/^Requested from /, "")
+  const when = item.requestedAt ? ago(item.requestedAt, now) : undefined
+  const value = [from, when].filter((part) => part !== undefined).join(", ")
+  return value ? { label: "Requested", value } : undefined
+}
+
+/** Everything the row's marks and tooltips say, spelled out; facts GitHub did not report are left out. */
+export function pullRequestDetails(
+  item: ReviewRequest,
+  reviewed: { verdict: Verdict; postedAt: string } | undefined,
+  now = Date.now(),
+): Detail[] {
+  const details: Detail[] = [{ label: "Author", value: `@${item.author}, opened ${ago(item.createdAt, now)}` }]
+  if (item.host) {
+    details.push({ label: "Host", value: item.host })
+  }
+  if (item.draft) {
+    details.push({ label: "Draft", value: "Not ready for review yet", tone: "warning" })
+  }
+  if (item.lastCommitAt) {
+    details.push({ label: "Last commit", value: ago(item.lastCommitAt, now) })
+  }
+  const size = sizeMark(item)
+  if (size) {
+    details.push({ label: "Changes", value: size.detail })
+  }
+  if (item.checks) {
+    const mark = CHECK_MARKS[item.checks]
+    details.push({ label: "Checks", value: mark.detail.replace(/^Checks /, ""), tone: mark.tone })
+  }
+  const merge = mergeDetail(item)
+  if (merge) {
+    details.push(merge)
+  }
+  if (item.unresolvedThreads !== undefined) {
+    const count = `${item.unresolvedThreads}${item.unresolvedThreadsCapped ? "+" : ""} unresolved`
+    details.push({ label: "Threads", value: item.unresolvedThreads === 0 ? "All resolved" : count })
+  }
+  const request = requestDetail(item, now)
+  if (request) {
+    details.push(request)
+  }
+  if (item.reviewDecision) {
+    details.push({ label: "Review status", ...DECISIONS[item.reviewDecision] })
+  }
+  details.push(...reviewDetails(item.reviews ?? [], now))
+  if (reviewed) {
+    details.push({ label: "Your review", value: `${VERDICT_VERBS[reviewed.verdict]} ${ago(reviewed.postedAt, now)}` })
+  }
+  return details
+}
+
 export function readinessSummary(item: ReviewRequest): string | undefined {
   const details = readinessMarks(item).map((mark) => mark.detail)
-  if (item.conflicts === false) {
+  if (item.conflicts === false && !item.behind) {
     details.push("No conflicts")
   }
   return details.length > 0 ? details.join(" · ") : undefined

@@ -42,6 +42,8 @@ const DraftStatus = v.picklist(["investigating", "ready", "posted"])
 export const ReviewDraft = v.object({
   version: v.literal(1),
   key: v.string(),
+  /** Left out for github.com. */
+  host: v.exactOptional(v.string()),
   repository: v.string(),
   number: v.number(),
   title: v.string(),

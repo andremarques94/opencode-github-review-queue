@@ -1,9 +1,9 @@
 import type { Context } from "@opencode/plugin/gui"
-import { For, Show } from "solid-js"
+import { createMemo, For, Show } from "solid-js"
 import type { RepositoryGroup } from "../../../../shared/presentation.js"
 import type { LocalReviews } from "../../../../shared/rpc.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
-import { ReviewRow } from "./review-row.js"
+import { type DetailsState, ReviewRow } from "./review-row.js"
 
 export function ReviewGroup(props: {
   context: Context
@@ -13,8 +13,12 @@ export function ReviewGroup(props: {
   local: LocalReviews
   now: number
   actions: ReviewActions
+  details: DetailsState
   copy(text: string, name: string): void
 }) {
+  const items = createMemo(() => new Map(props.group.items.map((item) => [item.key, item])))
+  const keys = createMemo(() => [...items().keys()])
+
   return (
     <section>
       <Show when={props.showHeader}>
@@ -28,17 +32,23 @@ export function ReviewGroup(props: {
           <span class="grq-group-count">{props.group.items.length}</span>
         </div>
       </Show>
-      <For each={props.group.items}>
-        {(item) => (
-          <ReviewRow
-            context={props.context}
-            item={item}
-            isNew={props.newKeys.includes(item.key)}
-            local={props.local}
-            now={props.now}
-            actions={props.actions}
-            copy={props.copy}
-          />
+      {/* Keyed by pull request, so a refresh updates a row in place: its open details and menu stay open. */}
+      <For each={keys()}>
+        {(key) => (
+          <Show when={items().get(key)}>
+            {(item) => (
+              <ReviewRow
+                context={props.context}
+                item={item()}
+                isNew={props.newKeys.includes(key)}
+                local={props.local}
+                now={props.now}
+                actions={props.actions}
+                details={props.details}
+                copy={props.copy}
+              />
+            )}
+          </Show>
         )}
       </For>
     </section>

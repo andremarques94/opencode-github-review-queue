@@ -1,19 +1,27 @@
 import * as v from "valibot"
-import type { Authored } from "../../domain/my-pull-request.js"
-import { type Checks, type RequestedVia, type ReviewRequest, requestKey } from "../../domain/review-request.js"
-import { GhError, runGh } from "./cli.js"
+import { type Authored, ReviewDecision } from "../../domain/my-pull-request.js"
+import {
+  type Checks,
+  hostField,
+  type RequestedVia,
+  type Review,
+  type ReviewRequest,
+  requestKey,
+} from "../../domain/review-request.js"
+import { GhError, hostFlag, runGh } from "./cli.js"
 
 const REQUESTED = "is:pr is:open review-requested:@me"
 const REVIEWED = "is:pr is:open reviewed-by:@me -review-requested:@me"
 
 const AUTHORED = "is:pr is:open author:@me"
 
-const pullRequestQuery = (extra: string) => `query($search: String!, $endCursor: String) {
+const QUERY = `query($search: String!, $endCursor: String) {
   search(query: $search, type: ISSUE, first: 100, after: $endCursor) {
     pageInfo { hasNextPage endCursor }
     nodes {
       ... on PullRequest {
         number title url createdAt isDraft headRefOid baseRefOid mergeable additions deletions changedFiles
+        reviewDecision mergeStateStatus
         author { login }
         repository { nameWithOwner }
         commits(last: 1) { nodes { commit { committedDate statusCheckRollup { state } } } }
@@ -21,7 +29,8 @@ const pullRequestQuery = (extra: string) => `query($search: String!, $endCursor:
         reviewRequests(first: 100) { nodes { requestedReviewer { ...reviewer } } }
         timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT], last: 20) {
           nodes { ... on ReviewRequestedEvent { createdAt requestedReviewer { ...reviewer } } }
-        }${extra}
+        }
+        latestReviews(first: 20) { nodes { state submittedAt author { login } } }
       }
     }
   }
@@ -34,11 +43,6 @@ fragment reviewer on RequestedReviewer {
   ... on Team { slug organization { login } }
 }`
 
-const QUERY = pullRequestQuery("")
-const AUTHORED_QUERY = pullRequestQuery(`
-        reviewDecision mergeStateStatus
-        latestReviews(first: 20) { nodes { state author { login } } }`)
-
 const CHECKS: Record<string, Checks> = {
   SUCCESS: "passing",
   FAILURE: "failing",
@@ -49,6 +53,9 @@ const CHECKS: Record<string, Checks> = {
 
 /** GitHub says `UNKNOWN` while it is still computing. */
 const MERGEABLE: Record<string, boolean> = { MERGEABLE: false, CONFLICTING: true }
+
+/** Only where the base branch requires branches to be up to date; elsewhere a branch behind still reads `CLEAN`. */
+const BEHIND: Record<string, true> = { BEHIND: true }
 
 const known = <K extends string, T>(key: K, value: T | null | undefined) =>
   (value === null || value === undefined ? {} : { [key]: value }) as { [P in K]?: T }
@@ -104,6 +111,33 @@ const RequestEvents = v.object({
 })
 type RequestEvent = { at: string; reviewer: Reviewer }
 
+/** Pending reviews, states GitHub adds later, and deleted authors say nothing about who reviewed. */
+const LatestReviews = v.object({
+  nodes: v.array(
+    v.fallback(
+      v.nullable(
+        v.object({
+          state: v.picklist(["APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED"]),
+          submittedAt: v.nullish(v.string()),
+          author: v.object({ login: v.string() }),
+        }),
+      ),
+      null,
+    ),
+  ),
+})
+
+const reviewsOf = (latest: v.InferOutput<typeof LatestReviews> | null | undefined) =>
+  latest
+    ? {
+        reviews: latest.nodes.flatMap((review): Review[] =>
+          review
+            ? [{ author: review.author.login, state: review.state, ...known("submittedAt", review.submittedAt) }]
+            : [],
+        ),
+      }
+    : {}
+
 const teamName = (team: { slug: string; organization: { login: string } }) => `${team.organization.login}/${team.slug}`
 
 const isUser = (reviewer: Reviewer, login: string) =>
@@ -145,10 +179,13 @@ const PullRequest = v.pipe(
     additions: optional(v.number()),
     deletions: optional(v.number()),
     changedFiles: optional(v.number()),
+    reviewDecision: optional(ReviewDecision),
+    mergeStateStatus: optional(v.string()),
     commits: optional(Commits),
     reviewThreads: optional(ReviewThreads),
     reviewRequests: optional(ReviewRequests),
     timelineItems: optional(RequestEvents),
+    latestReviews: optional(LatestReviews),
   }),
   v.transform((node): { request: ReviewRequest; reviewers: Reviewer[]; events: RequestEvent[] } => {
     const commit = node.commits?.nodes[0]?.commit
@@ -165,11 +202,14 @@ const PullRequest = v.pipe(
       ...known("baseSha", node.baseRefOid),
       ...known("checks", CHECKS[commit?.statusCheckRollup?.state ?? ""]),
       ...known("conflicts", MERGEABLE[node.mergeable ?? ""]),
+      ...known("behind", BEHIND[node.mergeStateStatus ?? ""]),
+      ...known("reviewDecision", node.reviewDecision),
       ...threadReadiness(node.reviewThreads),
       ...known("additions", node.additions),
       ...known("deletions", node.deletions),
       ...known("changedFiles", node.changedFiles),
       ...known("lastCommitAt", commit?.committedDate),
+      ...reviewsOf(node.latestReviews),
     }
     return {
       request,
@@ -224,7 +264,7 @@ function readPage(page: unknown): { nodes: unknown[]; viewer?: string; retryAt?:
 }
 
 /** Without the viewer's login a direct request cannot be told from a team one, so neither is claimed. */
-function readNode(node: unknown, viewer: string | undefined): ReviewRequest {
+function readNode(node: unknown, viewer: string | undefined, host: string): ReviewRequest {
   const parsed = v.safeParse(PullRequest, node)
   if (!parsed.success) {
     throw unchanged("a partial pull request")
@@ -232,20 +272,22 @@ function readNode(node: unknown, viewer: string | undefined): ReviewRequest {
   const { request, reviewers, events } = parsed.output
   const via = viewer ? requestedVia(reviewers, viewer) : undefined
   const at = requestedAt(events, via, viewer)
-  return { ...request, ...(via ? { requestedVia: via } : {}), ...(at ? { requestedAt: at } : {}) }
+  const hosted = hostField(host)
+  return {
+    ...request,
+    key: requestKey(request.repository, request.number, hosted.host),
+    ...hosted,
+    ...(via ? { requestedVia: via } : {}),
+    ...(at ? { requestedAt: at } : {}),
+  }
 }
 
-const REVIEW_DECISIONS = ["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"] as const
 /** `HAS_HOOKS` merges as cleanly as `CLEAN`; GitHub only adds that pre-receive hooks will run. */
 const MERGE_READY: Record<string, boolean> = { CLEAN: true, HAS_HOOKS: true, BEHIND: false, BLOCKED: false }
 
 const AuthoredNode = v.object({
-  reviewDecision: optional(v.picklist(REVIEW_DECISIONS)),
   mergeStateStatus: optional(v.string()),
   reviewRequests: optional(ReviewRequests),
-  latestReviews: optional(
-    v.object({ nodes: v.array(v.object({ state: v.string(), author: v.nullable(v.object({ login: v.string() })) })) }),
-  ),
 })
 
 const reviewerName = (reviewer: Reviewer) => {
@@ -259,17 +301,16 @@ const reviewerName = (reviewer: Reviewer) => {
   }
 }
 
-function readAuthored(node: unknown, viewer: string | undefined): ReviewRequest {
-  const { requestedVia: _, ...request } = readNode(node, viewer)
+function readAuthored(node: unknown, viewer: string | undefined, host: string): ReviewRequest {
+  const { requestedVia: _, ...request } = readNode(node, viewer, host)
   const parsed = v.parse(AuthoredNode, node)
   const mergeReady = MERGE_READY[parsed.mergeStateStatus ?? ""]
-  const reviews = parsed.latestReviews?.nodes ?? []
   const authored: Authored = {
-    ...(parsed.reviewDecision ? { reviewDecision: parsed.reviewDecision } : {}),
+    ...(request.reviewDecision ? { reviewDecision: request.reviewDecision } : {}),
     ...(mergeReady === undefined ? {} : { mergeReady }),
     waitingOn: (parsed.reviewRequests?.nodes ?? []).flatMap((entry) => reviewerName(entry.requestedReviewer)),
-    changesRequestedBy: reviews.flatMap((review) =>
-      review.state === "CHANGES_REQUESTED" && review.author ? [review.author.login] : [],
+    changesRequestedBy: (request.reviews ?? []).flatMap((review) =>
+      review.state === "CHANGES_REQUESTED" ? [review.author] : [],
     ),
   }
   return { ...request, authored }
@@ -279,24 +320,26 @@ export type SearchResult = { items: ReviewRequest[]; retryAt?: string }
 
 async function searchPullRequests(
   search: string,
+  host: string,
   signal: AbortSignal,
-  { query, read }: { query: string; read: typeof readNode } = { query: QUERY, read: readNode },
+  read: typeof readNode = readNode,
 ): Promise<SearchResult> {
   const result = await runGh(
-    ["api", "graphql", "--paginate", "--slurp", "-f", `query=${query}`, "-f", `search=${search}`],
+    ["api", "graphql", ...hostFlag(host), "--paginate", "--slurp", "-f", `query=${QUERY}`, "-f", `search=${search}`],
     { signal },
   )
   const pages = parsePages(result.stdout).map(readPage)
   const viewer = pages.find((page) => page.viewer)?.viewer
-  const items = pages.flatMap((page) => page.nodes.map((node) => read(node, viewer)))
+  const items = pages.flatMap((page) => page.nodes.map((node) => read(node, viewer, host)))
   items.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   const retryAt = pages.reduce<string | undefined>((last, page) => page.retryAt ?? last, undefined)
   return { items, ...(retryAt ? { retryAt } : {}) }
 }
 
-export const fetchReviewRequests = (signal: AbortSignal) => searchPullRequests(REQUESTED, signal)
+export const fetchReviewRequests = (host: string, signal: AbortSignal) => searchPullRequests(REQUESTED, host, signal)
 
-export const fetchReviewedPullRequests = (signal: AbortSignal) => searchPullRequests(REVIEWED, signal)
+export const fetchReviewedPullRequests = (host: string, signal: AbortSignal) =>
+  searchPullRequests(REVIEWED, host, signal)
 
-export const fetchAuthoredPullRequests = (signal: AbortSignal) =>
-  searchPullRequests(AUTHORED, signal, { query: AUTHORED_QUERY, read: readAuthored })
+export const fetchAuthoredPullRequests = (host: string, signal: AbortSignal) =>
+  searchPullRequests(AUTHORED, host, signal, readAuthored)

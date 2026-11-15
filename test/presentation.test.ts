@@ -3,8 +3,10 @@ import { type ReviewRequest, requestKey } from "../src/domain/review-request.js"
 import {
   ago,
   escapeInlineFences,
+  filterItems,
   fitLine,
   groupByRepository,
+  pullRequestDetails,
   readinessMarks,
   readinessSummary,
   teamRequest,
@@ -41,6 +43,107 @@ describe("groupByRepository", () => {
       ["acme", "api", [1, 3]],
       ["acme", "web", [2]],
     ])
+  })
+
+  it("keeps a repository of the same name on another host apart", () => {
+    const enterprise = { ...item("acme/api", 2), host: "ghe.acme.com", key: requestKey("acme/api", 2, "ghe.acme.com") }
+
+    const groups = groupByRepository([item("acme/api", 1), enterprise])
+
+    expect(groups.map((group) => group.repository)).toEqual(["acme/api", "ghe.acme.com/acme/api"])
+  })
+})
+
+describe("pullRequestDetails", () => {
+  const now = Date.parse("2026-01-03T00:00:00.000Z")
+  const rows = (details: ReturnType<typeof pullRequestDetails>) => details.map((detail) => [detail.label, detail.value])
+
+  it("spells out what the row's marks and tooltips say, and who reviewed", () => {
+    const details = pullRequestDetails(
+      {
+        ...item("acme/api", 1),
+        additions: 120,
+        deletions: 30,
+        changedFiles: 4,
+        checks: "failing",
+        conflicts: false,
+        unresolvedThreads: 2,
+        requestedVia: { kind: "team", teams: ["acme/web"] },
+        requestedAt: "2026-01-02T00:00:00.000Z",
+        reviews: [
+          { author: "alice", state: "APPROVED", submittedAt: "2026-01-02T12:00:00.000Z" },
+          { author: "bob", state: "CHANGES_REQUESTED", submittedAt: "2026-01-02T18:00:00.000Z" },
+          { author: "carol", state: "COMMENTED" },
+        ],
+      },
+      { verdict: "APPROVE", postedAt: "2026-01-01T00:00:00.000Z" },
+      now,
+    )
+
+    expect(rows(details)).toEqual([
+      ["Author", "@octocat, opened 2d ago"],
+      ["Changes", "120 added, 30 removed in 4 files"],
+      ["Checks", "failing"],
+      ["Merge", "No conflicts"],
+      ["Threads", "2 unresolved"],
+      ["Requested", "@acme/web, 1d ago"],
+      ["Approved by", "@alice"],
+      ["Changes requested by", "@bob"],
+      ["Commented", "@carol"],
+      ["Last review", "@bob requested changes 6h ago"],
+      ["Your review", "Approved 2d ago"],
+    ])
+    expect(details.find((detail) => detail.label === "Checks")?.tone).toBe("error")
+  })
+
+  it("shows the host, draft state, last commit, review status, and a branch behind its base", () => {
+    const details = pullRequestDetails(
+      {
+        ...item("acme/api", 1),
+        host: "ghe.acme.com",
+        draft: true,
+        lastCommitAt: "2026-01-02T21:00:00.000Z",
+        conflicts: false,
+        behind: true,
+        reviewDecision: "REVIEW_REQUIRED",
+      },
+      undefined,
+      now,
+    )
+
+    expect(rows(details)).toEqual([
+      ["Author", "@octocat, opened 2d ago"],
+      ["Host", "ghe.acme.com"],
+      ["Draft", "Not ready for review yet"],
+      ["Last commit", "3h ago"],
+      ["Merge", "Behind the base branch; needs a rebase or merge"],
+      ["Review status", "Review required"],
+    ])
+  })
+
+  it("leaves out what GitHub did not report", () => {
+    expect(rows(pullRequestDetails(item("acme/api", 1), undefined, now))).toEqual([
+      ["Author", "@octocat, opened 2d ago"],
+    ])
+  })
+
+  it("says who your own pull request waits on", () => {
+    const mine = {
+      ...item("acme/api", 1),
+      authored: { waitingOn: ["bob", "acme/web"], changesRequestedBy: [] },
+    }
+
+    expect(rows(pullRequestDetails(mine, undefined, now))).toContainEqual(["Waiting on", "@bob, @acme/web"])
+  })
+})
+
+describe("filterItems", () => {
+  it("matches the current checkout's host as well as its repository", () => {
+    const enterprise = { ...item("acme/api", 2), host: "ghe.acme.com", key: requestKey("acme/api", 2, "ghe.acme.com") }
+    const state = { items: [item("acme/api", 1), enterprise] }
+
+    expect(filterItems(state, "current", "ghe.acme.com/acme/api").map((entry) => entry.number)).toEqual([2])
+    expect(filterItems(state, "current", "acme/api").map((entry) => entry.number)).toEqual([1])
   })
 })
 
@@ -86,6 +189,14 @@ describe("readiness", () => {
     expect(teamRequest(one)).toEqual({ label: "via @web", detail: "Requested from @acme/web" })
     expect(teamRequest(two)).toEqual({ label: "via team", detail: "Requested from one of @acme/web, @acme/api" })
     expect(teamRequest({ ...item("acme/api", 3), requestedVia: { kind: "you" } })).toBeUndefined()
+  })
+
+  it("marks a branch behind its base, unless conflicts already say more", () => {
+    const behind = { ...item("acme/api", 1), conflicts: false, behind: true as const }
+
+    expect(readinessMarks(behind).map((mark) => mark.label)).toEqual(["behind"])
+    expect(readinessSummary(behind)).toBe("Behind the base branch; needs a rebase or merge")
+    expect(readinessMarks({ ...behind, conflicts: true }).map((mark) => mark.label)).toEqual(["conflicts"])
   })
 
   it("mentions a clean merge only in the summary", () => {
