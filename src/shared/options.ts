@@ -9,6 +9,10 @@ export type PluginOptions = QueueRules & {
   notifications: boolean
   keepClones: boolean
   followUps: boolean
+  /** List the user's own open pull requests under **Mine**. */
+  myPullRequests: boolean
+  /** Notify when one of them gets changes requested, becomes ready to merge, or starts failing its checks. */
+  notifyOnMyPullRequests: boolean
   sort: QueueSort
   /** How long a pull request may wait before its age is highlighted. */
   staleAfterMs?: number
@@ -46,6 +50,8 @@ export function parseOptions(input: Readonly<Record<string, unknown>>): PluginOp
     notifications: input.notifications !== false,
     keepClones: input.keepClones === true,
     followUps: input.followUps !== false,
+    myPullRequests: input.myPullRequests !== false,
+    notifyOnMyPullRequests: input.notifyOnMyPullRequests !== false,
     sort: sortOption(input.sort),
     ...staleOption(input.staleAfter),
     includeDrafts: input.includeDrafts !== false,

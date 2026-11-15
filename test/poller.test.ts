@@ -392,6 +392,50 @@ describe("ReviewQueuePoller across locations", () => {
     follower.poller.stop()
   })
 
+  it("announces changes on the user's own pull requests on both locations, once each", async () => {
+    const storage = sharedStorage()
+    let now = Date.parse("2026-01-01T00:00:00.000Z")
+    const own = (mergeReady: boolean): ReviewRequest => ({
+      ...item("acme/api", 7),
+      authored: { mergeReady, waitingOn: [], changesRequestedBy: [] },
+    })
+    let authored = [own(false)]
+    const make = (owner: string) => {
+      const poller = new ReviewQueuePoller(
+        async () => ({ items: [], authored }),
+        storage.baseline,
+        options,
+        () => now,
+        new StorageLease(storage.lease, TTL, () => now, owner),
+      )
+      const notices: PollerEvent[] = []
+      poller.on((event) => event.type === "notice" && notices.push(event))
+      return { poller, notices }
+    }
+    const leader = make("leader")
+    const follower = make("follower")
+
+    await leader.poller.start()
+    await follower.poller.start()
+    authored = [own(true)]
+    now += options.intervalMs
+    await leader.poller.poll()
+    await follower.poller.poll()
+    await follower.poller.poll()
+
+    const expected = {
+      type: "notice",
+      notice: { key: "acme/api#7", kind: "ready-to-merge" },
+      item: own(true),
+      eventID: `acme/api#7:ready-to-merge:${new Date(now).toISOString()}`,
+    }
+    expect(leader.notices).toEqual([expected])
+    expect(follower.notices).toEqual([expected])
+    expect(follower.poller.snapshot().authored).toEqual([own(true)])
+    leader.poller.stop()
+    follower.poller.stop()
+  })
+
   it("does not announce the same queue twice to a follower", async () => {
     const storage = sharedStorage()
     const now = Date.parse("2026-01-01T00:00:00.000Z")

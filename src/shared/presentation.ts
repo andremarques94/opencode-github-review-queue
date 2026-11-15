@@ -1,20 +1,23 @@
+import { needsYou } from "../domain/my-pull-request.js"
 import type { QueueSnapshot } from "../domain/review-queue.js"
 import { type ReviewRequest, waitingSince } from "../domain/review-request.js"
 
-export type QueueFilter = "current" | "all"
+/** **Mine** lists the user's own pull requests instead of the review queue. */
+export type QueueFilter = "current" | "all" | "mine"
 
 export function filterItems(
-  items: readonly ReviewRequest[],
+  state: Pick<QueueSnapshot, "items" | "authored">,
   filter: QueueFilter,
   repository?: string,
 ): ReviewRequest[] {
-  if (filter === "all") {
-    return [...items]
+  switch (filter) {
+    case "all":
+      return [...state.items]
+    case "mine":
+      return [...(state.authored ?? [])]
+    case "current":
+      return repository ? state.items.filter((item) => item.repository.toLowerCase() === repository.toLowerCase()) : []
   }
-  if (!repository) {
-    return []
-  }
-  return items.filter((item) => item.repository.toLowerCase() === repository.toLowerCase())
 }
 
 function age(createdAt: string, now = Date.now()): string {
@@ -36,6 +39,33 @@ function age(createdAt: string, now = Date.now()): string {
   }
   return `${Math.floor(days / 30)}mo`
 }
+
+/** All, Current, then Mine when the user's own pull requests are on. */
+export function nextFilter(filter: QueueFilter, mine: boolean): QueueFilter {
+  switch (filter) {
+    case "all":
+      return "current"
+    case "current":
+      return mine ? "mine" : "all"
+    case "mine":
+      return "all"
+  }
+}
+
+export function emptyMessage(filter: QueueFilter): string {
+  switch (filter) {
+    case "all":
+      return "You're all caught up."
+    case "current":
+      return "No review requests in this repository."
+    case "mine":
+      return "You have no open pull requests."
+  }
+}
+
+/** How many of the user's own pull requests need them; undefined when that list is off. */
+export const needingYou = (state: Pick<QueueSnapshot, "authored">): number | undefined =>
+  state.authored?.filter(needsYou).length
 
 export function ago(createdAt: string, now = Date.now()): string {
   const value = age(createdAt, now)

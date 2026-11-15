@@ -2,7 +2,7 @@ import type { Context } from "@opencode/plugin/gui"
 import { Show } from "solid-js"
 import type { Store } from "solid-js/store"
 import type { QueueSnapshot } from "../../../../domain/review-queue.js"
-import type { QueueFilter } from "../../../../shared/presentation.js"
+import { emptyMessage, type QueueFilter } from "../../../../shared/presentation.js"
 
 export function EmptyState(props: {
   context: Context
@@ -17,7 +17,7 @@ export function EmptyState(props: {
     if (props.snoozed > 0) {
       return "Everything left is snoozed."
     }
-    return props.filter === "current" ? "No review requests in this repository." : "You're all caught up."
+    return emptyMessage(props.filter)
   }
 
   return (

@@ -5,7 +5,8 @@ import type { ReviewDraft } from "../../../domain/review-draft.js"
 import { reviewedFor } from "../../../domain/review-history.js"
 import type { QueueSnapshot } from "../../../domain/review-queue.js"
 import type { ReviewRequest } from "../../../domain/review-request.js"
-import { fullReference, type QueueFilter } from "../../../shared/presentation.js"
+import { parseOptions } from "../../../shared/options.js"
+import { fullReference, nextFilter, type QueueFilter } from "../../../shared/presentation.js"
 import { draftFor, resumable } from "../../../shared/review/draft-status.js"
 import { postReviewFlow, type ReviewFlowHost, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
 import { activeSnooze, snoozeFlow } from "../../../shared/review/snooze.js"
@@ -110,6 +111,11 @@ export function useReviewActions(input: {
         if (!item) {
           return
         }
+        // The user's own pull request has nobody's review to start, so Enter opens it on GitHub instead.
+        if (item.authored && !resumable(currentDraft())) {
+          await actions.open()
+          return
+        }
         const sessionID = await startReviewFlow(
           host,
           item,
@@ -183,7 +189,7 @@ export function useReviewActions(input: {
             ? pullRequestOptions(actions, item, currentDraft(), activeSnooze(input.local().snoozes, item, input.now()))
             : []),
           ...queueOptions(actions, {
-            filter: input.filter(),
+            nextFilter: nextFilter(input.filter(), parseOptions(context.options).myPullRequests),
             snoozed: input.snoozed(),
             showSnoozed: input.showSnoozed(),
             toggleFullscreen: input.panel.toggleFullscreen,
@@ -200,7 +206,7 @@ export function useReviewActions(input: {
       input.setSelected(0)
     },
     toggleFilter() {
-      actions.setFilter(input.filter() === "all" ? "current" : "all")
+      actions.setFilter(nextFilter(input.filter(), parseOptions(context.options).myPullRequests))
     },
     close: input.panel.close,
   }

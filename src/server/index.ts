@@ -1,5 +1,6 @@
 import { Plugin } from "@opencode/plugin"
 import { ReviewedRecord } from "../domain/review-history.js"
+import { everyPullRequest } from "../domain/review-queue.js"
 import { Snooze } from "../domain/snooze.js"
 import { type PluginOptions, parseOptions } from "../shared/options.js"
 import { type LocalReviews, ReviewQueue } from "../shared/rpc.js"
@@ -108,7 +109,7 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
   poller.on((event) => {
     if (event.type === "fetched") {
       void reviews.pruneAfterRefresh(event.state, AbortSignal.timeout(options.timeoutMs))
-      void pruneSnoozes(snoozes, event.state.items, Date.now()).catch(() => undefined)
+      void pruneSnoozes(snoozes, everyPullRequest(event.state), Date.now()).catch(() => undefined)
     }
   })
   return { poller, drafts, reviewed, snoozes, reviews, findings: new Findings(drafts, options.timeoutMs), refs: 0 }
@@ -123,9 +124,9 @@ export default Plugin.define({
     current.refs += 1
     const timeout = (signal: AbortSignal, ms = options.timeoutMs) => AbortSignal.any([signal, AbortSignal.timeout(ms)])
     const queued = async (key: string) => {
-      const item = (await current.poller.latest()).items.find((candidate) => candidate.key === key)
+      const item = everyPullRequest(await current.poller.latest()).find((candidate) => candidate.key === key)
       if (!item) {
-        throw new Error("That review request is no longer in the queue. Refresh and try again.")
+        throw new Error("That pull request is no longer in the queue. Refresh and try again.")
       }
       return item
     }
@@ -215,6 +216,9 @@ export default Plugin.define({
           return
         case "discovered":
           void registration.events.emit("discovered", { item: event.item, eventID: event.eventID })
+          return
+        case "notice":
+          void registration.events.emit("notice", { notice: event.notice, item: event.item, eventID: event.eventID })
           return
       }
     }

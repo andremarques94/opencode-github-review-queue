@@ -3,7 +3,11 @@ import type { ReviewedRecord } from "../src/domain/review-history.js"
 import { type ReviewRequest, requestKey } from "../src/domain/review-request.js"
 import { parseOptions } from "../src/shared/options.js"
 
-const github = vi.hoisted(() => ({ fetchReviewRequests: vi.fn(), fetchReviewedPullRequests: vi.fn() }))
+const github = vi.hoisted(() => ({
+  fetchReviewRequests: vi.fn(),
+  fetchReviewedPullRequests: vi.fn(),
+  fetchAuthoredPullRequests: vi.fn(),
+}))
 
 vi.mock("../src/server/github/review-requests.js", () => github)
 
@@ -43,6 +47,7 @@ const numbers = (items: readonly ReviewRequest[]) => items.map((entry) => [entry
 beforeEach(() => {
   github.fetchReviewRequests.mockReset().mockResolvedValue({ items: [] })
   github.fetchReviewedPullRequests.mockReset().mockResolvedValue({ items: [] })
+  github.fetchAuthoredPullRequests.mockReset().mockResolvedValue({ items: [] })
 })
 
 describe("queueSource", () => {
@@ -95,6 +100,19 @@ describe("queueSource", () => {
     github.fetchReviewedPullRequests.mockResolvedValue({ items: [], retryAt: "2026-01-01T02:00:00Z" })
 
     expect((await queueSource(parseOptions({}), records(record(1)))(signal)).retryAt).toBe("2026-01-01T02:00:00Z")
+  })
+
+  it("lists the user's own pull requests apart from the queue, unless turned off", async () => {
+    github.fetchAuthoredPullRequests.mockResolvedValue({ items: [item(5, { author: "dependabot" })] })
+
+    const on = await queueSource(parseOptions({ excludeAuthors: ["dependabot"] }), records())(signal)
+    const off = await queueSource(parseOptions({ myPullRequests: false }), records())(signal)
+
+    // The queue rules are for the review queue: they never hide the user's own work.
+    expect(on.authored?.map((entry) => entry.number)).toEqual([5])
+    expect(on.items).toEqual([])
+    expect(off).not.toHaveProperty("authored")
+    expect(github.fetchAuthoredPullRequests).toHaveBeenCalledTimes(1)
   })
 
   it("fails the refresh when the follow-up search fails", async () => {

@@ -8,7 +8,9 @@ vi.mock("../src/server/github/cli.js", async (importOriginal) => ({
 }))
 
 const { classifyGhError } = await import("../src/server/github/cli.js")
-const { fetchReviewRequests, fetchReviewedPullRequests } = await import("../src/server/github/review-requests.js")
+const { fetchAuthoredPullRequests, fetchReviewRequests, fetchReviewedPullRequests } = await import(
+  "../src/server/github/review-requests.js"
+)
 
 const node = (number: number, createdAt: string) => ({
   number,
@@ -167,6 +169,50 @@ describe("fetchReviewRequests", () => {
       requestedAt: "2026-01-02T00:00:00Z",
     })
     expect(teams?.requestedAt).toBe("2026-01-04T00:00:00Z")
+  })
+
+  it("reads how the reviews of the user's own pull requests stand", async () => {
+    respond([
+      {
+        data: {
+          ...page([
+            {
+              ...node(1, "2026-01-01T00:00:00Z"),
+              author: { login: "me" },
+              reviewDecision: "CHANGES_REQUESTED",
+              mergeStateStatus: "BLOCKED",
+              reviewRequests: {
+                nodes: [
+                  { requestedReviewer: { __typename: "User", login: "bob" } },
+                  { requestedReviewer: { __typename: "Team", slug: "web", organization: { login: "acme" } } },
+                ],
+              },
+              latestReviews: {
+                nodes: [
+                  { state: "CHANGES_REQUESTED", author: { login: "alice" } },
+                  { state: "APPROVED", author: { login: "carol" } },
+                ],
+              },
+            },
+            { ...node(2, "2026-01-02T00:00:00Z"), mergeStateStatus: "HAS_HOOKS" },
+            { ...node(3, "2026-01-03T00:00:00Z"), mergeStateStatus: "UNKNOWN", reviewDecision: "SOMETHING_NEW" },
+          ]).data,
+          viewer: { login: "me" },
+        },
+      },
+    ])
+
+    const [blocked, ready, unknown] = (await fetchAuthoredPullRequests(signal)).items
+
+    expect(blocked?.authored).toEqual({
+      reviewDecision: "CHANGES_REQUESTED",
+      mergeReady: false,
+      waitingOn: ["bob", "acme/web"],
+      changesRequestedBy: ["alice"],
+    })
+    expect(ready?.authored).toEqual({ mergeReady: true, waitingOn: [], changesRequestedBy: [] })
+    expect(unknown?.authored).toEqual({ waitingOn: [], changesRequestedBy: [] })
+    expect(runGh.mock.calls[0]?.[0]).toContain("search=is:pr is:open author:@me")
   })
 
   it("claims no source without the viewer's login", async () => {

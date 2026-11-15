@@ -1,4 +1,5 @@
 import * as v from "valibot"
+import type { Authored } from "../../domain/my-pull-request.js"
 import { type Checks, type RequestedVia, type ReviewRequest, requestKey } from "../../domain/review-request.js"
 import { GhError, runGh } from "./cli.js"
 
@@ -6,7 +7,9 @@ const REQUESTED = "is:pr is:open review-requested:@me"
 /** Reviewed pull requests that no longer ask for the user; the queue keeps those with new commits since. */
 const REVIEWED = "is:pr is:open reviewed-by:@me -review-requested:@me"
 
-const QUERY = `query($search: String!, $endCursor: String) {
+const AUTHORED = "is:pr is:open author:@me"
+
+const pullRequestQuery = (extra: string) => `query($search: String!, $endCursor: String) {
   search(query: $search, type: ISSUE, first: 100, after: $endCursor) {
     pageInfo { hasNextPage endCursor }
     nodes {
@@ -19,7 +22,7 @@ const QUERY = `query($search: String!, $endCursor: String) {
         reviewRequests(first: 100) { nodes { requestedReviewer { ...reviewer } } }
         timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT], last: 20) {
           nodes { ... on ReviewRequestedEvent { createdAt requestedReviewer { ...reviewer } } }
-        }
+        }${extra}
       }
     }
   }
@@ -31,6 +34,12 @@ fragment reviewer on RequestedReviewer {
   ... on User { login }
   ... on Team { slug organization { login } }
 }`
+
+const QUERY = pullRequestQuery("")
+/** Only the user's own pull requests need how their reviews stand. */
+const AUTHORED_QUERY = pullRequestQuery(`
+        reviewDecision mergeStateStatus
+        latestReviews(first: 20) { nodes { state author { login } } }`)
 
 const CHECKS: Record<string, Checks> = {
   SUCCESS: "passing",
@@ -231,16 +240,61 @@ function readNode(node: unknown, viewer: string | undefined): ReviewRequest {
   return { ...request, ...(via ? { requestedVia: via } : {}), ...(at ? { requestedAt: at } : {}) }
 }
 
+const REVIEW_DECISIONS = ["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"] as const
+/** `HAS_HOOKS` merges as cleanly as `CLEAN`; GitHub only adds that pre-receive hooks will run. */
+const MERGE_READY: Record<string, boolean> = { CLEAN: true, HAS_HOOKS: true, BEHIND: false, BLOCKED: false }
+
+const AuthoredNode = v.object({
+  reviewDecision: optional(v.picklist(REVIEW_DECISIONS)),
+  mergeStateStatus: optional(v.string()),
+  reviewRequests: optional(ReviewRequests),
+  latestReviews: optional(
+    v.object({ nodes: v.array(v.object({ state: v.string(), author: v.nullable(v.object({ login: v.string() })) })) }),
+  ),
+})
+
+const reviewerName = (reviewer: Reviewer) => {
+  switch (reviewer?.__typename) {
+    case undefined:
+      return []
+    case "User":
+      return [reviewer.login]
+    case "Team":
+      return [teamName(reviewer)]
+  }
+}
+
+/** A pull request of the user's: nobody asks them to review it, so only how its reviews stand is kept. */
+function readAuthored(node: unknown, viewer: string | undefined): ReviewRequest {
+  const { requestedVia: _, ...request } = readNode(node, viewer)
+  const parsed = v.parse(AuthoredNode, node)
+  const mergeReady = MERGE_READY[parsed.mergeStateStatus ?? ""]
+  const reviews = parsed.latestReviews?.nodes ?? []
+  const authored: Authored = {
+    ...(parsed.reviewDecision ? { reviewDecision: parsed.reviewDecision } : {}),
+    ...(mergeReady === undefined ? {} : { mergeReady }),
+    waitingOn: (parsed.reviewRequests?.nodes ?? []).flatMap((entry) => reviewerName(entry.requestedReviewer)),
+    changesRequestedBy: reviews.flatMap((review) =>
+      review.state === "CHANGES_REQUESTED" && review.author ? [review.author.login] : [],
+    ),
+  }
+  return { ...request, authored }
+}
+
 export type SearchResult = { items: ReviewRequest[]; retryAt?: string }
 
-async function searchPullRequests(search: string, signal: AbortSignal): Promise<SearchResult> {
+async function searchPullRequests(
+  search: string,
+  signal: AbortSignal,
+  { query, read }: { query: string; read: typeof readNode } = { query: QUERY, read: readNode },
+): Promise<SearchResult> {
   const result = await runGh(
-    ["api", "graphql", "--paginate", "--slurp", "-f", `query=${QUERY}`, "-f", `search=${search}`],
+    ["api", "graphql", "--paginate", "--slurp", "-f", `query=${query}`, "-f", `search=${search}`],
     { signal },
   )
   const pages = parsePages(result.stdout).map(readPage)
   const viewer = pages.find((page) => page.viewer)?.viewer
-  const items = pages.flatMap((page) => page.nodes.map((node) => readNode(node, viewer)))
+  const items = pages.flatMap((page) => page.nodes.map((node) => read(node, viewer)))
   items.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   const retryAt = pages.reduce<string | undefined>((last, page) => page.retryAt ?? last, undefined)
   return { items, ...(retryAt ? { retryAt } : {}) }
@@ -249,3 +303,6 @@ async function searchPullRequests(search: string, signal: AbortSignal): Promise<
 export const fetchReviewRequests = (signal: AbortSignal) => searchPullRequests(REQUESTED, signal)
 
 export const fetchReviewedPullRequests = (signal: AbortSignal) => searchPullRequests(REVIEWED, signal)
+
+export const fetchAuthoredPullRequests = (signal: AbortSignal) =>
+  searchPullRequests(AUTHORED, signal, { query: AUTHORED_QUERY, read: readAuthored })
