@@ -7,7 +7,7 @@ import type { SummaryFlowHost } from "../../../shared/review/summary.js"
 import { ReviewQueue } from "../../../shared/rpc.js"
 import { editFindingBody } from "../components/edit-finding-dialog.js"
 import { confirmPost } from "../components/post-review-dialog.js"
-import { showSummary } from "../components/summary-dialog.js"
+import { openSummary } from "../components/summary-dialog.js"
 
 /** `server` is the review session's server: its pending questions live there. */
 export function createFindingFlowHost(context: Context, server: () => ServerRef): FindingFlowHost {
@@ -43,6 +43,6 @@ export function createFlowHost(context: Context): ReviewFlowHost & SnoozeFlowHos
     prompt: (options) => context.dialogs.prompt({ ...options, submit: "Snooze" }),
     snooze: (request) => rpc().snooze(request),
     summarize: (request) => rpc().summarize(request),
-    showSummary: (view) => showSummary(context, view),
+    openSummary: (input) => openSummary(context, input),
   }
 }
