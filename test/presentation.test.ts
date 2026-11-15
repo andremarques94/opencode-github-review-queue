@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest"
 import { type ReviewRequest, requestKey } from "../src/domain/review-request.js"
-import { ago, escapeInlineFences, fitLine, groupByRepository } from "../src/shared/presentation.js"
+import {
+  ago,
+  escapeInlineFences,
+  fitLine,
+  groupByRepository,
+  readinessMarks,
+  readinessSummary,
+} from "../src/shared/presentation.js"
 
 const item = (repository: string, number: number): ReviewRequest => ({
   key: requestKey(repository, number),
@@ -48,5 +55,26 @@ describe("escapeInlineFences", () => {
   it("escapes fences inside a line and keeps fenced blocks", () => {
     expect(escapeInlineFences('returns ("a:\\n```tsx\\nx")')).toBe('returns ("a:\\n\\`\\`\\`tsx\\nx")')
     expect(escapeInlineFences("```ts\nconst a = 1\n  ```")).toBe("```ts\nconst a = 1\n  ```")
+  })
+})
+
+describe("readiness", () => {
+  it("shows nothing GitHub does not know", () => {
+    expect(readinessMarks(item("acme/api", 1))).toEqual([])
+    expect(readinessSummary(item("acme/api", 1))).toBeUndefined()
+  })
+
+  it("marks checks, conflicts, and unresolved threads", () => {
+    const ready = { ...item("acme/api", 1), checks: "failing" as const, conflicts: true, unresolvedThreads: 1 }
+
+    expect(readinessMarks(ready).map((mark) => mark.label)).toEqual(["✗", "conflicts", "1 thread"])
+    expect(readinessSummary(ready)).toBe("Checks failing · Conflicts with the base branch · 1 unresolved review thread")
+  })
+
+  it("mentions a clean merge only in the summary", () => {
+    const clean = { ...item("acme/api", 1), checks: "passing" as const, conflicts: false, unresolvedThreads: 0 }
+
+    expect(readinessMarks(clean).map((mark) => mark.label)).toEqual(["✓"])
+    expect(readinessSummary(clean)).toBe("Checks passing · No conflicts")
   })
 })

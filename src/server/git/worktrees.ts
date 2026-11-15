@@ -42,6 +42,13 @@ export async function createWorktree(input: {
   return sha
 }
 
+export async function fetchCommit(checkout: string, repository: string, sha: string, signal: AbortSignal) {
+  const remote = await remoteFor(checkout, repository, signal)
+  if (remote) {
+    await runGit(checkout, ["fetch", "--no-tags", remote, sha], signal)
+  }
+}
+
 /** Removes the worktree only when `checkout` has it registered, so an unrelated directory is never deleted. */
 export async function removeWorktree(checkout: string, worktree: string, signal: AbortSignal): Promise<void> {
   if (!existsSync(checkout)) {

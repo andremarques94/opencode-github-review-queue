@@ -1,8 +1,7 @@
 import type { Context } from "@opencode/plugin/gui"
 import { For, Show } from "solid-js"
-import type { ReviewDraft } from "../../../../domain/review-draft.js"
 import type { RepositoryGroup } from "../../../../shared/presentation.js"
-import { draftFor } from "../../../../shared/review/draft-status.js"
+import type { LocalReviews } from "../../../../shared/rpc.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
 import { ReviewRow } from "./review-row.js"
 
@@ -11,7 +10,7 @@ export function ReviewGroup(props: {
   group: RepositoryGroup
   showHeader: boolean
   newKeys: readonly string[]
-  drafts: readonly ReviewDraft[]
+  local: LocalReviews
   actions: ReviewActions
   copy(text: string, name: string): void
 }) {
@@ -34,7 +33,7 @@ export function ReviewGroup(props: {
             context={props.context}
             item={item}
             isNew={props.newKeys.includes(item.key)}
-            draft={draftFor(props.drafts, item.key)}
+            local={props.local}
             actions={props.actions}
             copy={props.copy}
           />

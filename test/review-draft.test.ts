@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { commentableLines, commentProblem } from "../src/domain/pull-request-diff.js"
 import { postBlocker, type ReviewDraft, reviewPayload } from "../src/domain/review-draft.js"
-import { draftActions, draftLabel, resumable } from "../src/shared/review/draft-status.js"
+import { draftActions, draftLabel, resumable, reviewLabel } from "../src/shared/review/draft-status.js"
 import { reviewPreview } from "../src/shared/review/preview.js"
 
 const DIFF = `diff --git a/src/app.ts b/src/app.ts
@@ -146,5 +146,41 @@ describe("posting rules", () => {
         { location: "src/app.ts:11-12", body: "Dropped one." },
       ],
     })
+  })
+})
+
+describe("reviewLabel", () => {
+  const previous = {
+    version: 1 as const,
+    key: "acme/api#7",
+    repository: "acme/api",
+    number: 7,
+    headSha: "a".repeat(40),
+    verdict: "COMMENT" as const,
+    postedUrl: "https://github.com/acme/api/pull/7#pullrequestreview-1",
+    postedAt: "2026-01-02T00:00:00Z",
+  }
+  const item = {
+    key: "acme/api#7",
+    repository: "acme/api",
+    number: 7,
+    title: "Tune constants",
+    author: "octocat",
+    draft: false,
+    createdAt: "2026-01-01T00:00:00Z",
+    url: "https://github.com/acme/api/pull/7",
+  }
+
+  it("flags new commits since the posted review, unless a new draft is under way", () => {
+    const moved = { ...item, headSha: "b".repeat(40) }
+
+    expect(reviewLabel(moved, draft({ status: "posted" }), previous)).toBe("new commits since your review")
+    expect(reviewLabel(moved, undefined, previous)).toBe("new commits since your review")
+    expect(reviewLabel(moved, draft({ status: "investigating" }), previous)).toBe("reviewing")
+  })
+
+  it("says nothing new when the head did not move or is unknown", () => {
+    expect(reviewLabel({ ...item, headSha: "a".repeat(40) }, undefined, previous)).toBeUndefined()
+    expect(reviewLabel(item, undefined, previous)).toBeUndefined()
   })
 })

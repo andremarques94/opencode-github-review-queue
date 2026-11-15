@@ -1,12 +1,18 @@
 import { Rpc } from "@opencode/plugin/rpc"
 import * as v from "valibot"
 import { FindingFields, ReviewDraft } from "../domain/review-draft.js"
+import { ReviewedRecord } from "../domain/review-history.js"
 import { QueueSnapshot } from "../domain/review-queue.js"
 import { ReviewRequest } from "../domain/review-request.js"
 
 const empty = v.strictObject({})
 const byKey = v.strictObject({ key: v.string() })
-const drafts = v.strictObject({ drafts: v.array(ReviewDraft) })
+/** Everything the panel keeps locally about each pull request, re-read together. */
+const drafts = v.strictObject({
+  drafts: v.array(ReviewDraft),
+  reviewed: v.array(ReviewedRecord),
+})
+export type LocalReviews = v.InferOutput<typeof drafts>
 const draft = v.strictObject({ draft: ReviewDraft })
 const byFinding = { sessionID: v.string(), id: v.number() }
 const errors = { failed: v.undefined() }
@@ -40,6 +46,7 @@ export const ReviewQueue = Rpc.define({
         key: v.string(),
         directory: v.exactOptional(v.string()),
         clone: v.boolean(),
+        mode: v.exactOptional(v.picklist(["full", "changes"])),
         model: v.exactOptional(ModelRef),
       }),
       errors,

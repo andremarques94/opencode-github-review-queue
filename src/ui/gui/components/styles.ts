@@ -188,6 +188,10 @@ export const panelStyles = `${badgeStyles}
 .grq-row-meta > span { overflow: hidden; text-overflow: ellipsis; }
 .grq-number { flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .grq-sep { flex-shrink: 0; color: var(--text-weaker); }
+.grq-mark { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.grq-mark[data-tone="success"] { color: var(--icon-success-base); }
+.grq-mark[data-tone="error"] { color: var(--icon-critical-base); }
+.grq-mark[data-tone="warning"] { color: var(--icon-warning-base); }
 .grq-row-actions { flex-shrink: 0; margin-top: -3px; opacity: 0; transition: opacity 120ms; }
 .grq-row:hover .grq-row-actions,
 .grq-row:focus-within .grq-row-actions,

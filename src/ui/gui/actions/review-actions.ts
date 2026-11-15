@@ -1,12 +1,13 @@
 import type { Context } from "@opencode/plugin/gui"
 import type { ReviewDraft } from "../../../domain/review-draft.js"
+import type { ReviewedRecord } from "../../../domain/review-history.js"
 import type { ReviewRequest } from "../../../domain/review-request.js"
 import { postReviewFlow, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
 import { errorMessage } from "../../../shared/rpc.js"
 import { createFlowHost } from "./flow-host.js"
 
 export type ReviewActions = {
-  review(item: ReviewRequest, resuming: boolean): Promise<void>
+  review(item: ReviewRequest, resuming: boolean, previous: ReviewedRecord | undefined): Promise<void>
   post(draft: ReviewDraft): Promise<void>
   reset(draft: ReviewDraft): Promise<void>
 }
@@ -36,9 +37,9 @@ export function createReviewActions(input: {
   const attempt = attempting(context)
 
   return {
-    review: (item, resuming) =>
+    review: (item, resuming, previous) =>
       attempt(async () => {
-        const sessionID = await startReviewFlow(host, item, input.directory(), resuming)
+        const sessionID = await startReviewFlow(host, item, input.directory(), resuming, previous)
         if (sessionID) {
           context.tabs.open({ server: input.server(), id: sessionID }, { focus: true })
         }

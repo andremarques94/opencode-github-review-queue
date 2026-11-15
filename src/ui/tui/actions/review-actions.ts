@@ -2,12 +2,13 @@ import { usePlugin } from "@opencode/plugin/tui"
 import type { PanelInput } from "@opencode/plugin/tui/context"
 import type { Accessor, Setter } from "solid-js"
 import type { ReviewDraft } from "../../../domain/review-draft.js"
+import { reviewedFor } from "../../../domain/review-history.js"
 import type { QueueSnapshot } from "../../../domain/review-queue.js"
 import type { ReviewRequest } from "../../../domain/review-request.js"
 import { fullReference, type QueueFilter } from "../../../shared/presentation.js"
 import { draftFor, resumable } from "../../../shared/review/draft-status.js"
 import { postReviewFlow, type ReviewFlowHost, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
-import { errorMessage, ReviewQueue } from "../../../shared/rpc.js"
+import { errorMessage, type LocalReviews, ReviewQueue } from "../../../shared/rpc.js"
 import { createFlowHost } from "./flow-host.js"
 import { pullRequestOptions, queueOptions } from "./menu-options.js"
 
@@ -62,7 +63,7 @@ export function useReviewActions(input: {
   update(state: QueueSnapshot): void
   ordered: Accessor<ReviewRequest[]>
   current: Accessor<ReviewRequest | undefined>
-  drafts: Accessor<readonly ReviewDraft[]>
+  local: Accessor<LocalReviews>
   setSelected: Setter<number>
   filter: Accessor<QueueFilter>
   setFilter: Setter<QueueFilter>
@@ -72,7 +73,7 @@ export function useReviewActions(input: {
   const directory = () => (context.location ?? context.data.location.default()).directory
   const currentDraft = () => {
     const item = input.current()
-    return item ? draftFor(input.drafts(), item.key) : undefined
+    return item ? draftFor(input.local().drafts, item.key) : undefined
   }
   const host = createFlowHost(context)
   const attempt = attempting(context)
@@ -99,7 +100,13 @@ export function useReviewActions(input: {
         if (!item) {
           return
         }
-        const sessionID = await startReviewFlow(host, item, directory(), resumable(currentDraft()))
+        const sessionID = await startReviewFlow(
+          host,
+          item,
+          directory(),
+          resumable(currentDraft()),
+          reviewedFor(input.local().reviewed, item.key),
+        )
         if (sessionID) {
           input.panel.close()
           context.ui.router.navigate({ type: "session", sessionID })

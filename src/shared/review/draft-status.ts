@@ -1,4 +1,7 @@
 import { pendingFindings, postBlocker, type ReviewDraft } from "../../domain/review-draft.js"
+import { followUpOf, type ReviewedRecord as Reviewed, reviewedFor } from "../../domain/review-history.js"
+import type { ReviewRequest } from "../../domain/review-request.js"
+import type { LocalReviews } from "../rpc.js"
 import { VERDICT_LABELS } from "./preview.js"
 
 export function draftLabel(draft: ReviewDraft | undefined): string | undefined {
@@ -19,6 +22,18 @@ export function draftLabel(draft: ReviewDraft | undefined): string | undefined {
 
 export const resumable = (draft: ReviewDraft | undefined) => draft !== undefined && draft.status !== "posted"
 
+/** A draft in progress wins; otherwise new commits matter more than a review that is already posted. */
+export function reviewLabel(
+  item: ReviewRequest,
+  draft: ReviewDraft | undefined,
+  previous: Reviewed | undefined,
+): string | undefined {
+  if (!resumable(draft) && followUpOf(item, previous)) {
+    return "new commits since your review"
+  }
+  return draftLabel(draft)
+}
+
 export type DraftAction =
   | { kind: "post"; label: string; draft: ReviewDraft; blocker: string | undefined }
   | { kind: "reset"; label: string; draft: ReviewDraft }
@@ -35,6 +50,9 @@ export function draftActions(draft: ReviewDraft | undefined): DraftAction[] {
 }
 
 export const draftFor = (drafts: readonly ReviewDraft[], key: string) => drafts.find((draft) => draft.key === key)
+
+export const rowLabel = (item: ReviewRequest, local: LocalReviews) =>
+  reviewLabel(item, draftFor(local.drafts, item.key), reviewedFor(local.reviewed, item.key))
 
 export const draftForSession = (drafts: readonly ReviewDraft[], sessionID: string) =>
   drafts.find((draft) => draft.sessionID === sessionID)

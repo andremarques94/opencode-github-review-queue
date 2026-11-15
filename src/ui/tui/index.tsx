@@ -7,7 +7,7 @@ import { createDiscoveryBatcher } from "../../shared/notifications/discovery-bat
 import { notificationText } from "../../shared/notifications/notification-text.js"
 import { parseOptions } from "../../shared/options.js"
 import { draftForSession, replaceDraft } from "../../shared/review/draft-status.js"
-import { ReviewQueue } from "../../shared/rpc.js"
+import { type LocalReviews, ReviewQueue } from "../../shared/rpc.js"
 import { FINDINGS_PANEL, FindingsPanel } from "./components/findings/findings-panel.js"
 import { ReviewStatus } from "./components/findings/review-status.js"
 import { ReviewPanel } from "./components/review-panel.js"
@@ -18,7 +18,7 @@ export default Plugin.define({
   async setup(context) {
     const options = parseOptions(context.options)
     const rpc = context.client.rpc(ReviewQueue)
-    const initial: TuiState = { ...emptySnapshot(), drafts: [] }
+    const initial: TuiState = { ...emptySnapshot(), drafts: [], reviewed: [] }
     const [state, updateState] = context.storage.memory<TuiState>("queue", { initial })
     const update = (snapshot: QueueSnapshot) => updateState((draft) => Object.assign(draft, snapshot))
 
@@ -31,19 +31,20 @@ export default Plugin.define({
         }
       }),
     )
-    const updateDrafts = (drafts: ReviewDraft[]) =>
+    const updateDrafts = (local: LocalReviews) =>
       updateState((store) => {
-        store.drafts = drafts
+        store.drafts = local.drafts
+        store.reviewed = local.reviewed
       })
     void rpc.snapshot({}).then((snapshot) => update(snapshot))
     // Another location (the review session's) may write a draft, so re-read drafts with every queue update too.
-    const loadDrafts = () => void rpc.drafts({}).then((result) => updateDrafts(result.drafts))
+    const loadDrafts = () => void rpc.drafts({}).then(updateDrafts)
     loadDrafts()
     const stopState = rpc.events.on("state", (event) => {
       update(event.data)
       loadDrafts()
     })
-    const stopDrafts = rpc.events.on("drafts", (event) => updateDrafts(event.data.drafts))
+    const stopDrafts = rpc.events.on("drafts", (event) => updateDrafts(event.data))
     const batcher = createDiscoveryBatcher((items) => {
       const { title, message } = notificationText(items)
       context.ui.toast.show({ title, message: `${message}  ·  /reviews`, variant: "info" })

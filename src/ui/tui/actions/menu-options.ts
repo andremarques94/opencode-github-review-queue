@@ -1,6 +1,6 @@
 import type { ReviewDraft } from "../../../domain/review-draft.js"
 import type { ReviewRequest } from "../../../domain/review-request.js"
-import { fullReference, type QueueFilter } from "../../../shared/presentation.js"
+import { fullReference, type QueueFilter, readinessSummary } from "../../../shared/presentation.js"
 import { type DraftAction, draftActions } from "../../../shared/review/draft-status.js"
 import type { ReviewActions } from "./review-actions.js"
 
@@ -14,6 +14,8 @@ export type MenuOption = {
 
 const PULL_REQUEST = "Pull request"
 const QUEUE = "Queue"
+
+const withDescription = (description: string | undefined) => (description ? { description } : {})
 
 function draftOption(actions: ReviewActions, action: DraftAction): MenuOption {
   if (action.kind === "reset") {
@@ -34,7 +36,13 @@ export function pullRequestOptions(
   draft: ReviewDraft | undefined,
 ): MenuOption[] {
   return [
-    { title: "Open on GitHub", value: actions.open, footer: "o", category: PULL_REQUEST },
+    {
+      title: "Open on GitHub",
+      value: actions.open,
+      ...withDescription(readinessSummary(item)),
+      footer: "o",
+      category: PULL_REQUEST,
+    },
     {
       title: "Copy reference",
       value: () => actions.copy("reference"),

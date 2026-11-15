@@ -28,6 +28,8 @@ export const PersistedQueue = v.object({
   items: v.array(ReviewRequest),
   lastSuccessAt: v.exactOptional(v.string()),
   seen: v.exactOptional(v.record(v.string(), v.string())),
+  newKeys: v.exactOptional(v.array(v.string())),
+  error: v.exactOptional(QueueError),
 })
 export type PersistedQueue = v.InferOutput<typeof PersistedQueue>
 

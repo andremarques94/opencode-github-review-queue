@@ -1,4 +1,5 @@
 import { postBlocker, type ReviewDraft } from "../../domain/review-draft.js"
+import { followUpOf, type ReviewedRecord } from "../../domain/review-history.js"
 import type { ReviewRequest } from "../../domain/review-request.js"
 import { fullReference } from "../presentation.js"
 import type { RpcInput, RpcOutput } from "../rpc.js"
@@ -19,14 +20,17 @@ export type ReviewFlowHost = {
 
 type ModelOption = RpcOutput<"models">["models"][number]
 
-async function pickModel(host: ReviewFlowHost, item: ReviewRequest): Promise<ModelOption | undefined> {
+async function pickModel(
+  host: Pick<ReviewFlowHost, "models" | "select">,
+  title: string,
+): Promise<ModelOption | undefined> {
   const { models, preferred } = await host.models()
   if (models.length === 0) {
     throw new Error("No chat models are available. Connect a provider first.")
   }
   const current = models.find((model) => model.providerID === preferred?.providerID && model.id === preferred.id)
   return host.select({
-    title: `Start a review of ${fullReference(item)}? Pick the model`,
+    title,
     options: models.map((model) => ({
       title: model.name,
       description: model.provider,
@@ -37,19 +41,54 @@ async function pickModel(host: ReviewFlowHost, item: ReviewRequest): Promise<Mod
   })
 }
 
+type Mode = NonNullable<RpcInput<"startReview">["mode"]>
+
+const shortSha = (sha: string) => sha.slice(0, 7)
+
+/** Undefined when there is nothing to follow up on, `null` when the user cancelled. */
+async function pickMode(
+  host: ReviewFlowHost,
+  item: ReviewRequest,
+  previous: ReviewedRecord | undefined,
+): Promise<Mode | undefined | null> {
+  const since = followUpOf(item, previous)
+  if (!since) {
+    return undefined
+  }
+  const mode = await host.select<Mode>({
+    title: `New commits on ${fullReference(item)} since your review`,
+    options: [
+      {
+        title: "Review changes since last review",
+        value: "changes",
+        description: `${shortSha(since.headSha)}..${shortSha(item.headSha ?? "")}`,
+      },
+      { title: "Full review", value: "full", description: "The whole pull request again" },
+    ],
+    current: "changes",
+  })
+  return mode ?? null
+}
+
 export async function startReviewFlow(
   host: ReviewFlowHost,
   item: ReviewRequest,
   directory: string | undefined,
   resuming: boolean,
+  previous?: ReviewedRecord,
 ): Promise<string | undefined> {
-  const model = resuming ? undefined : await pickModel(host, item)
+  const mode = resuming ? undefined : await pickMode(host, item, previous)
+  if (mode === null) {
+    return undefined
+  }
+  const model = resuming ? undefined : await pickModel(host, `Start a review of ${fullReference(item)}? Pick the model`)
   if (!resuming && !model) {
     return undefined
   }
   const base = {
     key: item.key,
     ...(directory ? { directory } : {}),
+    ...(mode ? { mode } : {}),
     ...(model ? { model: { providerID: model.providerID, id: model.id } } : {}),
   }
   host.notify(`Preparing review of ${fullReference(item)}…`)

@@ -78,6 +78,43 @@ export function refreshLabel(state: QueueSnapshot): string {
 
 export const fullReference = (item: ReviewRequest): string => `${item.repository}#${item.number}`
 
+export type ReadinessMark = { label: string; tone: "success" | "error" | "warning"; detail: string }
+
+const CHECK_MARKS = {
+  passing: { label: "✓", tone: "success", detail: "Checks passing" },
+  failing: { label: "✗", tone: "error", detail: "Checks failing" },
+  pending: { label: "●", tone: "warning", detail: "Checks running" },
+} as const satisfies Record<NonNullable<ReviewRequest["checks"]>, ReadinessMark>
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`
+
+/** What GitHub knows about a pull request's readiness; anything it does not know is left out, not guessed. */
+export function readinessMarks(item: ReviewRequest): ReadinessMark[] {
+  const marks: ReadinessMark[] = []
+  if (item.checks) {
+    marks.push(CHECK_MARKS[item.checks])
+  }
+  if (item.conflicts) {
+    marks.push({ label: "conflicts", tone: "error", detail: "Conflicts with the base branch" })
+  }
+  if (item.unresolvedThreads) {
+    marks.push({
+      label: plural(item.unresolvedThreads, "thread"),
+      tone: "warning",
+      detail: plural(item.unresolvedThreads, "unresolved review thread"),
+    })
+  }
+  return marks
+}
+
+export function readinessSummary(item: ReviewRequest): string | undefined {
+  const details = readinessMarks(item).map((mark) => mark.detail)
+  if (item.conflicts === false) {
+    details.push("No conflicts")
+  }
+  return details.length > 0 ? details.join(" · ") : undefined
+}
+
 /** Cuts at the end: OpenTUI's own `truncate` cuts in the middle of the line. */
 export function fitLine(text: string, width: number): string {
   const line = text.split("\n").find((candidate) => candidate.trim() !== "") ?? ""

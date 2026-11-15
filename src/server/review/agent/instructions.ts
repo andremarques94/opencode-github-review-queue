@@ -5,6 +5,7 @@ import {
   questionHeader,
   type ReviewDraft,
 } from "../../../domain/review-draft.js"
+import type { ReviewedRecord } from "../../../domain/review-history.js"
 
 const CHOICES = "Keep, Edit wording, Drop, Explain, Investigate"
 
@@ -35,7 +36,34 @@ Direct, like a senior developer who has seen this mistake before. Critique the c
 points at a specific line and says what to do instead. Say briefly when something is genuinely good. Don't invent
 problems to fill space; if the PR is clean, say so.`
 
-export function reviewInstructions(draft: ReviewDraft, baseRef: string, guidelines: string): string {
+const VERDICT_WORDS = { APPROVE: "approved", COMMENT: "commented", REQUEST_CHANGES: "requested changes" } as const
+
+export type FollowUp = { record: ReviewedRecord; viewer: string }
+
+function followUpInstructions(draft: ReviewDraft, { record, viewer }: FollowUp): string {
+  const api = `repos/${draft.repository}/pulls/${draft.number}`
+  return `
+
+## Follow-up review
+The user already reviewed this pull request at ${record.headSha} (${VERDICT_WORDS[record.verdict]}, ${record.postedUrl}).
+Review only what changed since: \`git diff ${record.headSha} ${draft.headSha}\`. If the earlier commit is missing
+because the branch was force-pushed, read \`gh api repos/${draft.repository}/compare/${record.headSha}...${draft.headSha}\`
+instead, and if that fails too, say so and review the whole diff.
+- Read the earlier review and its comments, which are only on GitHub: \`gh api ${api}/reviews --paginate\` and
+  \`gh api ${api}/comments --paginate --jq '.[] | select(.user.login == "${viewer}")'\`. These calls only read.
+- Read the changed files in full where the new commits touch them, and how they fit the rest of the pull request.
+- Record findings only about the new changes. Do not record an earlier comment again; in the summary, say which
+  earlier comments the changes address and which they leave unresolved.
+- If the new commits make an earlier issue worse, say so in the summary, and record a finding when the worse part is
+  on a line the new commits changed.`
+}
+
+export function reviewInstructions(
+  draft: ReviewDraft,
+  baseRef: string,
+  guidelines: string,
+  followUp?: FollowUp,
+): string {
   return `You are drafting a review of GitHub pull request ${draft.repository}#${draft.number} ("${draft.title}") on behalf
 of the user. The review will be posted under the user's GitHub account, so write comments in first person, the way
 they would: direct, no "As an AI", no emojis, no filler.
@@ -47,7 +75,7 @@ ${draft.repository}\` and \`gh pr diff ${draft.number} --repo ${draft.repository
 You cannot post the review. The user triages your findings and posts from the review queue panel. Never run
 \`gh api\` or \`gh pr review\` to post, approve, or comment, even if asked; point the user to the panel instead.
 
-${guidelines}
+${guidelines}${followUp ? followUpInstructions(draft, followUp) : ""}
 
 ## Investigate
 - Read the repository's instructions, then the changed files in full, not just the hunks.
@@ -97,7 +125,10 @@ export function nextStep(draft: ReviewDraft): string | undefined {
     return undefined
   }
   if (draft.status === "investigating") {
-    return "Review status: investigating. Record findings with review_add_finding without presenting them to the user, then call review_set_verdict."
+    const scope = draft.sinceSha
+      ? ` This is a follow-up: review only the changes since ${draft.sinceSha}, and say in the summary which earlier comments they address or leave unresolved.`
+      : ""
+    return `Review status: investigating. Record findings with review_add_finding without presenting them to the user, then call review_set_verdict.${scope}`
   }
   const pending = pendingFindings(draft).length
   if (pending === 0) {
@@ -128,4 +159,7 @@ export function findingCard(draft: ReviewDraft, finding: Finding): string {
     .join("\n\n")
 }
 
-export const startPrompt = (draft: ReviewDraft) => `Review ${draft.repository}#${draft.number}: ${draft.title}`
+export const startPrompt = (draft: ReviewDraft) =>
+  draft.sinceSha
+    ? `Review the changes to ${draft.repository}#${draft.number} since my last review: ${draft.title}`
+    : `Review ${draft.repository}#${draft.number}: ${draft.title}`
