@@ -9,7 +9,7 @@ import type { ReviewRequest } from "../../../domain/review-request.js"
 import { parseOptions } from "../../../shared/options.js"
 import { adjacentFilter, fullReference, nextFilter, type QueueFilter } from "../../../shared/presentation.js"
 import { addressReviewFlow } from "../../../shared/review/address.js"
-import { draftFor, resumable } from "../../../shared/review/draft-status.js"
+import { draftFor, opensOnGitHub, resumable } from "../../../shared/review/draft-status.js"
 import { postReviewFlow, type ReviewFlowHost, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
 import { activeSnooze, snoozeFlow } from "../../../shared/review/snooze.js"
 import { summaryFlow } from "../../../shared/review/summary.js"
@@ -118,7 +118,7 @@ export function useReviewActions(input: {
         if (!item) {
           return
         }
-        if (item.authored && !resumable(currentDraft())) {
+        if (opensOnGitHub(item, currentDraft())) {
           await actions.open()
           return
         }

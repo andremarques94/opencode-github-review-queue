@@ -39,6 +39,34 @@ function draftOption(actions: ReviewActions, action: DraftAction): MenuOption {
   }
 }
 
+function addressOptions(actions: ReviewActions, item: ReviewRequest): MenuOption[] {
+  if (!canAddress(item)) {
+    return []
+  }
+  return [
+    {
+      title: "Address review…",
+      value: actions.address,
+      description: "Work through the review comments in your checkout",
+      footer: "a",
+      category: PULL_REQUEST,
+    },
+  ]
+}
+
+function snoozeOption(actions: ReviewActions, snooze: Snooze | undefined): MenuOption {
+  if (!snooze) {
+    return { title: "Snooze…", value: actions.snooze, footer: "s", category: PULL_REQUEST }
+  }
+  return {
+    title: "Wake up",
+    value: actions.snooze,
+    description: `Snoozed ${snoozeLabel(snooze)}`,
+    footer: "s",
+    category: PULL_REQUEST,
+  }
+}
+
 export function pullRequestOptions(
   actions: ReviewActions,
   item: ReviewRequest,
@@ -78,26 +106,8 @@ export function pullRequestOptions(
       footer: "i",
       category: PULL_REQUEST,
     },
-    ...(canAddress(item)
-      ? [
-          {
-            title: "Address review…",
-            value: actions.address,
-            description: "Work through the review comments in your checkout",
-            footer: "a",
-            category: PULL_REQUEST,
-          },
-        ]
-      : []),
-    snooze
-      ? {
-          title: "Wake up",
-          value: actions.snooze,
-          description: `Snoozed ${snoozeLabel(snooze)}`,
-          footer: "s",
-          category: PULL_REQUEST,
-        }
-      : { title: "Snooze…", value: actions.snooze, footer: "s", category: PULL_REQUEST },
+    ...addressOptions(actions, item),
+    snoozeOption(actions, snooze),
     ...draftActions(draft).map((action) => draftOption(actions, action)),
   ]
 }
