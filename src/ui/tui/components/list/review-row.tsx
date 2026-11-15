@@ -84,7 +84,7 @@ export function ReviewRow(props: {
       </text>
       <box flexDirection="column" flexGrow={1} paddingRight={1}>
         <text fg={theme.text.base} wrapMode={look().wrap}>
-          {look().title}
+          <b>{look().title}</b>
         </text>
         <text fg={theme.text.muted} wrapMode="none">
           #{props.item.number}

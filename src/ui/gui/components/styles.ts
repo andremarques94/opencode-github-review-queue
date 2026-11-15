@@ -183,6 +183,7 @@ export const panelStyles = `${badgeStyles}
   overflow-wrap: anywhere;
   color: var(--text-strong);
   font-size: 13px;
+  font-weight: var(--font-weight-medium);
   line-height: 18px;
 }
 .grq-row-meta {
