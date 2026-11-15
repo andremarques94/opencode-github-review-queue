@@ -18,6 +18,15 @@ export type LocalReviews = v.InferOutput<typeof drafts>
 const draft = v.strictObject({ draft: ReviewDraft })
 const byFinding = { sessionID: v.string(), id: v.number() }
 const errors = { failed: v.undefined() }
+export const LineComment = v.strictObject({
+  path: FindingFields.path,
+  line: FindingFields.line,
+  side: FindingFields.side,
+  startLine: FindingFields.startLine,
+  startSide: FindingFields.startSide,
+  note: v.string(),
+})
+export type LineComment = v.InferOutput<typeof LineComment>
 export const ModelRef = v.object({ providerID: v.string(), id: v.string() })
 export type ModelRef = v.InferOutput<typeof ModelRef>
 
@@ -77,6 +86,11 @@ export const ReviewQueue = Rpc.define({
       errors,
     },
     askAboutFinding: { input: v.strictObject(byFinding), output: empty, errors },
+    addLineComments: {
+      input: v.strictObject({ sessionID: v.string(), comments: v.pipe(v.array(LineComment), v.nonEmpty()) }),
+      output: empty,
+      errors,
+    },
     summarize: {
       input: v.strictObject({ key: v.string(), model: ModelRef }),
       output: v.strictObject({ summary: v.string(), truncated: v.boolean() }),

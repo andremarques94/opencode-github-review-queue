@@ -9,7 +9,7 @@ review in the TUI and Desktop app.
   snooze types and rules, and the pull request diff parser
 - `src/shared`: runtime-neutral code: options, presentation (row readiness marks), the RPC contract,
   `notifications/`, and `review/` (draft status and row labels, post preview, the start/post/reset flows, snooze,
-  and summary; both UIs run these through their flow host)
+  summary, and Desktop line comments; both UIs run these through their flow host)
 - `src/server`: server entry, the polling state machine, the lease that picks the one instance that polls
   (`queue-lease.ts`), plain keyed storage (`keyed-store.ts`) and snooze pruning, plus:
   - `github/`: `gh` runner, review search, pull requests (states, compare diffs), repository lookup

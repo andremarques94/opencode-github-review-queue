@@ -170,6 +170,7 @@ export default Plugin.define({
       decideFinding: (input, rpcContext) => reported(rpcContext, () => panel.decide(input)),
       editFinding: (input, rpcContext) => reported(rpcContext, () => panel.edit(input)),
       askAboutFinding: (input, rpcContext) => reported(rpcContext, () => panel.ask(input)),
+      addLineComments: (input, rpcContext) => reported(rpcContext, () => panel.addLineComments(input)),
       summarize: (input, rpcContext) =>
         reported(rpcContext, async () => {
           // Always the model the user picked: without one, the server falls back to a default they never chose.
