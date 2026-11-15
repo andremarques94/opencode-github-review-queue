@@ -1,5 +1,5 @@
 import type { Context } from "@opencode/plugin/gui"
-import { createSignal, createUniqueId, For, Show } from "solid-js"
+import { createUniqueId, For, Show } from "solid-js"
 import { canAddress } from "../../../../domain/my-pull-request.js"
 import { postBlocker } from "../../../../domain/review-draft.js"
 import { reviewedFor } from "../../../../domain/review-history.js"
@@ -25,6 +25,12 @@ import type { LocalReviews } from "../../../../shared/rpc.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
 import { RowDetails } from "./row-details.js"
 
+/** Which rows show their details; the panel holds it, so it can expand or collapse every row at once. */
+export type DetailsState = {
+  isOpen(key: string): boolean
+  toggle(key: string): void
+}
+
 export type ReviewRowProps = {
   context: Context
   item: ReviewRequest
@@ -32,6 +38,7 @@ export type ReviewRowProps = {
   local: LocalReviews
   now: number
   actions: ReviewActions
+  details: DetailsState
   copy(text: string, name: string): void
 }
 
@@ -50,10 +57,11 @@ const CLICK_SEQUENCE = [
 
 export function ReviewRow(props: ReviewRowProps) {
   let actions: HTMLDivElement | undefined
-  const [expanded, setExpanded] = createSignal(false)
+  const expanded = () => props.details.isOpen(props.item.key)
+  const toggleDetails = () => props.details.toggle(props.item.key)
   const detailsID = createUniqueId()
   const detailsLabel = () => (expanded() ? "Hide details" : "Show details")
-  const details = () => pullRequestDetails(props.item, reviewedFor(props.local.reviewed, props.item.key), props.now)
+  const detailRows = () => pullRequestDetails(props.item, reviewedFor(props.local.reviewed, props.item.key), props.now)
   const draft = () => draftFor(props.local.drafts, props.item.key)
   const snooze = () => activeSnooze(props.local.snoozes, props.item, props.now)
   const wait = () => waitMark(props.item, parseOptions(props.context.options).staleAfterMs, props.now)
@@ -152,7 +160,7 @@ export function ReviewRow(props: ReviewRowProps) {
           </div>
         </button>
         <Show when={expanded()}>
-          <RowDetails id={detailsID} details={details()} />
+          <RowDetails id={detailsID} details={detailRows()} />
         </Show>
       </div>
       <button
@@ -162,7 +170,7 @@ export function ReviewRow(props: ReviewRowProps) {
         aria-controls={detailsID}
         aria-label={detailsLabel()}
         title={detailsLabel()}
-        onClick={() => setExpanded((open) => !open)}
+        onClick={() => toggleDetails()}
       >
         <props.context.ui.Icon name="outline-chevron-down" size="small" />
       </button>
@@ -178,7 +186,7 @@ export function ReviewRow(props: ReviewRowProps) {
             {
               label: detailsLabel(),
               icon: "info",
-              onSelect: () => setExpanded((open) => !open),
+              onSelect: () => toggleDetails(),
             },
             { label: "Open on GitHub", icon: "github", onSelect: open },
             {

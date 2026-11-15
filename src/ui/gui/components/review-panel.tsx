@@ -26,6 +26,8 @@ export type ReviewPanelProps = {
 export function ReviewPanel(props: ReviewPanelProps) {
   const [filter, setFilter] = createSignal<QueueFilter>("all")
   const [showSnoozed, setShowSnoozed] = createSignal(false)
+  /** Kept here rather than in each row, so the header can open or close them all. */
+  const [expanded, setExpanded] = createSignal<ReadonlySet<string>>(new Set())
   const [now, setNow] = createSignal(Date.now())
   onCleanup(watchClock(setNow))
   const [repository, setRepository] = createSignal<string | undefined>()
@@ -59,6 +61,19 @@ export function ReviewPanel(props: ReviewPanelProps) {
   const view = createMemo(() =>
     hideSnoozed(filterItems(props.state, filter(), repository()), props.local.snoozes, showSnoozed(), now()),
   )
+  const details = {
+    isOpen: (key: string) => expanded().has(key),
+    toggle: (key: string) =>
+      setExpanded((current) => {
+        const next = new Set(current)
+        if (!next.delete(key)) {
+          next.add(key)
+        }
+        return next
+      }),
+  }
+  const anyExpanded = () => view().items.some((item) => expanded().has(item.key))
+  const toggleAll = () => setExpanded(anyExpanded() ? new Set<string>() : new Set(view().items.map((item) => item.key)))
   const refresh = () => {
     void rpc()
       .refresh({})
@@ -84,6 +99,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
         repository={repository()}
         setFilter={setFilter}
         refresh={refresh}
+        expandAll={view().items.length > 0 ? { expanded: anyExpanded(), toggle: toggleAll } : undefined}
       />
       <Show when={props.state.error}>{(error) => <ErrorBanner message={error().message} />}</Show>
       <Show
@@ -98,6 +114,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
           now={now()}
           actions={actions}
           grouped={filter() !== "current"}
+          details={details}
           copy={copy}
         />
       </Show>

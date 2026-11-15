@@ -5,6 +5,7 @@ import { groupByRepository } from "../../../../shared/presentation.js"
 import type { LocalReviews } from "../../../../shared/rpc.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
 import { ReviewGroup } from "./review-group.js"
+import type { DetailsState } from "./review-row.js"
 
 export function ReviewList(props: {
   context: Context
@@ -14,6 +15,7 @@ export function ReviewList(props: {
   now: number
   actions: ReviewActions
   grouped: boolean
+  details: DetailsState
   copy(text: string, name: string): void
 }) {
   const groups = createMemo(() => new Map(groupByRepository(props.items).map((group) => [group.repository, group])))
@@ -34,6 +36,7 @@ export function ReviewList(props: {
                 local={props.local}
                 now={props.now}
                 actions={props.actions}
+                details={props.details}
                 copy={props.copy}
               />
             )}

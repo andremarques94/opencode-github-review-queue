@@ -3,7 +3,7 @@ import { createMemo, For, Show } from "solid-js"
 import type { RepositoryGroup } from "../../../../shared/presentation.js"
 import type { LocalReviews } from "../../../../shared/rpc.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
-import { ReviewRow } from "./review-row.js"
+import { type DetailsState, ReviewRow } from "./review-row.js"
 
 export function ReviewGroup(props: {
   context: Context
@@ -13,6 +13,7 @@ export function ReviewGroup(props: {
   local: LocalReviews
   now: number
   actions: ReviewActions
+  details: DetailsState
   copy(text: string, name: string): void
 }) {
   const items = createMemo(() => new Map(props.group.items.map((item) => [item.key, item])))
@@ -43,6 +44,7 @@ export function ReviewGroup(props: {
                 local={props.local}
                 now={props.now}
                 actions={props.actions}
+                details={props.details}
                 copy={props.copy}
               />
             )}
