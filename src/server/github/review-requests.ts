@@ -11,19 +11,25 @@ const QUERY = `query($search: String!, $endCursor: String) {
     pageInfo { hasNextPage endCursor }
     nodes {
       ... on PullRequest {
-        number title url createdAt isDraft headRefOid baseRefOid mergeable
+        number title url createdAt isDraft headRefOid baseRefOid mergeable additions deletions changedFiles
         author { login }
         repository { nameWithOwner }
-        commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+        commits(last: 1) { nodes { commit { committedDate statusCheckRollup { state } } } }
         reviewThreads(first: 100) { pageInfo { hasNextPage } nodes { isResolved } }
-        reviewRequests(first: 100) {
-          nodes { requestedReviewer { __typename ... on User { login } ... on Team { slug organization { login } } } }
+        reviewRequests(first: 100) { nodes { requestedReviewer { ...reviewer } } }
+        timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT], last: 20) {
+          nodes { ... on ReviewRequestedEvent { createdAt requestedReviewer { ...reviewer } } }
         }
       }
     }
   }
   viewer { login }
   rateLimit { remaining resetAt }
+}
+fragment reviewer on RequestedReviewer {
+  __typename
+  ... on User { login }
+  ... on Team { slug organization { login } }
 }`
 
 const CHECKS: Record<string, Checks> = {
@@ -34,11 +40,25 @@ const CHECKS: Record<string, Checks> = {
   EXPECTED: "pending",
 }
 
+/** Whether the pull request conflicts; GitHub says `UNKNOWN` while it is still computing. */
+const MERGEABLE: Record<string, boolean> = { MERGEABLE: false, CONFLICTING: true }
+
+/** Leaves a field out instead of storing what GitHub did not report. */
+const known = <K extends string, T>(key: K, value: T | null | undefined) =>
+  (value === null || value === undefined ? {} : { [key]: value }) as { [P in K]?: T }
+
 /** Readiness is extra: a field GitHub leaves out or changes shape never costs the whole queue. */
 const optional = <T extends v.GenericSchema>(schema: T) => v.fallback(v.optional(v.nullable(schema)), undefined)
 
 const Commits = v.object({
-  nodes: v.array(v.object({ commit: v.object({ statusCheckRollup: v.nullable(v.object({ state: v.string() })) }) })),
+  nodes: v.array(
+    v.object({
+      commit: v.object({
+        committedDate: v.optional(v.string()),
+        statusCheckRollup: v.nullable(v.object({ state: v.string() })),
+      }),
+    }),
+  ),
 })
 
 const ReviewThreads = v.object({
@@ -72,17 +92,38 @@ type Reviewer = v.InferOutput<typeof Reviewer>
 
 const ReviewRequests = v.object({ nodes: v.array(v.object({ requestedReviewer: Reviewer })) })
 
+/** Other timeline items come back as empty objects. */
+const RequestEvents = v.object({
+  nodes: v.array(v.fallback(v.nullable(v.object({ createdAt: v.string(), requestedReviewer: Reviewer })), null)),
+})
+type RequestEvent = { at: string; reviewer: Reviewer }
+
+const teamName = (team: { slug: string; organization: { login: string } }) => `${team.organization.login}/${team.slug}`
+
+const isUser = (reviewer: Reviewer, login: string) =>
+  reviewer?.__typename === "User" && reviewer.login.toLowerCase() === login.toLowerCase()
+
 /** A direct request wins over a team one: the user is asked personally either way. */
 function requestedVia(reviewers: readonly Reviewer[], viewer: string): RequestedVia | undefined {
-  const named = viewer.toLowerCase()
-  if (reviewers.some((reviewer) => reviewer?.__typename === "User" && reviewer.login.toLowerCase() === named)) {
+  if (reviewers.some((reviewer) => isUser(reviewer, viewer))) {
     return { kind: "you" }
   }
-  const teams = reviewers.flatMap((reviewer) =>
-    reviewer?.__typename === "Team" ? [`${reviewer.organization.login}/${reviewer.slug}`] : [],
-  )
+  const teams = reviewers.flatMap((reviewer) => (reviewer?.__typename === "Team" ? [teamName(reviewer)] : []))
   const [first, ...rest] = teams
   return first ? { kind: "team", teams: [first, ...rest] } : undefined
+}
+
+function asksFor(reviewer: Reviewer, via: RequestedVia, viewer: string): boolean {
+  if (via.kind === "you") {
+    return isUser(reviewer, viewer)
+  }
+  return reviewer?.__typename === "Team" && via.teams.includes(teamName(reviewer))
+}
+
+/** The latest request for the user or their teams; when it is unclear who was asked, the latest request at all. */
+function requestedAt(events: readonly RequestEvent[], via: RequestedVia | undefined, viewer: string | undefined) {
+  const matching = via && viewer ? events.filter((event) => asksFor(event.reviewer, via, viewer)) : events
+  return matching.at(-1)?.at
 }
 
 const PullRequest = v.pipe(
@@ -97,12 +138,16 @@ const PullRequest = v.pipe(
     headRefOid: optional(v.string()),
     baseRefOid: optional(v.string()),
     mergeable: optional(v.string()),
+    additions: optional(v.number()),
+    deletions: optional(v.number()),
+    changedFiles: optional(v.number()),
     commits: optional(Commits),
     reviewThreads: optional(ReviewThreads),
     reviewRequests: optional(ReviewRequests),
+    timelineItems: optional(RequestEvents),
   }),
-  v.transform((node): { request: ReviewRequest; reviewers: Reviewer[] } => {
-    const checks = CHECKS[node.commits?.nodes[0]?.commit.statusCheckRollup?.state ?? ""]
+  v.transform((node): { request: ReviewRequest; reviewers: Reviewer[]; events: RequestEvent[] } => {
+    const commit = node.commits?.nodes[0]?.commit
     const request: ReviewRequest = {
       key: requestKey(node.repository.nameWithOwner, node.number),
       repository: node.repository.nameWithOwner,
@@ -112,15 +157,23 @@ const PullRequest = v.pipe(
       createdAt: node.createdAt,
       draft: node.isDraft,
       author: node.author.login,
-      ...(node.headRefOid ? { headSha: node.headRefOid } : {}),
-      ...(node.baseRefOid ? { baseSha: node.baseRefOid } : {}),
-      ...(checks ? { checks } : {}),
-      ...(node.mergeable === "MERGEABLE" || node.mergeable === "CONFLICTING"
-        ? { conflicts: node.mergeable === "CONFLICTING" }
-        : {}),
+      ...known("headSha", node.headRefOid),
+      ...known("baseSha", node.baseRefOid),
+      ...known("checks", CHECKS[commit?.statusCheckRollup?.state ?? ""]),
+      ...known("conflicts", MERGEABLE[node.mergeable ?? ""]),
       ...threadReadiness(node.reviewThreads),
+      ...known("additions", node.additions),
+      ...known("deletions", node.deletions),
+      ...known("changedFiles", node.changedFiles),
+      ...known("lastCommitAt", commit?.committedDate),
     }
-    return { request, reviewers: node.reviewRequests?.nodes.map((entry) => entry.requestedReviewer) ?? [] }
+    return {
+      request,
+      reviewers: node.reviewRequests?.nodes.map((entry) => entry.requestedReviewer) ?? [],
+      events: (node.timelineItems?.nodes ?? []).flatMap((event) =>
+        event ? [{ at: event.createdAt, reviewer: event.requestedReviewer }] : [],
+      ),
+    }
   }),
 )
 
@@ -172,9 +225,10 @@ function readNode(node: unknown, viewer: string | undefined): ReviewRequest {
   if (!parsed.success) {
     throw unchanged("a partial pull request")
   }
-  const { request, reviewers } = parsed.output
+  const { request, reviewers, events } = parsed.output
   const via = viewer ? requestedVia(reviewers, viewer) : undefined
-  return via ? { ...request, requestedVia: via } : request
+  const at = requestedAt(events, via, viewer)
+  return { ...request, ...(via ? { requestedVia: via } : {}), ...(at ? { requestedAt: at } : {}) }
 }
 
 export type SearchResult = { items: ReviewRequest[]; retryAt?: string }

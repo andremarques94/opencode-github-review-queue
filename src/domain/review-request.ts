@@ -30,8 +30,21 @@ export const ReviewRequest = v.object({
   requestedVia: v.exactOptional(RequestedVia),
   /** Queued for new commits since the user's posted review, not because GitHub asks for a review. */
   followUp: v.exactOptional(v.literal(true)),
+  additions: v.exactOptional(v.number()),
+  deletions: v.exactOptional(v.number()),
+  changedFiles: v.exactOptional(v.number()),
+  /** When the user, or one of the requested teams, was last asked to review. */
+  requestedAt: v.exactOptional(v.string()),
+  lastCommitAt: v.exactOptional(v.string()),
 })
 export type ReviewRequest = v.InferOutput<typeof ReviewRequest>
+
+/** A follow-up waits from the last commit, a request from when it was made; the pull request's age is the fallback. */
+export const waitingSince = (item: ReviewRequest): string =>
+  (item.followUp ? item.lastCommitAt : item.requestedAt) ?? item.createdAt
+
+export const changedLines = (item: ReviewRequest): number | undefined =>
+  item.additions === undefined || item.deletions === undefined ? undefined : item.additions + item.deletions
 
 export function requestKey(repository: string, number: number): string {
   return `${repository.toLowerCase()}#${number}`

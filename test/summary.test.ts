@@ -82,6 +82,19 @@ describe("summaryFlow", () => {
     })
   })
 
+  it("warns before picking a model when the diff will not fit", async () => {
+    const flow = host(async () => ({ summary: "", truncated: false }), undefined)
+
+    await summaryFlow(flow, { ...item, additions: 1_400, deletions: 200 })
+    await summaryFlow(flow, { ...item, additions: 10, deletions: 2 })
+
+    const titles = vi.mocked(flow.select).mock.calls.map(([input]) => input.title)
+    expect(titles).toEqual([
+      "Summarize acme/api#7? It changes 1,600 lines, so only part of the diff will fit. Pick the model",
+      "Summarize acme/api#7? Pick the model",
+    ])
+  })
+
   it("does nothing when no model is picked", async () => {
     const flow = host(async () => ({ summary: "", truncated: false }), undefined)
 

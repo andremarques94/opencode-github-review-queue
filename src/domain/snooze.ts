@@ -1,4 +1,5 @@
 import * as v from "valibot"
+import { parseDuration } from "./duration.js"
 import type { ReviewRequest } from "./review-request.js"
 
 export const SnoozeUntil = v.variant("kind", [
@@ -32,8 +33,6 @@ export function snoozing(snooze: Snooze | undefined, item: ReviewRequest, now: n
   }
 }
 
-const MINUTE = 60_000
-const UNITS: Record<string, number> = { m: MINUTE, h: 60 * MINUTE, d: 24 * 60 * MINUTE }
 const MORNING_HOUR = 9
 
 export function tomorrowMorning(now: number): Date {
@@ -64,12 +63,10 @@ function clockTime(text: string, now: number): Date | undefined {
  * date and time JavaScript can parse, such as `2026-11-20 09:00`. Only future times count.
  */
 export function parseSnoozeTime(input: string, now: number): Date | undefined {
-  const text = input.trim().toLowerCase()
-  const unit = UNITS[text.slice(-1)]
-  const amount = Number(text.slice(0, -1))
-  if (unit && text.length > 1 && Number.isFinite(amount) && amount > 0) {
-    return new Date(now + amount * unit)
+  const duration = parseDuration(input)
+  if (duration !== undefined) {
+    return new Date(now + duration)
   }
-  const parsed = clockTime(text, now) ?? new Date(Date.parse(input.trim()))
+  const parsed = clockTime(input.trim().toLowerCase(), now) ?? new Date(Date.parse(input.trim()))
   return parsed.getTime() > now ? parsed : undefined
 }
