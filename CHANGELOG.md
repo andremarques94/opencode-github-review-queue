@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.0.0](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v0.6.0...opencode-github-review-queue-v1.0.0) (2026-11-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* requires GitHub CLI 2.81.0 or later, for `gh auth status --json hosts`.
+
+### Features
+
+* expand or collapse every row's details at once ([0f2b57f](https://github.com/andremarques94/opencode-github-review-queue/commit/0f2b57fa61e8103fade1f8facc07ae90a5d6248a))
+* make pull request titles and authors stand out in the queue ([0f2b57f](https://github.com/andremarques94/opencode-github-review-queue/commit/0f2b57fa61e8103fade1f8facc07ae90a5d6248a))
+* open a review's worktree in your editor from the review pill ([0f2b57f](https://github.com/andremarques94/opencode-github-review-queue/commit/0f2b57fa61e8103fade1f8facc07ae90a5d6248a))
+* show each pull request's details in the queue, and mark branches behind their base ([0f2b57f](https://github.com/andremarques94/opencode-github-review-queue/commit/0f2b57fa61e8103fade1f8facc07ae90a5d6248a))
+* support GitHub Enterprise and multiple gh hosts ([0f2b57f](https://github.com/andremarques94/opencode-github-review-queue/commit/0f2b57fa61e8103fade1f8facc07ae90a5d6248a))
+
+
+### Bug Fixes
+
+* block every way review sessions could push or write to GitHub ([0f2b57f](https://github.com/andremarques94/opencode-github-review-queue/commit/0f2b57fa61e8103fade1f8facc07ae90a5d6248a))
+* clear the error banner after a successful refresh ([0f2b57f](https://github.com/andremarques94/opencode-github-review-queue/commit/0f2b57fa61e8103fade1f8facc07ae90a5d6248a))
+* find your clone when its remote uses an SSH host alias ([0f2b57f](https://github.com/andremarques94/opencode-github-review-queue/commit/0f2b57fa61e8103fade1f8facc07ae90a5d6248a))
+* keep a row's details and menu open while the queue refreshes ([0f2b57f](https://github.com/andremarques94/opencode-github-review-queue/commit/0f2b57fa61e8103fade1f8facc07ae90a5d6248a))
+* move the TUI scope left and right with the arrow keys ([0f2b57f](https://github.com/andremarques94/opencode-github-review-queue/commit/0f2b57fa61e8103fade1f8facc07ae90a5d6248a))
+* report an unreachable host as offline rather than as a failed login ([0f2b57f](https://github.com/andremarques94/opencode-github-review-queue/commit/0f2b57fa61e8103fade1f8facc07ae90a5d6248a))
+* space out expanded rows in the Desktop queue ([9e885e2](https://github.com/andremarques94/opencode-github-review-queue/commit/9e885e20095b531081aace738137cafcbaa339a4))
+
 ## [0.6.0](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v0.5.0...opencode-github-review-queue-v0.6.0) (2026-11-15)
 
 
