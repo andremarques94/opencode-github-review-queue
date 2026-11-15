@@ -191,8 +191,7 @@ export default Plugin.define({
           return undefined
         }
         const progress = reviewProgress(draft)
-        // The capsule truncates, so it carries the short status; `title` is also the popover's heading, so it names
-        // the pull request and leaves the details to the popover body instead of repeating them.
+        // `title` is also the popover's heading, so it must not repeat the label.
         return {
           label: `Review · ${pillStatus(draft)}`,
           icon: "github",

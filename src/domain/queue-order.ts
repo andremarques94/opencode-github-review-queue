@@ -6,11 +6,9 @@ const ready = (item: ReviewRequest) => item.checks === "passing" && item.conflic
 
 const oldest = (a: ReviewRequest, b: ReviewRequest) => waitingSince(a).localeCompare(waitingSince(b))
 
-/** An unknown size sorts last: it is no reason to review a pull request first. */
 const smallest = (a: ReviewRequest, b: ReviewRequest) =>
   (changedLines(a) ?? Number.POSITIVE_INFINITY) - (changedLines(b) ?? Number.POSITIVE_INFINITY)
 
-/** Ties fall back to the longest wait, so the order is stable from one poll to the next. */
 export function sortQueue(items: readonly ReviewRequest[], sort: QueueSort): ReviewRequest[] {
   switch (sort) {
     case "oldest":

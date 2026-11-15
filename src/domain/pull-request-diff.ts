@@ -108,10 +108,7 @@ export function commentProblem(
   return undefined
 }
 
-/**
- * A suggestion replaces new lines, so it needs RIGHT on both ends, and GitHub only applies one whose lines run
- * unbroken through a single hunk: a gap in the new lines means the range spans two.
- */
+/** GitHub only applies a suggestion to new lines of one hunk; a gap in the new lines means the range spans two. */
 export function suggestionProblem(
   lines: CommentableLines,
   target: { path: string; line: number; side: DiffSide; startLine?: number; startSide?: DiffSide; suggestion?: string },

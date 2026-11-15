@@ -64,7 +64,6 @@ export async function fetchPullRequestBranch(repository: string, number: number,
 
 export type OpenThread = {
   path: string
-  /** Missing once the code it was on changed. */
   line?: number
   outdated: boolean
   comments: { author: string; body: string }[]
@@ -107,7 +106,6 @@ const THREADS_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   }
 }`
 
-/** The review threads nobody resolved yet, in GitHub's order. */
 export async function fetchOpenThreads(repository: string, number: number, signal: AbortSignal) {
   const [owner = "", name = ""] = repository.split("/")
   const result = await runGh(

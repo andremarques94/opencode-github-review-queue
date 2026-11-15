@@ -15,12 +15,7 @@ const NOTHING: SearchResult = { items: [] }
 const latest = (...times: (string | undefined)[]) =>
   times.reduce<string | undefined>((last, time) => (time && (!last || time > last) ? time : last), undefined)
 
-/**
- * The review requests plus the follow-ups, filtered by the user's rules and in the order they picked, and the user's
- * own pull requests. Without a posted review there is nothing to follow up on, so that search only runs once one is
- * recorded. Any search failing fails the refresh, so the saved queue stays whole instead of losing part of it for one
- * poll.
- */
+/** Any search failing fails the refresh, so the saved queue stays whole instead of losing part of it for one poll. */
 export function queueSource(options: PluginOptions, reviewed: { list(): Promise<ReviewedRecord[]> }): FetchQueue {
   return async (signal) => {
     const records = options.followUps ? await reviewed.list() : []

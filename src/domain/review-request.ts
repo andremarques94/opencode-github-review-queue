@@ -4,7 +4,7 @@ import { Authored } from "./my-pull-request.js"
 const Checks = v.picklist(["passing", "failing", "pending"])
 export type Checks = v.InferOutput<typeof Checks>
 
-/** Teams are `org/slug`. Every requested team is listed: which ones the user belongs to is not fetched. */
+/** Lists every requested team: which ones the user belongs to is not fetched. */
 const RequestedVia = v.variant("kind", [
   v.object({ kind: v.literal("you") }),
   v.object({ kind: v.literal("team"), teams: v.pipe(v.array(v.string()), v.nonEmpty()) }),
@@ -34,15 +34,12 @@ export const ReviewRequest = v.object({
   additions: v.exactOptional(v.number()),
   deletions: v.exactOptional(v.number()),
   changedFiles: v.exactOptional(v.number()),
-  /** When the user, or one of the requested teams, was last asked to review. */
   requestedAt: v.exactOptional(v.string()),
   lastCommitAt: v.exactOptional(v.string()),
-  /** Only on the user's own pull requests. */
   authored: v.exactOptional(Authored),
 })
 export type ReviewRequest = v.InferOutput<typeof ReviewRequest>
 
-/** A follow-up waits from the last commit, a request from when it was made; the pull request's age is the fallback. */
 export const waitingSince = (item: ReviewRequest): string =>
   (item.followUp ? item.lastCommitAt : item.requestedAt) ?? item.createdAt
 

@@ -5,9 +5,7 @@ import { pickModel, type ReviewFlowHost } from "./flows.js"
 
 export type SummaryView = { title: string; note: string | undefined; markdown: string }
 
-/** A summary dialog opened before the model answers, so the click shows at once that something is happening. */
 export type PendingSummary = {
-  /** Fills the dialog in, reopening it if the user closed it while waiting. */
   show(view: SummaryView): void
   close(): void
 }
