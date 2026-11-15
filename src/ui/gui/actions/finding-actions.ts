@@ -23,7 +23,11 @@ export function createFindingActions(input: {
   const { context } = input
   const host = createFindingFlowHost(context, () => input.session().server)
   const attempt = attempting(context)
-  const reviews = createReviewActions({ context, server: () => input.session().server.id, directory: () => undefined })
+  const reviews = createReviewActions({
+    context,
+    server: () => input.session().server.id,
+    directory: () => undefined,
+  })
 
   return {
     decide: (draft, finding, decision) =>

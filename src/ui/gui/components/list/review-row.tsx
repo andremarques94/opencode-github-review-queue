@@ -1,19 +1,29 @@
 import type { Context } from "@opencode/plugin/gui"
-import { Show } from "solid-js"
-import { postBlocker, type ReviewDraft } from "../../../../domain/review-draft.js"
+import { For, Show } from "solid-js"
+import { postBlocker } from "../../../../domain/review-draft.js"
+import { reviewedFor } from "../../../../domain/review-history.js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
-import { ago, fullReference } from "../../../../shared/presentation.js"
-import { type DraftAction, draftActions, draftLabel, resumable } from "../../../../shared/review/draft-status.js"
+import { ago, fullReference, readinessMarks } from "../../../../shared/presentation.js"
+import {
+  type DraftAction,
+  draftActions,
+  draftFor,
+  resumable,
+  rowLabel,
+} from "../../../../shared/review/draft-status.js"
+import type { LocalReviews } from "../../../../shared/rpc.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
 
 export type ReviewRowProps = {
   context: Context
   item: ReviewRequest
   isNew: boolean
-  draft: ReviewDraft | undefined
+  local: LocalReviews
   actions: ReviewActions
   copy(text: string, name: string): void
 }
+
+const postBlockerOf = (draft: ReturnType<typeof draftFor>) => (draft ? postBlocker(draft) : undefined)
 
 // The host's menu has no programmatic open, so right-click replays a real mouse click on its trigger.
 const mouse = { bubbles: true, cancelable: true, button: 0 }
@@ -28,6 +38,7 @@ const CLICK_SEQUENCE = [
 
 export function ReviewRow(props: ReviewRowProps) {
   let actions: HTMLDivElement | undefined
+  const draft = () => draftFor(props.local.drafts, props.item.key)
   const open = () => props.context.system.openExternal(props.item.url)
   const openMenu = (event: MouseEvent) => {
     const trigger = actions?.querySelector("button")
@@ -40,7 +51,8 @@ export function ReviewRow(props: ReviewRowProps) {
     }
   }
 
-  const review = () => void props.actions.review(props.item, resumable(props.draft))
+  const review = () =>
+    void props.actions.review(props.item, resumable(draft()), reviewedFor(props.local.reviewed, props.item.key))
   const draftItem = (action: DraftAction) => {
     if (action.kind === "reset") {
       return { label: action.label, icon: "trash" as const, onSelect: () => void props.actions.reset(action.draft) }
@@ -53,7 +65,7 @@ export function ReviewRow(props: ReviewRowProps) {
     }
   }
   const draftItems = () => {
-    const actions = draftActions(props.draft)
+    const actions = draftActions(draft())
     return actions.length > 0 ? [{ type: "separator" as const }, ...actions.map(draftItem)] : []
   }
 
@@ -64,6 +76,13 @@ export function ReviewRow(props: ReviewRowProps) {
         <div class="grq-row-title">{props.item.title}</div>
         <div class="grq-row-meta">
           <span class="grq-number">#{props.item.number}</span>
+          <For each={readinessMarks(props.item)}>
+            {(mark) => (
+              <span class="grq-mark" data-tone={mark.tone} role="img" title={mark.detail} aria-label={mark.detail}>
+                {mark.label}
+              </span>
+            )}
+          </For>
           <span class="grq-sep">·</span>
           <span>@{props.item.author}</span>
           <span class="grq-sep">·</span>
@@ -71,9 +90,12 @@ export function ReviewRow(props: ReviewRowProps) {
           <Show when={props.item.draft}>
             <span class="grq-badge">Draft</span>
           </Show>
-          <Show when={draftLabel(props.draft)}>
+          <Show when={rowLabel(props.item, props.local)}>
             {(label) => (
-              <span class="grq-badge grq-badge-review" title={props.draft ? postBlocker(props.draft) : undefined}>
+              <span
+                class="grq-badge grq-badge-review"
+                title={(resumable(draft()) && postBlockerOf(draft())) || label()}
+              >
                 {label()}
               </span>
             )}

@@ -8,6 +8,7 @@ import {
 } from "../domain/review-queue.js"
 import type { ReviewRequest } from "../domain/review-request.js"
 import { GhError } from "./github/cli.js"
+import { type Lease, SOLE_LEASE } from "./queue-lease.js"
 
 export type QueuePersistence = {
   load(): Promise<unknown>
@@ -29,7 +30,13 @@ export type FetchQueue = (signal: AbortSignal) => Promise<FetchResult>
 export type PollerEvent =
   | { type: "state"; state: QueueSnapshot }
   | { type: "discovered"; item: ReviewRequest; eventID: string }
+  /** Only on the instance that fetched the queue from GitHub. */
+  | { type: "fetched"; state: QueueSnapshot }
 
+/**
+ * Every OpenCode location runs its own instance. The one holding the lease polls GitHub and persists the queue; the
+ * others follow the persisted queue, and take the lease over once it lapses.
+ */
 export class ReviewQueuePoller {
   private state: QueueSnapshot = emptySnapshot()
   private listeners = new Set<(event: PollerEvent) => void>()
@@ -37,6 +44,8 @@ export class ReviewQueuePoller {
   private active: Promise<QueueSnapshot> | undefined
   private controller: AbortController | undefined
   private stopped = false
+  private leading = false
+  private nextFetchAt = 0
   private failures = 0
   private seen = new Map<string, number>()
 
@@ -45,10 +54,21 @@ export class ReviewQueuePoller {
     private readonly persistence: QueuePersistence,
     private readonly options: PollerOptions,
     private readonly now: () => number = Date.now,
+    private readonly lease: Lease = SOLE_LEASE,
   ) {}
 
   snapshot(): QueueSnapshot {
     return structuredClone(this.state)
+  }
+  /**
+   * The queue as last saved by whichever instance polls. A UI may show a queue this instance has not re-read yet, so
+   * actions on a pull request look it up here rather than in `snapshot`.
+   */
+  async latest(): Promise<QueueSnapshot> {
+    if (!this.leading) {
+      await this.follow()
+    }
+    return this.snapshot()
   }
   on(listener: (event: PollerEvent) => void): () => void {
     this.listeners.add(listener)
@@ -56,47 +76,115 @@ export class ReviewQueuePoller {
   }
 
   async start(): Promise<void> {
-    const loaded = v.safeParse(PersistedQueue, await this.persistence.load())
-    if (loaded.success) {
-      const saved = loaded.output
-      this.state = {
-        items: saved.items,
-        newKeys: [],
-        initialized: saved.initialized,
-        loading: true,
-        stale: false,
-        ...(saved.lastSuccessAt ? { lastSuccessAt: saved.lastSuccessAt } : {}),
-      }
-      const fallback = saved.lastSuccessAt ? Date.parse(saved.lastSuccessAt) : this.now()
-      for (const item of saved.items) {
-        this.seen.set(item.key, fallback)
-      }
-      for (const [key, at] of Object.entries(saved.seen ?? {})) {
-        const time = Date.parse(at)
-        if (Number.isFinite(time)) {
-          this.seen.set(key, time)
-        }
-      }
+    const saved = await this.load()
+    if (saved) {
+      this.adopt(saved, [])
+      this.state = { ...this.state, loading: true }
     }
     this.emit({ type: "state", state: this.snapshot() })
-    await this.refresh()
+    await this.poll()
   }
 
-  refresh(): Promise<QueueSnapshot> {
-    if (this.active) {
-      return this.active
+  async poll(): Promise<void> {
+    if (this.stopped) {
+      return
     }
     this.clearTimer()
-    this.active = this.performRefresh().finally(() => {
-      this.active = undefined
+    try {
+      if (await this.lease.acquire().catch(() => false)) {
+        await this.lead()
+        if (this.now() >= this.nextFetchAt) {
+          await this.run(() => this.performRefresh())
+        }
+        return
+      }
+      this.leading = false
+      await this.follow()
+    } finally {
+      this.scheduleNext()
+    }
+  }
+
+  /** Fetches now from any instance, taking the lease over so the queue keeps a single poller. */
+  refresh(): Promise<QueueSnapshot> {
+    return this.run(async () => {
+      await this.lease.claim().catch(() => undefined)
+      await this.lead()
+      return this.performRefresh()
     })
-    return this.active
   }
 
   stop(): void {
     this.stopped = true
     this.clearTimer()
     this.controller?.abort()
+    if (this.leading) {
+      void this.lease.release().catch(() => undefined)
+    }
+  }
+
+  private run(task: () => Promise<QueueSnapshot>): Promise<QueueSnapshot> {
+    this.active ??= task().finally(() => {
+      this.active = undefined
+    })
+    return this.active
+  }
+
+  /** A new holder starts from the queue its predecessor saved, so it only announces what is actually new. */
+  private async lead(): Promise<void> {
+    if (this.leading) {
+      return
+    }
+    this.leading = true
+    const saved = await this.load()
+    if (saved && saved.lastSuccessAt !== this.state.lastSuccessAt) {
+      this.adopt(saved, this.state.newKeys)
+    }
+  }
+
+  private async follow(): Promise<void> {
+    const saved = await this.load()
+    if (!saved) {
+      return
+    }
+    const fresh = saved.lastSuccessAt !== this.state.lastSuccessAt
+    if (!fresh && saved.error?.message === this.state.error?.message && !this.state.loading) {
+      return
+    }
+    const announce = fresh && this.state.initialized
+    this.adopt(saved, announce ? (saved.newKeys ?? []) : this.state.newKeys)
+    this.emit({ type: "state", state: this.snapshot() })
+    if (!announce) {
+      return
+    }
+    for (const item of this.state.items.filter((candidate) => this.state.newKeys.includes(candidate.key))) {
+      this.emit({ type: "discovered", item, eventID: `${item.key}:${saved.lastSuccessAt}` })
+    }
+  }
+
+  private async load(): Promise<PersistedQueue | undefined> {
+    const loaded = v.safeParse(PersistedQueue, await this.persistence.load().catch(() => undefined))
+    return loaded.success ? loaded.output : undefined
+  }
+
+  private adopt(saved: PersistedQueue, newKeys: string[]): void {
+    this.state = {
+      items: saved.items,
+      newKeys,
+      initialized: saved.initialized,
+      loading: false,
+      stale: saved.initialized && saved.error !== undefined,
+      ...(saved.lastSuccessAt ? { lastSuccessAt: saved.lastSuccessAt } : {}),
+      ...(saved.error ? { error: saved.error } : {}),
+    }
+    const fallback = saved.lastSuccessAt ? Date.parse(saved.lastSuccessAt) : this.now()
+    this.seen = new Map(saved.items.map((item) => [item.key, fallback]))
+    for (const [key, at] of Object.entries(saved.seen ?? {})) {
+      const time = Date.parse(at)
+      if (Number.isFinite(time)) {
+        this.seen.set(key, time)
+      }
+    }
   }
 
   private async performRefresh(): Promise<QueueSnapshot> {
@@ -111,9 +199,10 @@ export class ReviewQueuePoller {
       const timestamp = new Date(now).toISOString()
       const added = firstSuccess ? [] : this.newlyQueued(compareQueues(this.state.items, result.items).added, now)
       const seen = this.recordSeen(result.items, now)
+      const newKeys = added.map((item) => item.key)
       const nextState: QueueSnapshot = {
         items: result.items,
-        newKeys: added.map((item) => item.key),
+        newKeys,
         initialized: true,
         loading: false,
         stale: false,
@@ -125,14 +214,16 @@ export class ReviewQueuePoller {
         items: result.items,
         lastSuccessAt: timestamp,
         seen,
+        newKeys,
       })
       this.failures = 0
       this.state = nextState
       this.emit({ type: "state", state: this.snapshot() })
+      this.emit({ type: "fetched", state: this.snapshot() })
       for (const item of added) {
         this.emit({ type: "discovered", item, eventID: `${item.key}:${timestamp}` })
       }
-      this.schedule(Math.max(this.options.intervalMs, this.delayFromRetryAt(result.retryAt) ?? 0))
+      this.nextFetchAt = now + Math.max(this.options.intervalMs, this.delayFromRetryAt(result.retryAt) ?? 0)
     } catch (error) {
       if (this.stopped) {
         return this.snapshot()
@@ -140,14 +231,30 @@ export class ReviewQueuePoller {
       const detail = this.errorDetail(error, this.controller.signal.aborted)
       this.failures += 1
       this.state = { ...this.state, loading: false, stale: this.state.initialized, error: detail }
+      await this.persistence.save(this.persisted(detail)).catch(() => undefined)
       this.emit({ type: "state", state: this.snapshot() })
       const exponential = Math.min(this.options.maxBackoffMs, this.options.intervalMs * 2 ** Math.min(this.failures, 6))
-      this.schedule(Math.max(exponential, this.delayFromRetryAt(detail.retryAt) ?? 0))
+      this.nextFetchAt = this.now() + Math.max(exponential, this.delayFromRetryAt(detail.retryAt) ?? 0)
     } finally {
       clearTimeout(timeout)
       this.controller = undefined
     }
+    this.scheduleNext()
     return this.snapshot()
+  }
+
+  /** The last successful queue, unchanged, with the failure that followers should show. */
+  private persisted(error: QueueError): PersistedQueue {
+    const seen = Object.fromEntries([...this.seen].map(([key, at]) => [key, new Date(at).toISOString()]))
+    return {
+      version: 1,
+      initialized: this.state.initialized,
+      items: this.state.items,
+      ...(this.state.lastSuccessAt ? { lastSuccessAt: this.state.lastSuccessAt } : {}),
+      seen,
+      newKeys: this.state.newKeys,
+      error,
+    }
   }
 
   private get renotifyAfterMs(): number {
@@ -198,10 +305,14 @@ export class ReviewQueuePoller {
     const delay = Date.parse(retryAt) - this.now()
     return Number.isFinite(delay) ? Math.max(0, delay) : undefined
   }
-  private schedule(delay: number): void {
-    if (!this.stopped) {
-      this.timer = setTimeout(() => void this.refresh(), delay)
+  /** Ticks at least every interval, so the holder renews its lease even while backing off. */
+  private scheduleNext(): void {
+    this.clearTimer()
+    if (this.stopped) {
+      return
     }
+    const due = this.leading ? Math.max(0, this.nextFetchAt - this.now()) : this.options.intervalMs
+    this.timer = setTimeout(() => void this.poll(), Math.min(this.options.intervalMs, due))
   }
   private clearTimer(): void {
     if (this.timer) {

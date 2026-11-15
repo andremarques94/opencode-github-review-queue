@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import type { ReviewDraft } from "../src/domain/review-draft.js"
+import type { ReviewedRecord } from "../src/domain/review-history.js"
 import type { ReviewRequest } from "../src/domain/review-request.js"
 import { postReviewFlow, type ReviewFlowHost, startReviewFlow } from "../src/shared/review/flows.js"
 
@@ -48,6 +49,49 @@ function host(overrides: Partial<ReviewFlowHost> = {}): ReviewFlowHost {
     ...overrides,
   }
 }
+
+const OLD_HEAD = "a".repeat(40)
+const NEW_HEAD = "b".repeat(40)
+const previous: ReviewedRecord = {
+  version: 1,
+  key: item.key,
+  repository: item.repository,
+  number: item.number,
+  headSha: OLD_HEAD,
+  verdict: "REQUEST_CHANGES",
+  postedUrl: "https://github.com/acme/api/pull/7#pullrequestreview-1",
+  postedAt: "2026-01-02T00:00:00Z",
+}
+
+describe("startReviewFlow after an earlier review", () => {
+  it("offers to review only the changes, and picks that by default", async () => {
+    const flow = host()
+
+    expect(await startReviewFlow(flow, { ...item, headSha: NEW_HEAD }, "/repo", false, previous)).toBe("ses_new")
+    expect(vi.mocked(flow.select).mock.calls[0]?.[0]).toMatchObject({
+      options: [{ title: "Review changes since last review" }, { title: "Full review" }],
+      current: "changes",
+    })
+    expect(flow.startReview).toHaveBeenCalledWith(expect.objectContaining({ mode: "changes" }))
+  })
+
+  it("starts nothing when the choice is cancelled", async () => {
+    const flow = host({ select: vi.fn(async () => undefined) })
+
+    expect(await startReviewFlow(flow, { ...item, headSha: NEW_HEAD }, "/repo", false, previous)).toBeUndefined()
+    expect(flow.select).toHaveBeenCalledTimes(1)
+    expect(flow.startReview).not.toHaveBeenCalled()
+  })
+
+  it("asks nothing when the head has not moved", async () => {
+    const flow = host()
+
+    await startReviewFlow(flow, { ...item, headSha: OLD_HEAD }, "/repo", false, previous)
+
+    expect(flow.select).toHaveBeenCalledTimes(1)
+    expect(flow.startReview).toHaveBeenCalledWith(expect.not.objectContaining({ mode: expect.anything() }))
+  })
+})
 
 describe("startReviewFlow", () => {
   it("starts with the picked model", async () => {

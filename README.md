@@ -23,7 +23,12 @@ in the background, with a notification only when something actually needs you.
 
 ## Features
 
-- **One queue, both surfaces.** The TUI panel and the Desktop side panel read the same server-side poller.
+- **One queue, both surfaces.** The TUI panel and the Desktop side panel read the same server-side poller, and only
+  one OpenCode location polls GitHub however many review sessions are open.
+- **Readiness at a glance.** Each row shows its checks (✓ passing, ✗ failing, ● running), merge conflicts, and
+  unresolved review threads.
+- **Re-reviews that focus on what changed.** When a pull request you reviewed comes back with new commits, the row
+  says so, and the next review can cover only the commits since.
 - **Grouped by repository**, with a **Current** scope for the repository in the session.
 - **Notifications that respect you.** New requests are batched into one notification; a request that briefly drops
   out of GitHub's search index does not notify twice.
@@ -84,14 +89,23 @@ Then open the queue with `/reviews`, or **Show GitHub review requests** from the
 
 The footer only shows `enter` and `m`, so it fits a narrow panel; the actions menu lists the rest. With mouse support
 enabled in your terminal, click a request to select it, click it again to start or resume its review, and right-click
-for the actions menu. **All** / **Current** and the footer hints are clickable, and the wheel scrolls the list.
+for the actions menu. **All** / **Current** and the footer hints are clickable, and the wheel scrolls
+the list. The actions menu's **Open on GitHub** entry spells out the row's readiness.
 Copying uses OSC 52, so it needs a terminal that supports it.
 
 ### Desktop
 
 Open the pinned **Review requests** tab in the side panel, or **Show GitHub review requests** from the command palette.
 Click a row to start or resume its review. Its menu (or a right-click) opens it on GitHub, copies its reference or
-link, and posts or resets its review. New requests also raise a toast with a **Show reviews** button.
+link, and posts or resets its review. Hover a readiness mark for its meaning. New requests also raise a toast with a
+**Show reviews** button.
+
+### Readiness
+
+Rows show what GitHub reports about the pull request's last commit and mergeability: ✓, ✗, or ● for checks that
+pass, fail, or are still running, _conflicts_ when it cannot merge cleanly, and _N threads_ for unresolved review
+threads. Anything GitHub does not know yet, such as a pull request without checks or mergeability still being
+computed, shows nothing.
 
 ### Reviews
 
@@ -109,6 +123,12 @@ your last pick selected, then prepares a local review and opens its session:
 
 The row shows where the review stands: _reviewing_, _N to decide_, _ready to post_, or _posted_. **Resume review**
 returns to the same session.
+
+After you post, the plugin remembers the commit you reviewed and your verdict until the pull request is closed or
+merged. When the author pushes and the request comes back, the row shows _new commits since your review_, and
+starting a review offers **Review changes since last review** (the default) or **Full review**. A follow-up review
+fetches both commits, looks only at the changes between them, reads your earlier comments on GitHub, and its summary
+says which of them the changes address and which they leave unresolved.
 
 Each finding ends with a question: **Keep**, **Edit wording**, **Drop**, **Explain**, or **Investigate**, with the
 agent's recommendation first. Click one or type a reply. Explain and Investigate answer about that finding and ask

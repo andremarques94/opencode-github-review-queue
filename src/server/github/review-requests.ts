@@ -1,5 +1,5 @@
 import * as v from "valibot"
-import { type ReviewRequest, requestKey } from "../../domain/review-request.js"
+import { type Checks, type ReviewRequest, requestKey } from "../../domain/review-request.js"
 import { GhError, runGh } from "./cli.js"
 
 const QUERY = `query($endCursor: String) {
@@ -7,14 +7,33 @@ const QUERY = `query($endCursor: String) {
     pageInfo { hasNextPage endCursor }
     nodes {
       ... on PullRequest {
-        number title url createdAt isDraft
+        number title url createdAt isDraft headRefOid baseRefOid mergeable
         author { login }
         repository { nameWithOwner }
+        commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+        reviewThreads(first: 100) { nodes { isResolved } }
       }
     }
   }
   rateLimit { remaining resetAt }
 }`
+
+const CHECKS: Record<string, Checks> = {
+  SUCCESS: "passing",
+  FAILURE: "failing",
+  ERROR: "failing",
+  PENDING: "pending",
+  EXPECTED: "pending",
+}
+
+/** Readiness is extra: a field GitHub leaves out or changes shape never costs the whole queue. */
+const optional = <T extends v.GenericSchema>(schema: T) => v.fallback(v.optional(v.nullable(schema)), undefined)
+
+const Commits = v.object({
+  nodes: v.array(v.object({ commit: v.object({ statusCheckRollup: v.nullable(v.object({ state: v.string() })) }) })),
+})
+
+const ReviewThreads = v.object({ nodes: v.array(v.object({ isResolved: v.boolean() })) })
 
 const PullRequest = v.pipe(
   v.object({
@@ -25,9 +44,15 @@ const PullRequest = v.pipe(
     isDraft: v.boolean(),
     author: v.fallback(v.object({ login: v.string() }), { login: "ghost" }),
     repository: v.object({ nameWithOwner: v.string() }),
+    headRefOid: optional(v.string()),
+    baseRefOid: optional(v.string()),
+    mergeable: optional(v.string()),
+    commits: optional(Commits),
+    reviewThreads: optional(ReviewThreads),
   }),
-  v.transform(
-    (node): ReviewRequest => ({
+  v.transform((node): ReviewRequest => {
+    const checks = CHECKS[node.commits?.nodes[0]?.commit.statusCheckRollup?.state ?? ""]
+    return {
       key: requestKey(node.repository.nameWithOwner, node.number),
       repository: node.repository.nameWithOwner,
       number: node.number,
@@ -36,8 +61,17 @@ const PullRequest = v.pipe(
       createdAt: node.createdAt,
       draft: node.isDraft,
       author: node.author.login,
-    }),
-  ),
+      ...(node.headRefOid ? { headSha: node.headRefOid } : {}),
+      ...(node.baseRefOid ? { baseSha: node.baseRefOid } : {}),
+      ...(checks ? { checks } : {}),
+      ...(node.mergeable === "MERGEABLE" || node.mergeable === "CONFLICTING"
+        ? { conflicts: node.mergeable === "CONFLICTING" }
+        : {}),
+      ...(node.reviewThreads
+        ? { unresolvedThreads: node.reviewThreads.nodes.filter((thread) => !thread.isResolved).length }
+        : {}),
+    }
+  }),
 )
 
 const GraphQLErrors = v.object({ errors: v.pipe(v.array(v.unknown()), v.nonEmpty()) })

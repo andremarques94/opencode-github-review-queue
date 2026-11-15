@@ -4,7 +4,9 @@ import type { PanelInput } from "@opencode/plugin/tui/context"
 import { createMemo, createSignal, Show } from "solid-js"
 import type { Store } from "solid-js/store"
 import type { QueueSnapshot } from "../../../domain/review-queue.js"
+import type { ReviewRequest } from "../../../domain/review-request.js"
 import { filterItems, groupByRepository, type QueueFilter } from "../../../shared/presentation.js"
+import { rowLabel } from "../../../shared/review/draft-status.js"
 import { useReviewActions } from "../actions/review-actions.js"
 import type { TuiState } from "../state.js"
 import { EmptyState } from "./feedback/empty-state.js"
@@ -34,11 +36,12 @@ export function ReviewPanel(props: ReviewPanelProps) {
     update: props.update,
     ordered,
     current,
-    drafts: () => props.state.drafts,
+    local: () => props.state,
     setSelected,
     filter,
     setFilter,
   })
+  const label = (item: ReviewRequest) => rowLabel(item, props.state)
 
   return (
     <box flexDirection="column" flexGrow={1} paddingTop={1} paddingLeft={1} paddingRight={1}>
@@ -50,7 +53,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
           grouped={filter() === "all"}
           selectedKey={current()?.key}
           newKeys={props.state.newKeys}
-          drafts={props.state.drafts}
+          label={label}
           width={props.panel.width - ROW_INSET}
           actions={actions}
         />

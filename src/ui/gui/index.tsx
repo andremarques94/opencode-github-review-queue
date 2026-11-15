@@ -9,13 +9,12 @@ import {
 } from "@opencode/plugin/gui"
 import { createEffect, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
-import type { ReviewDraft } from "../../domain/review-draft.js"
 import { emptySnapshot, type QueueSnapshot } from "../../domain/review-queue.js"
 import { createDiscoveryBatcher } from "../../shared/notifications/discovery-batcher.js"
 import { notificationText } from "../../shared/notifications/notification-text.js"
 import { parseOptions } from "../../shared/options.js"
 import { draftForSession, replaceDraft, reviewProgress } from "../../shared/review/draft-status.js"
-import { ReviewQueue } from "../../shared/rpc.js"
+import { type LocalReviews, ReviewQueue } from "../../shared/rpc.js"
 import { createFindingActions, FINDINGS_PANEL } from "./actions/finding-actions.js"
 import { FindingsPanel } from "./components/findings/findings-panel.js"
 import { ProgressMenu } from "./components/findings/progress-menu.js"
@@ -34,7 +33,7 @@ export default Plugin.define({
   setup(ctx) {
     const options = parseOptions(ctx.options)
     const [state, setState] = createStore<QueueSnapshot>(emptySnapshot())
-    const [drafts, setDrafts] = createStore<{ list: ReviewDraft[] }>({ list: [] })
+    const [drafts, setDrafts] = createStore<LocalReviews>({ drafts: [], reviewed: [] })
     const repositories = new Map<string, string | undefined>()
     const rpc = () => ctx.client.rpc(ReviewQueue)
     const update = (snapshot: QueueSnapshot) => setState(snapshot)
@@ -43,17 +42,14 @@ export default Plugin.define({
       .snapshot({})
       .then((snapshot) => update(snapshot))
     // Another location (the review session's) may write a draft, so re-read drafts with every queue update too.
-    const loadDrafts = () =>
-      void rpc()
-        .drafts({})
-        .then((result) => setDrafts("list", result.drafts))
+    const loadDrafts = () => void rpc().drafts({}).then(setDrafts)
     loadDrafts()
     const stopState = rpc().events.on("state", (event) => {
       update(event.data)
       loadDrafts()
     })
-    const stopDrafts = rpc().events.on("drafts", (event) => setDrafts("list", event.data.drafts))
-    const reviewDraft = (session: MountedSession) => draftForSession(drafts.list, session.id)
+    const stopDrafts = rpc().events.on("drafts", (event) => setDrafts(event.data))
+    const reviewDraft = (session: MountedSession) => draftForSession(drafts.drafts, session.id)
     // The agent records decisions in the review session's own plugin instance, whose events may not reach this
     // window, so re-read drafts whenever that session's state, messages, or open questions change.
     createEffect(() => {
@@ -73,7 +69,7 @@ export default Plugin.define({
       createFindingActions({
         context: ctx,
         session,
-        update: (draft) => setDrafts("list", replaceDraft(drafts.list, draft)),
+        update: (draft) => setDrafts("drafts", replaceDraft(drafts.drafts, draft)),
         reload: loadDrafts,
       })
     const openPanel = () => {
@@ -141,7 +137,7 @@ export default Plugin.define({
           context={ctx}
           directory={props.session.location?.directory}
           server={props.session.server.id}
-          drafts={drafts.list}
+          local={drafts}
           repositories={repositories}
           state={state}
           update={update}

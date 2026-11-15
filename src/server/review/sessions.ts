@@ -1,15 +1,19 @@
 import { readFile } from "node:fs/promises"
 import type { Location, Plugin } from "@opencode/plugin"
 import { postBlocker, type ReviewDraft, reviewPayload } from "../../domain/review-draft.js"
+import type { ReviewedRecord } from "../../domain/review-history.js"
 import type { QueueSnapshot } from "../../domain/review-queue.js"
 import type { ReviewRequest } from "../../domain/review-request.js"
-import { createWorktree } from "../git/worktrees.js"
-import { fetchPullRequest, postReview, viewerLogin } from "../github/pull-request.js"
+import { createWorktree, fetchCommit } from "../git/worktrees.js"
+import { fetchPullRequest, postReview, pullRequestStates, viewerLogin } from "../github/pull-request.js"
+import type { KeyedStore } from "../keyed-store.js"
 import { DEFAULT_GUIDELINES, reviewInstructions, startPrompt } from "./agent/instructions.js"
 import { cleanUpCheckout, cloneRepository, findCheckout, managedClonePath, worktreePath } from "./checkout.js"
 import type { DraftStore } from "./draft-store.js"
 
 type SessionModel = NonNullable<NonNullable<Parameters<Plugin.Context["session"]["create"]>[0]>["model"]>
+
+export type ReviewMode = "full" | "changes"
 
 export type StartResult =
   | { status: "started" | "resumed"; sessionID: string }
@@ -26,6 +30,7 @@ export class ReviewSessions {
 
   constructor(
     private readonly store: DraftStore,
+    private readonly reviewed: KeyedStore<ReviewedRecord>,
     private readonly options: {
       cacheDirectory: string
       guidelinesFile?: string | undefined
@@ -38,6 +43,7 @@ export class ReviewSessions {
     item: ReviewRequest
     directory?: string | undefined
     clone: boolean
+    mode?: ReviewMode | undefined
     model?: { providerID: string; id: string } | undefined
     sessions: Plugin.Context["session"]
     signal: AbortSignal
@@ -63,10 +69,11 @@ export class ReviewSessions {
       }
     }
 
-    const [pullRequest, viewer, guidelines] = await Promise.all([
+    const [pullRequest, viewer, guidelines, previous] = await Promise.all([
       fetchPullRequest(item.repository, item.number, signal),
       viewerLogin(signal),
       this.guidelines(),
+      input.mode === "changes" ? this.reviewed.get(item.key) : undefined,
     ])
     if (pullRequest.state !== "OPEN") {
       throw new Error(
@@ -81,6 +88,7 @@ export class ReviewSessions {
       worktree,
       signal,
     })
+    const since = await this.followUp(previous, { checkout, repository: item.repository, headSha }, signal)
 
     try {
       const session = await input.sessions.create({
@@ -97,6 +105,8 @@ export class ReviewSessions {
         number: item.number,
         title: pullRequest.title,
         headSha,
+        baseSha: pullRequest.baseRefOid,
+        ...(since ? { sinceSha: since.headSha } : {}),
         ownPullRequest: pullRequest.author.login.toLowerCase() === viewer.toLowerCase(),
         checkout,
         worktree,
@@ -109,7 +119,7 @@ export class ReviewSessions {
       await input.sessions.instructions.entry.put({
         sessionID: session.id,
         key: INSTRUCTIONS_KEY,
-        value: reviewInstructions(draft, pullRequest.baseRefName, guidelines),
+        value: reviewInstructions(draft, pullRequest.baseRefName, guidelines, since && { record: since, viewer }),
       })
       await input.sessions.prompt({ sessionID: session.id, text: startPrompt(draft) })
       return { status: "started", sessionID: session.id }
@@ -118,6 +128,19 @@ export class ReviewSessions {
       await this.cleanUp({ checkout, worktree }, AbortSignal.timeout(this.options.timeoutMs)).catch(() => undefined)
       throw error
     }
+  }
+
+  private async followUp(
+    previous: ReviewedRecord | undefined,
+    target: { checkout: string; repository: string; headSha: string },
+    signal: AbortSignal,
+  ): Promise<ReviewedRecord | undefined> {
+    if (!previous || previous.headSha === target.headSha) {
+      return undefined
+    }
+    // A managed clone may have been deleted since, and a force-push leaves the old head out of the new fetch.
+    await fetchCommit(target.checkout, target.repository, previous.headSha, signal).catch(() => undefined)
+    return previous
   }
 
   async reset(key: string, signal: AbortSignal): Promise<void> {
@@ -150,6 +173,20 @@ export class ReviewSessions {
       saved.status = "posted"
       saved.postedUrl = url
     })
+    // Only the follow-up offer depends on this record, so failing to save it must not report the post as failed.
+    await this.reviewed
+      .put({
+        version: 1,
+        key,
+        repository: draft.repository,
+        number: draft.number,
+        headSha: draft.headSha,
+        ...(draft.baseSha ? { baseSha: draft.baseSha } : {}),
+        verdict: draft.verdict ?? "COMMENT",
+        postedUrl: url,
+        postedAt: new Date().toISOString(),
+      })
+      .catch(() => undefined)
     const cleanupWarning = await this.cleanUp(draft, signal).then(
       () => undefined,
       (error: unknown) =>
@@ -158,10 +195,6 @@ export class ReviewSessions {
     return { status: "posted", url, ...(cleanupWarning ? { cleanupWarning } : {}) }
   }
 
-  /**
-   * Forgets the drafts of pull requests that left the queue: posted ones right away, unposted ones once the pull
-   * request is closed or merged. An open pull request keeps its draft, since the user may still post it.
-   */
   /** Prunes after each successful queue refresh, one run at a time. */
   pruneAfterRefresh(state: QueueSnapshot, signal: AbortSignal): Promise<void> {
     if (state.loading || state.error || this.pruning) {
@@ -176,7 +209,13 @@ export class ReviewSessions {
     return this.pruning
   }
 
+  /**
+   * Forgets the drafts of pull requests that left the queue: posted ones right away, unposted ones once the pull
+   * request is closed or merged. An open pull request keeps its draft, since the user may still post it. A record of
+   * a posted review is kept until its pull request is closed or merged, so a re-request can follow up on it.
+   */
   async prune(queued: ReadonlySet<string>, signal: AbortSignal): Promise<void> {
+    await this.pruneReviewed(queued, signal).catch(() => undefined)
     for (const draft of await this.store.list()) {
       if (queued.has(draft.key) || !(await this.finished(draft, signal))) {
         continue
@@ -185,6 +224,20 @@ export class ReviewSessions {
         await this.cleanUp(draft, signal).catch(() => undefined)
       }
       await this.store.remove(draft.key)
+    }
+  }
+
+  private async pruneReviewed(queued: ReadonlySet<string>, signal: AbortSignal): Promise<void> {
+    const candidates = (await this.reviewed.list()).filter((record) => !queued.has(record.key))
+    if (candidates.length === 0) {
+      return
+    }
+    const states = await pullRequestStates(candidates, signal)
+    for (const record of candidates) {
+      const state = states.get(record.key)
+      if (state && state !== "OPEN") {
+        await this.reviewed.remove(record.key)
+      }
     }
   }
 

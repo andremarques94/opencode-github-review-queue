@@ -41,6 +41,10 @@ export const ReviewDraft = v.object({
   number: v.number(),
   title: v.string(),
   headSha: v.string(),
+  /** Missing on drafts started before it was recorded. */
+  baseSha: v.exactOptional(v.string()),
+  /** The head of the last posted review, when this one only covers the changes since. */
+  sinceSha: v.exactOptional(v.string()),
   ownPullRequest: v.boolean(),
   checkout: v.string(),
   worktree: v.string(),

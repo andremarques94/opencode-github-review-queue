@@ -54,6 +54,40 @@ describe("fetchReviewRequests", () => {
     expect((await fetchReviewRequests(signal)).items[0]?.author).toBe("ghost")
   })
 
+  it("reads readiness and leaves out what GitHub does not know", async () => {
+    respond([
+      page([
+        {
+          ...node(1, "2026-01-01T00:00:00Z"),
+          headRefOid: "head1",
+          baseRefOid: "base1",
+          mergeable: "CONFLICTING",
+          commits: { nodes: [{ commit: { statusCheckRollup: { state: "ERROR" } } }] },
+          reviewThreads: { nodes: [{ isResolved: false }, { isResolved: true }, { isResolved: false }] },
+        },
+        {
+          ...node(2, "2026-01-02T00:00:00Z"),
+          mergeable: "UNKNOWN",
+          commits: { nodes: [{ commit: { statusCheckRollup: null } }] },
+          reviewThreads: "unexpected",
+        },
+      ]),
+    ])
+
+    const [first, second] = (await fetchReviewRequests(signal)).items
+
+    expect(first).toMatchObject({
+      headSha: "head1",
+      baseSha: "base1",
+      checks: "failing",
+      conflicts: true,
+      unresolvedThreads: 2,
+    })
+    for (const field of ["headSha", "checks", "conflicts", "unresolvedThreads"]) {
+      expect(second).not.toHaveProperty(field)
+    }
+  })
+
   it.each([
     ["malformed JSON", "{", "malformed JSON"],
     ["a non-array response", "{}", "an incomplete response"],
