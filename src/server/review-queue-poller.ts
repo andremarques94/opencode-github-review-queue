@@ -1,4 +1,5 @@
 import * as v from "valibot"
+import { type MyNotice, myNotices } from "../domain/my-pull-request.js"
 import {
   compareQueues,
   emptySnapshot,
@@ -24,12 +25,14 @@ export type PollerOptions = {
 const DEFAULT_RENOTIFY_AFTER_MS = 60 * 60_000
 export type FetchResult = {
   items: ReviewRequest[]
+  authored?: ReviewRequest[]
   retryAt?: string
 }
 export type FetchQueue = (signal: AbortSignal) => Promise<FetchResult>
 export type PollerEvent =
   | { type: "state"; state: QueueSnapshot }
   | { type: "discovered"; item: ReviewRequest; eventID: string }
+  | { type: "notice"; notice: MyNotice; item: ReviewRequest; eventID: string }
   /** Only on the instance that fetched the queue from GitHub. */
   | { type: "fetched"; state: QueueSnapshot }
 
@@ -48,6 +51,8 @@ export class ReviewQueuePoller {
   private nextFetchAt = 0
   private failures = 0
   private seen = new Map<string, number>()
+  /** The last successful poll's notices, kept when a failure re-saves the queue, as `newKeys` are. */
+  private notices: MyNotice[] = []
 
   constructor(
     private readonly fetchQueue: FetchQueue,
@@ -160,6 +165,16 @@ export class ReviewQueuePoller {
     for (const item of this.state.items.filter((candidate) => this.state.newKeys.includes(candidate.key))) {
       this.emit({ type: "discovered", item, eventID: `${item.key}:${saved.lastSuccessAt}` })
     }
+    this.announce(saved.notices, saved.lastSuccessAt)
+  }
+
+  private announce(notices: readonly MyNotice[] = [], timestamp = ""): void {
+    for (const notice of notices) {
+      const item = this.state.authored?.find((candidate) => candidate.key === notice.key)
+      if (item) {
+        this.emit({ type: "notice", notice, item, eventID: `${notice.key}:${notice.kind}:${timestamp}` })
+      }
+    }
   }
 
   private async load(): Promise<PersistedQueue | undefined> {
@@ -171,6 +186,7 @@ export class ReviewQueuePoller {
     this.state = {
       items: saved.items,
       newKeys,
+      ...(saved.authored ? { authored: saved.authored } : {}),
       initialized: saved.initialized,
       loading: false,
       stale: saved.initialized && saved.error !== undefined,
@@ -200,9 +216,11 @@ export class ReviewQueuePoller {
       const added = firstSuccess ? [] : this.newlyQueued(compareQueues(this.state.items, result.items).added, now)
       const seen = this.recordSeen(result.items, now)
       const newKeys = added.map((item) => item.key)
+      const { authored, notices } = this.authoredUpdate(result.authored)
       const nextState: QueueSnapshot = {
         items: result.items,
         newKeys,
+        ...authored,
         initialized: true,
         loading: false,
         stale: false,
@@ -212,10 +230,13 @@ export class ReviewQueuePoller {
         version: 1,
         initialized: true,
         items: result.items,
+        ...authored,
         lastSuccessAt: timestamp,
         seen,
         newKeys,
+        ...this.persistedNotices(notices),
       })
+      this.notices = notices
       this.failures = 0
       this.state = nextState
       this.emit({ type: "state", state: this.snapshot() })
@@ -223,6 +244,7 @@ export class ReviewQueuePoller {
       for (const item of added) {
         this.emit({ type: "discovered", item, eventID: `${item.key}:${timestamp}` })
       }
+      this.announce(notices, timestamp)
       this.nextFetchAt = now + Math.max(this.options.intervalMs, this.delayFromRetryAt(result.retryAt) ?? 0)
     } catch (error) {
       if (this.stopped) {
@@ -250,11 +272,24 @@ export class ReviewQueuePoller {
       version: 1,
       initialized: this.state.initialized,
       items: this.state.items,
+      ...(this.state.authored ? { authored: this.state.authored } : {}),
       ...(this.state.lastSuccessAt ? { lastSuccessAt: this.state.lastSuccessAt } : {}),
       seen,
       newKeys: this.state.newKeys,
+      ...this.persistedNotices(this.notices),
       error,
     }
+  }
+
+  private authoredUpdate(next: ReviewRequest[] | undefined) {
+    if (!next) {
+      return { authored: {}, notices: [] }
+    }
+    return { authored: { authored: next }, notices: myNotices(this.state.authored ?? [], next) }
+  }
+
+  private persistedNotices(notices: MyNotice[]) {
+    return notices.length > 0 ? { notices } : {}
   }
 
   private get renotifyAfterMs(): number {

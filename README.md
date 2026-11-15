@@ -27,11 +27,17 @@ in the background, with a notification only when something actually needs you.
   one OpenCode location polls GitHub however many review sessions are open.
 - **Readiness at a glance.** Each row shows its checks (✓ passing, ✗ failing, ● running), merge conflicts, and
   unresolved review threads.
-- **Re-reviews that focus on what changed.** When a pull request you reviewed comes back with new commits, the row
-  says so, and the next review can cover only the commits since.
+- **Re-reviews that focus on what changed.** A pull request you reviewed comes back to the queue when the author
+  pushes, even without a re-request, and the next review can cover only the commits since.
+- **Your own pull requests too.** **Mine** lists them with how their reviews stand, and you are notified when one
+  gets changes requested, becomes ready to merge, or starts failing its checks.
 - **Snooze** a pull request until its checks finish, until the author pushes, or until a time you pick.
 - **Summaries on demand:** a pull request's intent, main changes, and what to inspect, without starting a review.
 - **Grouped by repository**, with a **Current** scope for the repository in the session.
+- **Size and wait at a glance.** Rows show lines added and removed, and how long the pull request has waited on you;
+  sort by the longest wait, the smallest change, or ready to merge first, and highlight what waited too long.
+- **Only what you want to see.** Hide drafts, bots, repositories, or requests made to a team rather than to you;
+  team requests are marked _via @team_.
 - **Notifications that respect you.** New requests are batched into one notification; a request that briefly drops
   out of GitHub's search index does not notify twice.
 - **Keyboard and mouse.** Move, open, copy, filter and refresh, or click and right-click.
@@ -82,12 +88,13 @@ Then open the queue with `/reviews`, or **Show GitHub review requests** from the
 | `o`       | Open the pull request on GitHub                               |
 | `p`       | Post the selected review, after a preview                     |
 | `i`       | Summarize the selected pull request                           |
+| `a`       | Address the review of your selected pull request              |
 | `s`       | Snooze the selected pull request, or wake it                  |
 | `z`       | Show or hide snoozed pull requests                            |
 | `m`       | Actions menu, listing every action with its key               |
 | `y`       | Copy `owner/repo#123`                                         |
 | `u`       | Copy the URL                                                  |
-| `f`       | Switch between **Current** and **All** (or `←` / `→`)          |
+| `f`       | Switch between **All**, **Current**, and **Mine** (or `←` / `→`) |
 | `r`       | Refresh                                                       |
 | `Shift+F` | Toggle full screen                                            |
 | `Esc`     | Close the panel                                               |
@@ -111,7 +118,33 @@ button.
 Rows show what GitHub reports about the pull request's last commit and mergeability: ✓, ✗, or ● for checks that
 pass, fail, or are still running, _conflicts_ when it cannot merge cleanly, and _N threads_ for unresolved review
 threads. Anything GitHub does not know yet, such as a pull request without checks or mergeability still being
-computed, shows nothing.
+computed, shows nothing. On a pull request with more than 100 review threads only the first 100 are counted, so the
+mark reads _N+ threads_.
+
+Next come the lines added and removed (_+120 −30_), the author, and how long the pull request has waited on you:
+since you, or a team you are in, were last asked to review, or for a follow-up since its last commit. Hover it on the
+Desktop for the exact time.
+
+### Your pull requests
+
+**Mine** lists your own open pull requests, grouped by repository like the queue, with their readiness and where
+their reviews stand: _changes requested by @alice_, _blocked_ (conflicts or failing checks), _ready to merge_,
+_approved_ (but not mergeable yet, such as while checks run), or _waiting on @bob, @acme/web_. The scope shows how
+many need you, which means changes requested or ready to merge. Selecting one opens it on GitHub; its menu copies,
+summarizes, and snoozes it as in the queue.
+
+**Address review** (`a` in the TUI, or the row's menu) appears when changes were requested or threads are still
+unresolved. It opens a session in your own clone, with every open review comment as a checklist, and the agent works
+through them with you: what each asks for, the fix it proposes, and a drafted reply where no change is needed. It can
+edit files there, but pushing, resolving threads, and posting on GitHub stay with you: those commands are denied in
+the session. If your clone is on another branch, the plugin asks before adding a worktree on the pull request's
+branch under the cache directory, and never switches your branch; that worktree is kept afterwards, since it may hold
+your commits. **Address review** returns to the same session until the pull request is closed or merged.
+
+You are notified when one of them gets changes requested, becomes ready to merge, or its checks go from passing or
+running to failing. A pull request seen for the first time, such as one you just opened, never notifies. Set
+`"notifyOnMyPullRequests": false` to keep the list without the notifications, or `"myPullRequests": false` to turn
+both off.
 
 ### Snooze
 
@@ -126,7 +159,7 @@ dropped when its pull request leaves the queue.
 **Summarize** asks which model to use (your last review model is selected), reads the pull request's title,
 description, and diff with `gh`, and asks that model for its intent, main changes, and the areas worth inspecting. The
 Desktop shows it as Markdown, the TUI in a dialog. Diffs beyond about 80,000 characters are cut, and the dialog says
-so.
+so; for a pull request of more than about 1,500 changed lines, the model picker warns you first.
 
 ### Reviews
 
@@ -149,10 +182,12 @@ The agent's comments are checked against the exact commits under review, so a pu
 the lines it may comment on.
 
 After you post, the plugin remembers the commit you reviewed and your verdict until the pull request is closed or
-merged. When the author pushes and the request comes back, the row shows _new commits since your review_, and
-starting a review offers **Review changes since last review** (the default) or **Full review**. A follow-up review
+merged. When the author pushes, the pull request comes back to the queue even if nobody re-requests your review, and
+you are notified once. The row shows _new commits since your review_, and starting a review offers **Review changes since last review** (the default) or **Full review**. A follow-up review
 fetches both commits, looks only at the changes between them, reads your earlier comments on GitHub, and its summary
-says which of them the changes address and which they leave unresolved.
+says which of them the changes address and which they leave unresolved. Once you post the follow-up, the pull request
+leaves the queue until the next push. **Snooze › Until the author pushes** sets one aside, and `"followUps": false`
+turns this off. Only reviews posted from the plugin are followed up.
 
 Each finding ends with a question: **Keep**, **Edit wording**, **Drop**, **Explain**, or **Investigate**, with the
 agent's recommendation first. Click one or type a reply. Explain and Investigate answer about that finding and ask
@@ -176,6 +211,10 @@ or says why it found nothing; the comments are removed from the composer once se
 A decision made there is yours: the agent skips it and moves on instead of asking again. Saving an edited comment keeps
 the finding. The `review_*` tools only appear in review sessions.
 
+When a fix is concrete, the agent attaches it as a GitHub **suggestion**, which the author can apply with one click.
+It is posted under the comment as a `suggestion` block, and only on new lines within one hunk, which is where GitHub can
+apply it. Editing a comment shows the block as it will be posted: change it, or delete it to post the comment alone.
+
 **Post review** shows the verdict, summary, and every retained comment, and posts only after you confirm. It refuses
 while findings are undecided, and asks again if new commits were pushed since the draft. The agent cannot post.
 After posting, the worktree is removed, and so is a clone the plugin made once no other review uses it (set
@@ -197,6 +236,10 @@ in a direct tone. Point `reviewGuidelines` at a Markdown file to replace them wi
 Desktop notifications follow **Settings › Notifications**; TUI notifications follow the TUI's attention settings.
 Set `"notifications": false` to keep the in-app toasts but silence native ones.
 
+Each poll runs up to three GitHub searches (requests, follow-ups once you have posted a review, and your own pull
+requests), about 13 points of GitHub's 5,000-an-hour GraphQL budget together. Raise `intervalMs` if you share that
+budget with other tools.
+
 ## Configuration
 
 ```jsonc
@@ -211,7 +254,16 @@ Set `"notifications": false` to keep the in-app toasts but silence native ones.
         "notifications": true,
         "cacheDirectory": "~/.cache/opencode-github-review-queue",
         "reviewGuidelines": "/path/to/review-guidelines.md",
-        "keepClones": false
+        "keepClones": false,
+        "followUps": true,
+        "myPullRequests": true,
+        "notifyOnMyPullRequests": true,
+        "sort": "oldest",
+        "staleAfter": "2d",
+        "includeDrafts": true,
+        "excludeAuthors": ["dependabot", "renovate"],
+        "excludeRepositories": ["acme/legacy", "archive-org/*"],
+        "teamRequests": "show"
       }
     }
   ]
@@ -224,9 +276,18 @@ Set `"notifications": false` to keep the in-app toasts but silence native ones.
 | `timeoutMs`     | `20000`   | Timeout for each GitHub CLI request                               |
 | `maxBackoffMs`  | `900000`  | Longest delay after transient failures                            |
 | `notifications` | `true`    | Native and terminal-attention notifications                       |
-| `cacheDirectory` | `$XDG_CACHE_HOME/opencode-github-review-queue` | Plugin-made clones and review worktrees; falls back to `~/.cache` |
+| `cacheDirectory` | `$XDG_CACHE_HOME/opencode-github-review-queue` | Plugin-made clones, review worktrees, and worktrees for addressing a review; falls back to `~/.cache` |
 | `reviewGuidelines` | built-in | Path to a Markdown file that replaces the review quality bar and tone |
 | `keepClones` | `false` | Keep the plugin's clones after their last review instead of deleting them |
+| `followUps` | `true` | Queue pull requests you reviewed when new commits arrive, without waiting for a re-request |
+| `myPullRequests` | `true` | List your own open pull requests under **Mine** |
+| `notifyOnMyPullRequests` | `true` | Notify when one of them gets changes requested, becomes ready to merge, or starts failing its checks |
+| `sort` | `"oldest"` | `"oldest"` (longest wait first), `"smallest"` (fewest changed lines), or `"ready"` (checks passing and no conflicts first, then smallest) |
+| `staleAfter` | none | Highlight the wait once it passes this, such as `"4h"` or `"2d"` |
+| `includeDrafts` | `true` | Show draft pull requests |
+| `excludeAuthors` | `[]` | Hide pull requests by these logins; bots match with or without `[bot]` |
+| `excludeRepositories` | `[]` | Hide these repositories: `owner/repo`, or `owner/*` for every repository of an owner |
+| `teamRequests` | `"show"` | `"hide"` drops requests made only to a team you are in, keeping the ones made to you |
 
 
 ## Development

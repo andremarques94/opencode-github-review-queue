@@ -1,9 +1,11 @@
 import type { Context } from "@opencode/plugin/gui"
 import { For, Show } from "solid-js"
+import { canAddress } from "../../../../domain/my-pull-request.js"
 import { postBlocker } from "../../../../domain/review-draft.js"
 import { reviewedFor } from "../../../../domain/review-history.js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
-import { ago, fullReference, readinessMarks } from "../../../../shared/presentation.js"
+import { parseOptions } from "../../../../shared/options.js"
+import { fullReference, readinessMarks, sizeMark, teamRequest, waitMark } from "../../../../shared/presentation.js"
 import {
   type DraftAction,
   draftActions,
@@ -42,6 +44,7 @@ export function ReviewRow(props: ReviewRowProps) {
   let actions: HTMLDivElement | undefined
   const draft = () => draftFor(props.local.drafts, props.item.key)
   const snooze = () => activeSnooze(props.local.snoozes, props.item, props.now)
+  const wait = () => waitMark(props.item, parseOptions(props.context.options).staleAfterMs, props.now)
   const open = () => props.context.system.openExternal(props.item.url)
   const openMenu = (event: MouseEvent) => {
     const trigger = actions?.querySelector("button")
@@ -55,7 +58,9 @@ export function ReviewRow(props: ReviewRowProps) {
   }
 
   const review = () =>
-    void props.actions.review(props.item, resumable(draft()), reviewedFor(props.local.reviewed, props.item.key))
+    props.item.authored && !resumable(draft())
+      ? open()
+      : void props.actions.review(props.item, resumable(draft()), reviewedFor(props.local.reviewed, props.item.key))
   const snoozeItem = () => {
     const current = snooze()
     return current
@@ -96,10 +101,28 @@ export function ReviewRow(props: ReviewRowProps) {
               </span>
             )}
           </For>
+          <Show when={sizeMark(props.item)}>
+            {(size) => (
+              <span class="grq-number" title={size().detail}>
+                {size().label}
+              </span>
+            )}
+          </Show>
+          <Show when={!props.item.authored}>
+            <span class="grq-sep">·</span>
+            <span>@{props.item.author}</span>
+          </Show>
+          <Show when={teamRequest(props.item)}>
+            {(team) => (
+              <span class="grq-team" title={team().detail}>
+                {team().label}
+              </span>
+            )}
+          </Show>
           <span class="grq-sep">·</span>
-          <span>@{props.item.author}</span>
-          <span class="grq-sep">·</span>
-          <span class="grq-number">{ago(props.item.createdAt)}</span>
+          <span class="grq-number" data-stale={wait().stale ? "" : undefined} title={wait().detail}>
+            {wait().label}
+          </span>
           <Show when={props.item.draft}>
             <span class="grq-badge">Draft</span>
           </Show>
@@ -132,6 +155,15 @@ export function ReviewRow(props: ReviewRowProps) {
             },
             { label: "Copy link", icon: "link", onSelect: () => props.copy(props.item.url, "Link") },
             { label: "Summarize", icon: "file-document", onSelect: () => void props.actions.summarize(props.item) },
+            ...(canAddress(props.item)
+              ? [
+                  {
+                    label: "Address review…",
+                    icon: "outline-code-brackets" as const,
+                    onSelect: () => void props.actions.address(props.item),
+                  },
+                ]
+              : []),
             snoozeItem(),
             ...draftItems(),
           ]}

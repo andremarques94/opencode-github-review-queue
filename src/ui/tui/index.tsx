@@ -3,8 +3,14 @@ import { Plugin } from "@opencode/plugin/tui"
 import { Show } from "solid-js"
 import type { ReviewDraft } from "../../domain/review-draft.js"
 import { emptySnapshot, type QueueSnapshot } from "../../domain/review-queue.js"
+import type { ReviewRequest } from "../../domain/review-request.js"
 import { createDiscoveryBatcher } from "../../shared/notifications/discovery-batcher.js"
-import { notificationText } from "../../shared/notifications/notification-text.js"
+import {
+  type MyUpdate,
+  myUpdate,
+  myUpdateText,
+  notificationText,
+} from "../../shared/notifications/notification-text.js"
 import { parseOptions } from "../../shared/options.js"
 import { draftForSession, replaceDraft } from "../../shared/review/draft-status.js"
 import { type LocalReviews, ReviewQueue } from "../../shared/rpc.js"
@@ -46,8 +52,7 @@ export default Plugin.define({
       loadDrafts()
     })
     const stopDrafts = rpc.events.on("drafts", (event) => updateDrafts(event.data))
-    const batcher = createDiscoveryBatcher((items) => {
-      const { title, message } = notificationText(items)
+    const announce = ({ title, message }: { title: string; message: string }) => {
       context.ui.toast.show({ title, message: `${message}  ·  /reviews`, variant: "info" })
       if (options.notifications) {
         void context.attention.notify({
@@ -57,9 +62,16 @@ export default Plugin.define({
           sound: { name: "default", when: "blurred" },
         })
       }
-    })
+    }
+    const batcher = createDiscoveryBatcher((items: ReviewRequest[]) => announce(notificationText(items)))
     const stopDiscovered = rpc.events.on("discovered", (event) => {
       batcher.push(event.data.item)
+    })
+    const updates = createDiscoveryBatcher((entries: MyUpdate[]) => announce(myUpdateText(entries)))
+    const stopNotices = rpc.events.on("notice", (event) => {
+      if (options.notifyOnMyPullRequests) {
+        updates.push(myUpdate(event.data.notice, event.data.item))
+      }
     })
 
     const updateDraft = (draft: ReviewDraft) =>
@@ -137,6 +149,8 @@ export default Plugin.define({
       stopDrafts()
       stopDiscovered()
       batcher.dispose()
+      stopNotices()
+      updates.dispose()
       removePanel()
       removeStatus()
     }

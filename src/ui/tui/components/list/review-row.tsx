@@ -4,7 +4,8 @@ import { usePlugin } from "@opencode/plugin/tui"
 import type { MouseEvent } from "@opentui/core"
 import { createSignal, For, Show } from "solid-js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
-import { ago, fitLine, readinessMarks } from "../../../../shared/presentation.js"
+import { parseOptions } from "../../../../shared/options.js"
+import { fitLine, readinessMarks, sizeMark, teamRequest, waitMark } from "../../../../shared/presentation.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
 
 const RIGHT_BUTTON = 2
@@ -20,7 +21,10 @@ export function ReviewRow(props: {
   width: number
   actions: ReviewActions
 }) {
-  const theme = usePlugin().theme
+  const plugin = usePlugin()
+  const theme = plugin.theme
+  const staleAfterMs = parseOptions(plugin.options).staleAfterMs
+  const wait = () => waitMark(props.item, staleAfterMs)
   const [hovered, setHovered] = createSignal(false)
   const look = () =>
     props.selected
@@ -78,7 +82,13 @@ export function ReviewRow(props: {
           <For each={readinessMarks(props.item)}>
             {(mark) => <span style={{ fg: theme.text.feedback[mark.tone].base }}> {mark.label}</span>}
           </For>
-          {` · @${props.item.author} · ${ago(props.item.createdAt)}`}
+          <Show when={sizeMark(props.item)}>{(size) => ` ${size().label}`}</Show>
+          {props.item.authored ? "" : ` · @${props.item.author}`}
+          <Show when={teamRequest(props.item)}>
+            {(team) => <span style={{ fg: theme.text.faint }}> {team().label}</span>}
+          </Show>
+          {" · "}
+          <span style={{ fg: wait().stale ? theme.text.feedback.warning.base : theme.text.muted }}>{wait().label}</span>
           <Show when={props.item.draft}>
             <span style={{ fg: theme.text.feedback.warning.base }}> · draft</span>
           </Show>

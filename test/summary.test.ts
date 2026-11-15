@@ -61,25 +61,54 @@ describe("summarize", () => {
 
 describe("summaryFlow", () => {
   const model = { providerID: "acme", id: "fast", name: "Fast", provider: "Acme" }
-  const host = (summarize: SummaryFlowHost["summarize"], picked: typeof model | undefined) => ({
-    models: async () => ({ models: [model], preferred: null }),
-    select: vi.fn(async () => picked) as SummaryFlowHost["select"],
-    notify: vi.fn(),
-    summarize: vi.fn(summarize),
-    showSummary: vi.fn(),
-  })
+  const host = (summarize: SummaryFlowHost["summarize"], picked: typeof model | undefined) => {
+    const events: string[] = []
+    const pending = { show: vi.fn(() => void events.push("show")), close: vi.fn(() => void events.push("close")) }
+    return {
+      events,
+      pending,
+      models: async () => ({ models: [model], preferred: null }),
+      select: vi.fn(async () => picked) as SummaryFlowHost["select"],
+      summarize: vi.fn(async (input: Parameters<SummaryFlowHost["summarize"]>[0]) => {
+        events.push("summarize")
+        return summarize(input)
+      }),
+      openSummary: vi.fn((_input: { title: string; waiting: string }) => {
+        events.push("open")
+        return pending
+      }),
+    }
+  }
 
-  it("summarizes with the picked model and says when the diff was cut", async () => {
+  it("opens the dialog before the model answers, then fills it in", async () => {
     const flow = host(async () => ({ summary: "## Intent", truncated: true }), model)
 
     await summaryFlow(flow, item)
 
+    expect(flow.events).toEqual(["open", "summarize", "show"])
+    expect(flow.openSummary).toHaveBeenCalledWith({
+      title: "acme/api#7 · Add b",
+      waiting: "Fast is reading the pull request…",
+    })
     expect(flow.summarize).toHaveBeenCalledWith({ key: item.key, model: { providerID: "acme", id: "fast" } })
-    expect(flow.showSummary).toHaveBeenCalledWith({
+    expect(flow.pending.show).toHaveBeenCalledWith({
       title: "acme/api#7 · Add b",
       note: "By Fast · The diff was too large and was cut short, so this covers only part of it.",
       markdown: "## Intent",
     })
+  })
+
+  it("warns before picking a model when the diff will not fit", async () => {
+    const flow = host(async () => ({ summary: "", truncated: false }), undefined)
+
+    await summaryFlow(flow, { ...item, additions: 1_400, deletions: 200 })
+    await summaryFlow(flow, { ...item, additions: 10, deletions: 2 })
+
+    const titles = vi.mocked(flow.select).mock.calls.map(([input]) => input.title)
+    expect(titles).toEqual([
+      "Summarize acme/api#7? It changes 1,600 lines, so only part of the diff will fit. Pick the model",
+      "Summarize acme/api#7? Pick the model",
+    ])
   })
 
   it("does nothing when no model is picked", async () => {
@@ -88,13 +117,15 @@ describe("summaryFlow", () => {
     await summaryFlow(flow, item)
 
     expect(flow.summarize).not.toHaveBeenCalled()
+    expect(flow.openSummary).not.toHaveBeenCalled()
   })
 
-  it("names the model when it fails", async () => {
+  it("closes the waiting dialog and names the model when it fails", async () => {
     const flow = host(async () => {
       throw { type: "failed", message: "Free usage limit reached." }
     }, model)
 
     await expect(summaryFlow(flow, item)).rejects.toThrow("Fast (Acme): Free usage limit reached.")
+    expect(flow.events).toEqual(["open", "summarize", "close"])
   })
 })

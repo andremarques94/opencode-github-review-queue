@@ -1,4 +1,5 @@
 import * as v from "valibot"
+import { MyNotice } from "./my-pull-request.js"
 import { ReviewRequest } from "./review-request.js"
 
 const QueueErrorKind = v.picklist(["missing-gh", "authentication", "offline", "rate-limit", "unavailable", "unknown"])
@@ -14,6 +15,7 @@ export type QueueError = v.InferOutput<typeof QueueError>
 export const QueueSnapshot = v.object({
   items: v.array(ReviewRequest),
   newKeys: v.array(v.string()),
+  authored: v.exactOptional(v.array(ReviewRequest)),
   initialized: v.boolean(),
   loading: v.boolean(),
   stale: v.boolean(),
@@ -29,9 +31,16 @@ export const PersistedQueue = v.object({
   lastSuccessAt: v.exactOptional(v.string()),
   seen: v.exactOptional(v.record(v.string(), v.string())),
   newKeys: v.exactOptional(v.array(v.string())),
+  authored: v.exactOptional(v.array(ReviewRequest)),
+  notices: v.exactOptional(v.array(MyNotice)),
   error: v.exactOptional(QueueError),
 })
 export type PersistedQueue = v.InferOutput<typeof PersistedQueue>
+
+export const everyPullRequest = (state: Pick<QueueSnapshot, "items" | "authored">) => [
+  ...state.items,
+  ...(state.authored ?? []),
+]
 
 export const emptySnapshot = (): QueueSnapshot => ({
   items: [],

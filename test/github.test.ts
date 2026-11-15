@@ -8,7 +8,10 @@ vi.mock("../src/server/github/cli.js", async (importOriginal) => ({
 }))
 
 const { classifyGhError } = await import("../src/server/github/cli.js")
-const { fetchReviewRequests } = await import("../src/server/github/review-requests.js")
+const { fetchOpenThreads, fetchPullRequestBranch } = await import("../src/server/github/pull-request.js")
+const { fetchAuthoredPullRequests, fetchReviewRequests, fetchReviewedPullRequests } = await import(
+  "../src/server/github/review-requests.js"
+)
 
 const node = (number: number, createdAt: string) => ({
   number,
@@ -40,6 +43,18 @@ describe("fetchReviewRequests", () => {
       ["acme/api#2", "octocat"],
     ])
     expect(result.retryAt).toBeUndefined()
+  })
+
+  it("passes each search as a variable, never inside the query", async () => {
+    respond([page([])])
+    await fetchReviewRequests(signal)
+    await fetchReviewedPullRequests(signal)
+
+    const searches = runGh.mock.calls.map((call) => (call[0] as string[]).find((arg) => arg.startsWith("search=")))
+    expect(searches).toEqual([
+      "search=is:pr is:open review-requested:@me",
+      "search=is:pr is:open reviewed-by:@me -review-requested:@me",
+    ])
   })
 
   it("reports the reset time when the rate limit is exhausted", async () => {
@@ -83,9 +98,156 @@ describe("fetchReviewRequests", () => {
       conflicts: true,
       unresolvedThreads: 2,
     })
+    expect(first).not.toHaveProperty("unresolvedThreadsCapped")
     for (const field of ["headSha", "checks", "conflicts", "unresolvedThreads"]) {
       expect(second).not.toHaveProperty(field)
     }
+  })
+
+  it("tells direct requests from team requests", async () => {
+    const reviewers = (...requestedReviewer: unknown[]) => ({
+      reviewRequests: { nodes: requestedReviewer.map((entry) => ({ requestedReviewer: entry })) },
+    })
+    const team = (slug: string) => ({ __typename: "Team", slug, organization: { login: "acme" } })
+    const viewer = { __typename: "User", login: "Me" }
+    respond([
+      {
+        data: {
+          ...page([
+            { ...node(1, "2026-01-01T00:00:00Z"), ...reviewers(team("web"), viewer) },
+            { ...node(2, "2026-01-02T00:00:00Z"), ...reviewers(team("web"), team("api")) },
+            { ...node(3, "2026-01-03T00:00:00Z"), ...reviewers(null, { __typename: "Bot", login: "copilot" }) },
+          ]).data,
+          viewer: { login: "me" },
+        },
+      },
+    ])
+
+    const [direct, teams, unknown] = (await fetchReviewRequests(signal)).items
+
+    expect(direct?.requestedVia).toEqual({ kind: "you" })
+    expect(teams?.requestedVia).toEqual({ kind: "team", teams: ["acme/web", "acme/api"] })
+    expect(unknown).not.toHaveProperty("requestedVia")
+  })
+
+  it("reads the size, the last commit, and when the user or their team was last asked", async () => {
+    const user = (login: string) => ({ __typename: "User", login })
+    const team = { __typename: "Team", slug: "web", organization: { login: "acme" } }
+    const asked = (createdAt: string, requestedReviewer: unknown) => ({ createdAt, requestedReviewer })
+    respond([
+      {
+        data: {
+          ...page([
+            {
+              ...node(1, "2026-01-01T00:00:00Z"),
+              additions: 10,
+              deletions: 2,
+              changedFiles: 3,
+              commits: { nodes: [{ commit: { committedDate: "2026-01-05T00:00:00Z", statusCheckRollup: null } }] },
+              reviewRequests: { nodes: [{ requestedReviewer: user("me") }] },
+              timelineItems: {
+                nodes: [asked("2026-01-02T00:00:00Z", user("me")), asked("2026-01-03T00:00:00Z", user("other")), {}],
+              },
+            },
+            {
+              ...node(2, "2026-01-01T00:00:00Z"),
+              reviewRequests: { nodes: [{ requestedReviewer: team }] },
+              timelineItems: { nodes: [asked("2026-01-04T00:00:00Z", team), asked("2026-01-06T00:00:00Z", null)] },
+            },
+          ]).data,
+          viewer: { login: "me" },
+        },
+      },
+    ])
+
+    const [mine, teams] = (await fetchReviewRequests(signal)).items
+
+    expect(mine).toMatchObject({
+      additions: 10,
+      deletions: 2,
+      changedFiles: 3,
+      lastCommitAt: "2026-01-05T00:00:00Z",
+      requestedAt: "2026-01-02T00:00:00Z",
+    })
+    expect(teams?.requestedAt).toBe("2026-01-04T00:00:00Z")
+  })
+
+  it("reads how the reviews of the user's own pull requests stand", async () => {
+    respond([
+      {
+        data: {
+          ...page([
+            {
+              ...node(1, "2026-01-01T00:00:00Z"),
+              author: { login: "me" },
+              reviewDecision: "CHANGES_REQUESTED",
+              mergeStateStatus: "BLOCKED",
+              reviewRequests: {
+                nodes: [
+                  { requestedReviewer: { __typename: "User", login: "bob" } },
+                  { requestedReviewer: { __typename: "Team", slug: "web", organization: { login: "acme" } } },
+                ],
+              },
+              latestReviews: {
+                nodes: [
+                  { state: "CHANGES_REQUESTED", author: { login: "alice" } },
+                  { state: "APPROVED", author: { login: "carol" } },
+                ],
+              },
+            },
+            { ...node(2, "2026-01-02T00:00:00Z"), mergeStateStatus: "HAS_HOOKS" },
+            { ...node(3, "2026-01-03T00:00:00Z"), mergeStateStatus: "UNKNOWN", reviewDecision: "SOMETHING_NEW" },
+          ]).data,
+          viewer: { login: "me" },
+        },
+      },
+    ])
+
+    const [blocked, ready, unknown] = (await fetchAuthoredPullRequests(signal)).items
+
+    expect(blocked?.authored).toEqual({
+      reviewDecision: "CHANGES_REQUESTED",
+      mergeReady: false,
+      waitingOn: ["bob", "acme/web"],
+      changesRequestedBy: ["alice"],
+    })
+    expect(ready?.authored).toEqual({ mergeReady: true, waitingOn: [], changesRequestedBy: [] })
+    expect(unknown?.authored).toEqual({ waitingOn: [], changesRequestedBy: [] })
+    expect(runGh.mock.calls[0]?.[0]).toContain("search=is:pr is:open author:@me")
+  })
+
+  it("claims no source without the viewer's login", async () => {
+    respond([
+      page([
+        {
+          ...node(1, "2026-01-01T00:00:00Z"),
+          reviewRequests: {
+            nodes: [{ requestedReviewer: { __typename: "Team", slug: "web", organization: { login: "acme" } } }],
+          },
+        },
+      ]),
+    ])
+
+    expect((await fetchReviewRequests(signal)).items[0]).not.toHaveProperty("requestedVia")
+  })
+
+  it("marks the thread count as a lower bound past the first page", async () => {
+    const threads = (isResolved: boolean) => ({
+      pageInfo: { hasNextPage: true },
+      nodes: [{ isResolved }, { isResolved: true }],
+    })
+    respond([
+      page([
+        { ...node(1, "2026-01-01T00:00:00Z"), reviewThreads: threads(false) },
+        { ...node(2, "2026-01-02T00:00:00Z"), reviewThreads: threads(true) },
+      ]),
+    ])
+
+    const [some, none] = (await fetchReviewRequests(signal)).items
+
+    expect(some).toMatchObject({ unresolvedThreads: 1, unresolvedThreadsCapped: true })
+    expect(none).not.toHaveProperty("unresolvedThreads")
+    expect(none).not.toHaveProperty("unresolvedThreadsCapped")
   })
 
   it.each([
@@ -100,6 +262,59 @@ describe("fetchReviewRequests", () => {
     await expect(fetchReviewRequests(signal)).rejects.toMatchObject({
       detail: { kind: "unknown", message: `GitHub returned ${problem}; the saved queue was left unchanged.` },
     })
+  })
+})
+
+describe("addressing a review", () => {
+  it("keeps only unresolved threads, without a line once the code moved on", async () => {
+    const thread = (isResolved: boolean, line: number | null, body: string) => ({
+      isResolved,
+      isOutdated: line === null,
+      path: "src/app.ts",
+      line,
+      comments: {
+        nodes: [
+          { author: { login: "alice" }, body },
+          { author: null, body: "+1" },
+        ],
+      },
+    })
+    respond({
+      data: {
+        repository: {
+          pullRequest: {
+            reviewThreads: {
+              nodes: [thread(false, 3, "Name this."), thread(true, 4, "Done"), thread(false, null, "Why?")],
+            },
+          },
+        },
+      },
+    })
+
+    expect(await fetchOpenThreads("acme/api", 7, signal)).toEqual([
+      {
+        path: "src/app.ts",
+        line: 3,
+        outdated: false,
+        comments: [
+          { author: "alice", body: "Name this." },
+          { author: "ghost", body: "+1" },
+        ],
+      },
+      { path: "src/app.ts", outdated: true, comments: expect.any(Array) },
+    ])
+    expect(runGh.mock.calls[0]?.[0]).toEqual(expect.arrayContaining(["owner=acme", "name=api", "number=7"]))
+  })
+
+  it("refuses a branch name git could read as an option", async () => {
+    const branch = (headRefName: string) => respond({ state: "OPEN", headRefName, isCrossRepository: false })
+
+    branch("feature/b")
+    expect((await fetchPullRequestBranch("acme/api", 7, signal)).headRefName).toBe("feature/b")
+    for (const name of ["--upload-pack=evil", "a..b", "feature/", "x.lock", "has space"]) {
+      branch(name)
+      await expect(fetchPullRequestBranch("acme/api", 7, signal)).rejects.toThrow(/unexpected response/)
+    }
   })
 })
 

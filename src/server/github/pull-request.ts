@@ -41,6 +41,102 @@ export async function fetchPullRequest(repository: string, number: number, signa
   return parseJson(PullRequestInfo, result.stdout, `${repository}#${number}`)
 }
 
+/** Refuses a name git could read as an option or that leaves the refs namespace; GitHub's own names pass. */
+const BranchName = v.pipe(
+  v.string(),
+  v.regex(/^[\w.][\w./-]*$/),
+  v.check((name) => !name.includes("..") && !name.endsWith("/") && !name.endsWith(".lock")),
+)
+
+const PullRequestBranch = v.object({
+  state: v.string(),
+  headRefName: BranchName,
+  isCrossRepository: v.boolean(),
+})
+
+export async function fetchPullRequestBranch(repository: string, number: number, signal: AbortSignal) {
+  const result = await runGh(
+    ["pr", "view", String(number), "--repo", repository, "--json", "state,headRefName,isCrossRepository"],
+    { signal },
+  )
+  return parseJson(PullRequestBranch, result.stdout, `${repository}#${number}`)
+}
+
+export type OpenThread = {
+  path: string
+  line?: number
+  outdated: boolean
+  comments: { author: string; body: string }[]
+}
+
+const ThreadsResponse = v.object({
+  data: v.object({
+    repository: v.object({
+      pullRequest: v.object({
+        reviewThreads: v.object({
+          nodes: v.array(
+            v.object({
+              isResolved: v.boolean(),
+              isOutdated: v.boolean(),
+              path: v.string(),
+              line: v.nullable(v.number()),
+              comments: v.object({
+                nodes: v.array(
+                  v.object({
+                    author: v.fallback(v.object({ login: v.string() }), { login: "ghost" }),
+                    body: v.string(),
+                  }),
+                ),
+              }),
+            }),
+          ),
+        }),
+      }),
+    }),
+  }),
+})
+
+const THREADS_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100) {
+        nodes { isResolved isOutdated path line comments(first: 50) { nodes { author { login } body } } }
+      }
+    }
+  }
+}`
+
+export async function fetchOpenThreads(repository: string, number: number, signal: AbortSignal) {
+  const [owner = "", name = ""] = repository.split("/")
+  const result = await runGh(
+    [
+      "api",
+      "graphql",
+      "-f",
+      `query=${THREADS_QUERY}`,
+      "-f",
+      `owner=${owner}`,
+      "-f",
+      `name=${name}`,
+      "-F",
+      `number=${number}`,
+    ],
+    { signal },
+  )
+  const threads = parseJson(ThreadsResponse, result.stdout, `the review threads of ${repository}#${number}`).data
+    .repository.pullRequest.reviewThreads.nodes
+  return threads
+    .filter((thread) => !thread.isResolved)
+    .map(
+      (thread): OpenThread => ({
+        path: thread.path,
+        ...(thread.line === null ? {} : { line: thread.line }),
+        outdated: thread.isOutdated,
+        comments: thread.comments.nodes.map((comment) => ({ author: comment.author.login, body: comment.body })),
+      }),
+    )
+}
+
 const PullRequestText = v.object({ title: v.string(), body: v.string() })
 
 export async function fetchPullRequestText(repository: string, number: number, signal: AbortSignal) {

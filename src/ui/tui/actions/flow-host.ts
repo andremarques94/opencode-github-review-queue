@@ -1,4 +1,5 @@
 import type { usePlugin } from "@opencode/plugin/tui"
+import type { AddressFlowHost } from "../../../shared/review/address.js"
 import type { FindingFlowHost } from "../../../shared/review/finding-flows.js"
 import type { ReviewFlowHost } from "../../../shared/review/flows.js"
 import type { SnoozeFlowHost } from "../../../shared/review/snooze.js"
@@ -6,7 +7,7 @@ import type { SummaryFlowHost } from "../../../shared/review/summary.js"
 import { ReviewQueue } from "../../../shared/rpc.js"
 import { editFindingBody } from "../components/findings/edit-finding-dialog.js"
 import { confirmPost } from "../components/post-review-dialog.js"
-import { showSummary } from "../components/summary-dialog.js"
+import { openSummary } from "../components/summary-dialog.js"
 
 export function createFindingFlowHost(context: ReturnType<typeof usePlugin>): FindingFlowHost {
   const rpc = context.client.rpc(ReviewQueue)
@@ -22,9 +23,10 @@ export function createFindingFlowHost(context: ReturnType<typeof usePlugin>): Fi
 
 export function createFlowHost(
   context: ReturnType<typeof usePlugin>,
-): ReviewFlowHost & SnoozeFlowHost & SummaryFlowHost {
+): ReviewFlowHost & SnoozeFlowHost & SummaryFlowHost & AddressFlowHost {
   const rpc = context.client.rpc(ReviewQueue)
   return {
+    addressReview: (request) => rpc.addressReview(request),
     confirm: async (options) =>
       (await context.ui.dialog.confirm({
         title: options.title,
@@ -46,6 +48,6 @@ export function createFlowHost(
     prompt: (options) => context.ui.dialog.prompt(options),
     snooze: (request) => rpc.snooze(request),
     summarize: (request) => rpc.summarize(request),
-    showSummary: (view) => showSummary(context, view),
+    openSummary: (input) => openSummary(context, input),
   }
 }

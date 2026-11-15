@@ -1,5 +1,6 @@
 import { Rpc } from "@opencode/plugin/rpc"
 import * as v from "valibot"
+import { MyNotice } from "../domain/my-pull-request.js"
 import { FindingFields, ReviewDraft } from "../domain/review-draft.js"
 import { ReviewedRecord } from "../domain/review-history.js"
 import { QueueSnapshot } from "../domain/review-queue.js"
@@ -81,6 +82,7 @@ export const ReviewQueue = Rpc.define({
       errors,
     },
     editFinding: {
+      /** The comment as posted: a closing suggestion block becomes the finding's suggestion. */
       input: v.strictObject({ ...byFinding, body: FindingFields.body }),
       output: draft,
       errors,
@@ -96,12 +98,32 @@ export const ReviewQueue = Rpc.define({
       output: v.strictObject({ summary: v.string(), truncated: v.boolean() }),
       errors,
     },
+    addressReview: {
+      input: v.strictObject({
+        key: v.string(),
+        directory: v.exactOptional(v.string()),
+        worktree: v.boolean(),
+        model: v.exactOptional(ModelRef),
+      }),
+      output: v.variant("status", [
+        v.strictObject({ status: v.picklist(["started", "resumed"]), sessionID: v.string() }),
+        v.strictObject({
+          status: v.literal("needs-worktree"),
+          branch: v.string(),
+          current: v.exactOptional(v.string()),
+          directory: v.string(),
+        }),
+        v.strictObject({ status: v.literal("needs-model") }),
+      ]),
+      errors,
+    },
     snooze: { input: v.strictObject({ key: v.string(), until: SnoozeUntil }), output: drafts, errors },
     wake: { input: byKey, output: drafts, errors },
   },
   events: {
     state: { schema: QueueSnapshot },
     discovered: { schema: v.object({ item: ReviewRequest, eventID: v.string() }) },
+    notice: { schema: v.object({ notice: MyNotice, item: ReviewRequest, eventID: v.string() }) },
     drafts: { schema: drafts },
   },
 } satisfies Rpc.PortableDefinition)

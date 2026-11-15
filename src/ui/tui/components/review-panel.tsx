@@ -35,12 +35,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
   onCleanup(watchClock(setNow))
 
   const view = createMemo(() =>
-    hideSnoozed(
-      filterItems(props.state.items, filter(), props.state.repository),
-      props.state.snoozes,
-      showSnoozed(),
-      now(),
-    ),
+    hideSnoozed(filterItems(props.state, filter(), props.state.repository), props.state.snoozes, showSnoozed(), now()),
   )
   const groups = createMemo(() => groupByRepository(view().items))
   const ordered = createMemo(() => groups().flatMap((group) => group.items))
@@ -79,7 +74,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
       >
         <ReviewList
           groups={groups()}
-          grouped={filter() === "all"}
+          grouped={filter() !== "current"}
           selectedKey={current()?.key}
           newKeys={props.state.newKeys}
           label={label}

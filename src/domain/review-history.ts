@@ -28,3 +28,16 @@ export function followUpOf(item: ReviewRequest, record: ReviewedRecord | undefin
   }
   return record
 }
+
+/** A follow-up drops `requestedVia`: GitHub still lists the other requested teams, but nobody is asking the user. */
+export function withFollowUps(
+  requested: readonly ReviewRequest[],
+  reviewed: readonly ReviewRequest[],
+  records: readonly ReviewedRecord[],
+): ReviewRequest[] {
+  const keys = new Set(requested.map((item) => item.key))
+  const followUps = reviewed
+    .filter((item) => !keys.has(item.key) && followUpOf(item, reviewedFor(records, item.key)))
+    .map(({ requestedVia: _, ...item }): ReviewRequest => ({ ...item, followUp: true }))
+  return [...requested, ...followUps]
+}

@@ -1,11 +1,14 @@
 import { usePlugin } from "@opencode/plugin/tui"
 import type { PanelInput } from "@opencode/plugin/tui/context"
 import type { Accessor, Setter } from "solid-js"
+import { canAddress } from "../../../domain/my-pull-request.js"
 import type { ReviewDraft } from "../../../domain/review-draft.js"
 import { reviewedFor } from "../../../domain/review-history.js"
 import type { QueueSnapshot } from "../../../domain/review-queue.js"
 import type { ReviewRequest } from "../../../domain/review-request.js"
-import { fullReference, type QueueFilter } from "../../../shared/presentation.js"
+import { parseOptions } from "../../../shared/options.js"
+import { fullReference, nextFilter, type QueueFilter } from "../../../shared/presentation.js"
+import { addressReviewFlow } from "../../../shared/review/address.js"
 import { draftFor, resumable } from "../../../shared/review/draft-status.js"
 import { postReviewFlow, type ReviewFlowHost, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
 import { activeSnooze, snoozeFlow } from "../../../shared/review/snooze.js"
@@ -31,6 +34,7 @@ export type ReviewActions = {
   snooze(): Promise<void>
   toggleSnoozed(): void
   summarize(): Promise<void>
+  address(): Promise<void>
   menu(): Promise<void>
   refresh(): Promise<void>
   setFilter(filter: QueueFilter): void
@@ -110,6 +114,10 @@ export function useReviewActions(input: {
         if (!item) {
           return
         }
+        if (item.authored && !resumable(currentDraft())) {
+          await actions.open()
+          return
+        }
         const sessionID = await startReviewFlow(
           host,
           item,
@@ -167,6 +175,18 @@ export function useReviewActions(input: {
     toggleSnoozed() {
       input.setShowSnoozed((shown) => !shown)
     },
+    address: () =>
+      attempt(async () => {
+        const item = input.current()
+        if (!item || !canAddress(item)) {
+          return
+        }
+        const sessionID = await addressReviewFlow(host, item, directory())
+        if (sessionID) {
+          input.panel.close()
+          context.ui.router.navigate({ type: "session", sessionID })
+        }
+      }, "Could not address the review"),
     summarize: () =>
       attempt(async () => {
         const item = input.current()
@@ -183,7 +203,7 @@ export function useReviewActions(input: {
             ? pullRequestOptions(actions, item, currentDraft(), activeSnooze(input.local().snoozes, item, input.now()))
             : []),
           ...queueOptions(actions, {
-            filter: input.filter(),
+            nextFilter: nextFilter(input.filter(), parseOptions(context.options).myPullRequests),
             snoozed: input.snoozed(),
             showSnoozed: input.showSnoozed(),
             toggleFullscreen: input.panel.toggleFullscreen,
@@ -200,7 +220,7 @@ export function useReviewActions(input: {
       input.setSelected(0)
     },
     toggleFilter() {
-      actions.setFilter(input.filter() === "all" ? "current" : "all")
+      actions.setFilter(nextFilter(input.filter(), parseOptions(context.options).myPullRequests))
     },
     close: input.panel.close,
   }
@@ -224,6 +244,12 @@ export function useReviewActions(input: {
       { id: "github-review-queue.menu", title: "Pull request actions", bind: "m", run: actions.menu },
       { id: "github-review-queue.post", title: "Post review", bind: "p", run: actions.post },
       { id: "github-review-queue.summarize", title: "Summarize pull request", bind: "i", run: actions.summarize },
+      {
+        id: "github-review-queue.address",
+        title: "Address the review of your pull request",
+        bind: "a",
+        run: actions.address,
+      },
       { id: "github-review-queue.snooze", title: "Snooze or wake pull request", bind: "s", run: actions.snooze },
       {
         id: "github-review-queue.show-snoozed",

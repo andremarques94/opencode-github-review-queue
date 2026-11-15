@@ -57,7 +57,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
   })
 
   const view = createMemo(() =>
-    hideSnoozed(filterItems(props.state.items, filter(), repository()), props.local.snoozes, showSnoozed(), now()),
+    hideSnoozed(filterItems(props.state, filter(), repository()), props.local.snoozes, showSnoozed(), now()),
   )
   const refresh = () => {
     void rpc()
@@ -97,7 +97,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
           local={props.local}
           now={now()}
           actions={actions}
-          grouped={filter() === "all"}
+          grouped={filter() !== "current"}
           copy={copy}
         />
       </Show>

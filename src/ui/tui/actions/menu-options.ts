@@ -1,7 +1,8 @@
+import { canAddress } from "../../../domain/my-pull-request.js"
 import type { ReviewDraft } from "../../../domain/review-draft.js"
 import type { ReviewRequest } from "../../../domain/review-request.js"
 import type { Snooze } from "../../../domain/snooze.js"
-import { fullReference, type QueueFilter, readinessSummary } from "../../../shared/presentation.js"
+import { fullReference, type QueueFilter, readinessSummary, teamRequest } from "../../../shared/presentation.js"
 import { type DraftAction, draftActions } from "../../../shared/review/draft-status.js"
 import { snoozeLabel } from "../../../shared/review/snooze.js"
 import type { ReviewActions } from "./review-actions.js"
@@ -16,6 +17,12 @@ export type MenuOption = {
 
 const PULL_REQUEST = "Pull request"
 const QUEUE = "Queue"
+
+const SCOPE_TITLES: Record<QueueFilter, string> = {
+  all: "Show all repositories",
+  current: "Show only this repository",
+  mine: "Show your pull requests",
+}
 
 const withDescription = (description: string | undefined) => (description ? { description } : {})
 
@@ -42,7 +49,9 @@ export function pullRequestOptions(
     {
       title: "Open on GitHub",
       value: actions.open,
-      ...withDescription(readinessSummary(item)),
+      ...withDescription(
+        [teamRequest(item)?.detail, readinessSummary(item)].filter((part) => part !== undefined).join(" · "),
+      ),
       footer: "o",
       category: PULL_REQUEST,
     },
@@ -61,6 +70,17 @@ export function pullRequestOptions(
       footer: "i",
       category: PULL_REQUEST,
     },
+    ...(canAddress(item)
+      ? [
+          {
+            title: "Address review…",
+            value: actions.address,
+            description: "Work through the review comments in your checkout",
+            footer: "a",
+            category: PULL_REQUEST,
+          },
+        ]
+      : []),
     snooze
       ? {
           title: "Wake up",
@@ -76,11 +96,11 @@ export function pullRequestOptions(
 
 export function queueOptions(
   actions: ReviewActions,
-  queue: { filter: QueueFilter; snoozed: number; showSnoozed: boolean; toggleFullscreen: () => void },
+  queue: { nextFilter: QueueFilter; snoozed: number; showSnoozed: boolean; toggleFullscreen: () => void },
 ): MenuOption[] {
   return [
     {
-      title: queue.filter === "all" ? "Show only this repository" : "Show all repositories",
+      title: SCOPE_TITLES[queue.nextFilter],
       value: actions.toggleFilter,
       footer: "f / ←→",
       category: QUEUE,

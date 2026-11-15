@@ -1,6 +1,6 @@
 import type { Context } from "@opencode/plugin/gui"
 import { Show } from "solid-js"
-import { type Finding, findingLocation, type ReviewDraft } from "../../../../domain/review-draft.js"
+import { commentBody, type Finding, findingLocation, type ReviewDraft } from "../../../../domain/review-draft.js"
 import { DECISION_LABELS } from "../../../../shared/review/draft-status.js"
 import type { FindingActions } from "../../actions/finding-actions.js"
 import { showEvidence } from "../evidence-dialog.js"
@@ -27,7 +27,7 @@ export function FindingCard(props: FindingCardProps) {
         <span>{props.finding.confidence} confidence</span>
         <span class={`grq-badge grq-badge-${props.finding.decision}`}>{DECISION_LABELS[props.finding.decision]}</span>
       </div>
-      <props.context.ui.Markdown text={props.finding.body} />
+      <props.context.ui.Markdown text={commentBody(props.finding)} />
       <div class="grq-actions">
         <Show when={editable()}>
           <props.context.ui.Button

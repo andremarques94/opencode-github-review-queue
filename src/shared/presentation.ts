@@ -1,20 +1,22 @@
+import { needsYou } from "../domain/my-pull-request.js"
 import type { QueueSnapshot } from "../domain/review-queue.js"
-import type { ReviewRequest } from "../domain/review-request.js"
+import { type ReviewRequest, waitingSince } from "../domain/review-request.js"
 
-export type QueueFilter = "current" | "all"
+export type QueueFilter = "current" | "all" | "mine"
 
 export function filterItems(
-  items: readonly ReviewRequest[],
+  state: Pick<QueueSnapshot, "items" | "authored">,
   filter: QueueFilter,
   repository?: string,
 ): ReviewRequest[] {
-  if (filter === "all") {
-    return [...items]
+  switch (filter) {
+    case "all":
+      return [...state.items]
+    case "mine":
+      return [...(state.authored ?? [])]
+    case "current":
+      return repository ? state.items.filter((item) => item.repository.toLowerCase() === repository.toLowerCase()) : []
   }
-  if (!repository) {
-    return []
-  }
-  return items.filter((item) => item.repository.toLowerCase() === repository.toLowerCase())
 }
 
 function age(createdAt: string, now = Date.now()): string {
@@ -35,6 +37,37 @@ function age(createdAt: string, now = Date.now()): string {
     return `${days}d`
   }
   return `${Math.floor(days / 30)}mo`
+}
+
+export function nextFilter(filter: QueueFilter, mine: boolean): QueueFilter {
+  switch (filter) {
+    case "all":
+      return "current"
+    case "current":
+      return mine ? "mine" : "all"
+    case "mine":
+      return "all"
+  }
+}
+
+export function emptyMessage(filter: QueueFilter): string {
+  switch (filter) {
+    case "all":
+      return "You're all caught up."
+    case "current":
+      return "No review requests in this repository."
+    case "mine":
+      return "You have no open pull requests."
+  }
+}
+
+export const needingYou = (state: Pick<QueueSnapshot, "authored">): number | undefined =>
+  state.authored?.filter(needsYou).length
+
+export function elapsedLabel(startedAt: number, now: number): string {
+  const seconds = Math.max(0, Math.floor((now - startedAt) / 1_000))
+  const minutes = Math.floor(seconds / 60)
+  return minutes > 0 ? `(${minutes}m ${String(seconds % 60).padStart(2, "0")}s)` : `(${seconds}s)`
 }
 
 export function ago(createdAt: string, now = Date.now()): string {
@@ -98,13 +131,56 @@ export function readinessMarks(item: ReviewRequest): ReadinessMark[] {
     marks.push({ label: "conflicts", tone: "error", detail: "Conflicts with the base branch" })
   }
   if (item.unresolvedThreads) {
-    marks.push({
-      label: plural(item.unresolvedThreads, "thread"),
-      tone: "warning",
-      detail: plural(item.unresolvedThreads, "unresolved review thread"),
-    })
+    const detail = plural(item.unresolvedThreads, "unresolved review thread")
+    marks.push(
+      item.unresolvedThreadsCapped
+        ? { label: `${item.unresolvedThreads}+ threads`, tone: "warning", detail: `At least ${detail}` }
+        : { label: plural(item.unresolvedThreads, "thread"), tone: "warning", detail },
+    )
   }
   return marks
+}
+
+const count = new Intl.NumberFormat("en-US")
+
+export function sizeMark(item: ReviewRequest): { label: string; detail: string } | undefined {
+  if (item.additions === undefined || item.deletions === undefined) {
+    return undefined
+  }
+  const files = item.changedFiles === undefined ? "" : ` in ${plural(item.changedFiles, "file")}`
+  return {
+    label: `+${count.format(item.additions)} −${count.format(item.deletions)}`,
+    detail: `${count.format(item.additions)} added, ${count.format(item.deletions)} removed${files}`,
+  }
+}
+
+export function waitMark(
+  item: ReviewRequest,
+  staleAfterMs: number | undefined,
+  now = Date.now(),
+): { label: string; detail: string; stale: boolean } {
+  const since = waitingSince(item)
+  const known = item.followUp ? item.lastCommitAt : item.requestedAt
+  const reason = !known ? "Opened" : item.followUp ? "New commits" : "Requested"
+  return {
+    label: ago(since, now),
+    detail: `${reason} ${new Date(since).toLocaleString()}`,
+    stale: staleAfterMs !== undefined && now - Date.parse(since) > staleAfterMs,
+  }
+}
+
+export function teamRequest(item: ReviewRequest): { label: string; detail: string } | undefined {
+  if (item.requestedVia?.kind !== "team") {
+    return undefined
+  }
+  const [first, ...rest] = item.requestedVia.teams
+  if (first && rest.length === 0) {
+    return { label: `via @${first.slice(first.indexOf("/") + 1)}`, detail: `Requested from @${first}` }
+  }
+  return {
+    label: "via team",
+    detail: `Requested from one of ${item.requestedVia.teams.map((team) => `@${team}`).join(", ")}`,
+  }
 }
 
 export function readinessSummary(item: ReviewRequest): string | undefined {

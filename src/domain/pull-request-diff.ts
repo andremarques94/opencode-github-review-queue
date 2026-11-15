@@ -107,3 +107,23 @@ export function commentProblem(
   }
   return undefined
 }
+
+/** GitHub only applies a suggestion to new lines of one hunk; a gap in the new lines means the range spans two. */
+export function suggestionProblem(
+  lines: CommentableLines,
+  target: { path: string; line: number; side: DiffSide; startLine?: number; startSide?: DiffSide; suggestion?: string },
+): string | undefined {
+  if (target.suggestion === undefined) {
+    return undefined
+  }
+  if (target.side !== "RIGHT" || (target.startSide ?? target.side) !== "RIGHT") {
+    return "A suggestion replaces new lines, so it needs side RIGHT; describe a fix for removed lines in the body."
+  }
+  const right = lines.get(target.path)?.RIGHT
+  for (let line = target.startLine ?? target.line; line <= target.line; line++) {
+    if (!right?.has(line)) {
+      return `A suggestion must cover lines of one hunk, and ${target.path}:${line} is not in the diff.`
+    }
+  }
+  return undefined
+}

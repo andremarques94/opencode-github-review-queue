@@ -27,7 +27,12 @@ const findingProperties = {
   severity: { type: "string", enum: ["blocker", "major", "minor", "nit"] },
   confidence: { type: "string", enum: ["high", "medium", "low"] },
   evidence: { type: "string", description: "Local notes for the user: what you verified and what is uncertain." },
-  body: { type: "string", description: "The exact GitHub comment, in the user's voice." },
+  body: { type: "string", description: "The exact GitHub comment, in the user's voice, without a suggestion block." },
+  suggestion: {
+    type: "string",
+    description:
+      "Optional. The exact new text of the commented RIGHT lines, without a fence; posted as a GitHub suggestion. Empty deletes them.",
+  },
 } as const
 
 // The long fields sit in one nested object because the TUI draws a tool call as its name plus every top-level
@@ -35,7 +40,10 @@ const findingProperties = {
 const AddInput = v.strictObject({ finding: v.strictObject(FindingFields) })
 const UpdateInput = v.strictObject({
   id: v.number(),
-  changes: v.strictObject(v.partial(v.object(FindingFields)).entries),
+  changes: v.strictObject({
+    ...v.partial(v.object(FindingFields)).entries,
+    suggestion: v.exactOptional(v.nullable(v.string())),
+  }),
 })
 const DecideInput = v.strictObject({ id: v.number(), decision: v.picklist(["keep", "drop"]) })
 const VerdictInput = v.strictObject({
@@ -94,7 +102,13 @@ export function addReviewTools(editor: ToolEditor, findings: Findings): void {
         changes: {
           type: "object",
           description: "Only the fields to change.",
-          properties: findingProperties,
+          properties: {
+            ...findingProperties,
+            suggestion: {
+              type: ["string", "null"],
+              description: `${findingProperties.suggestion.description} null removes the suggestion.`,
+            },
+          },
           additionalProperties: false,
         },
       },

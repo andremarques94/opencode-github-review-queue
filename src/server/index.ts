@@ -1,12 +1,15 @@
 import { Plugin } from "@opencode/plugin"
+import { AddressSession } from "../domain/my-pull-request.js"
 import { ReviewedRecord } from "../domain/review-history.js"
+import { everyPullRequest } from "../domain/review-queue.js"
 import { Snooze } from "../domain/snooze.js"
 import { type PluginOptions, parseOptions } from "../shared/options.js"
 import { type LocalReviews, ReviewQueue } from "../shared/rpc.js"
 import { openReview, repositoryForDirectory } from "./github/repository.js"
-import { fetchReviewRequests } from "./github/review-requests.js"
 import { type KeyedPersistence, KeyedStore } from "./keyed-store.js"
 import { StorageLease } from "./queue-lease.js"
+import { queueSource } from "./queue-source.js"
+import { AddressSessions } from "./review/address.js"
 import { nextStep } from "./review/agent/instructions.js"
 import { addReviewTools, hideReviewTools } from "./review/agent/tools.js"
 import { defaultCacheDirectory, expandHome } from "./review/checkout.js"
@@ -25,6 +28,7 @@ const SUMMARY_TIMEOUT_MS = 5 * 60_000
 const DRAFT_PREFIX = "draft/"
 const REVIEWED_PREFIX = "reviewed/"
 const SNOOZE_PREFIX = "snooze/"
+const ADDRESS_PREFIX = "address/"
 // Missing a few renewals, such as while the machine sleeps, should not hand the lease over.
 const LEASE_INTERVALS = 3
 
@@ -34,6 +38,7 @@ type Shared = {
   reviewed: KeyedStore<ReviewedRecord>
   snoozes: KeyedStore<Snooze>
   reviews: ReviewSessions
+  addressing: AddressSessions
   findings: Findings
   refs: number
   started?: Promise<void>
@@ -81,8 +86,9 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
     },
     LEASE_INTERVALS * options.intervalMs + options.timeoutMs,
   )
+  const reviewed = new KeyedStore(ReviewedRecord, prefixed(storage, REVIEWED_PREFIX))
   const poller = new ReviewQueuePoller(
-    fetchReviewRequests,
+    queueSource(options, reviewed),
     {
       load: () => storage.get("baseline"),
       save: (value) => storage.set("baseline", value),
@@ -97,10 +103,14 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
     save: (draft) => storage.set(`${DRAFT_PREFIX}${draft.key}`, draft),
     remove: (key) => storage.remove(`${DRAFT_PREFIX}${key}`),
   })
-  const reviewed = new KeyedStore(ReviewedRecord, prefixed(storage, REVIEWED_PREFIX))
   const snoozes = new KeyedStore(Snooze, prefixed(storage, SNOOZE_PREFIX))
+  const cacheDirectory = options.cacheDirectory ? expandHome(options.cacheDirectory) : defaultCacheDirectory()
+  const addressing = new AddressSessions(
+    new KeyedStore(AddressSession, prefixed(storage, ADDRESS_PREFIX)),
+    cacheDirectory,
+  )
   const reviews = new ReviewSessions(drafts, reviewed, {
-    cacheDirectory: options.cacheDirectory ? expandHome(options.cacheDirectory) : defaultCacheDirectory(),
+    cacheDirectory,
     guidelinesFile: options.reviewGuidelines && expandHome(options.reviewGuidelines),
     keepClones: options.keepClones,
     timeoutMs: options.timeoutMs,
@@ -108,10 +118,23 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
   poller.on((event) => {
     if (event.type === "fetched") {
       void reviews.pruneAfterRefresh(event.state, AbortSignal.timeout(options.timeoutMs))
-      void pruneSnoozes(snoozes, event.state.items, Date.now()).catch(() => undefined)
+      void pruneSnoozes(snoozes, everyPullRequest(event.state), Date.now()).catch(() => undefined)
+      const authored = event.state.authored
+      if (authored) {
+        void addressing.prune(new Set(authored.map((item) => item.key))).catch(() => undefined)
+      }
     }
   })
-  return { poller, drafts, reviewed, snoozes, reviews, findings: new Findings(drafts, options.timeoutMs), refs: 0 }
+  return {
+    poller,
+    drafts,
+    reviewed,
+    snoozes,
+    reviews,
+    addressing,
+    findings: new Findings(drafts, options.timeoutMs),
+    refs: 0,
+  }
 }
 
 export default Plugin.define({
@@ -123,9 +146,9 @@ export default Plugin.define({
     current.refs += 1
     const timeout = (signal: AbortSignal, ms = options.timeoutMs) => AbortSignal.any([signal, AbortSignal.timeout(ms)])
     const queued = async (key: string) => {
-      const item = (await current.poller.latest()).items.find((candidate) => candidate.key === key)
+      const item = everyPullRequest(await current.poller.latest()).find((candidate) => candidate.key === key)
       if (!item) {
-        throw new Error("That review request is no longer in the queue. Refresh and try again.")
+        throw new Error("That pull request is no longer in the queue. Refresh and try again.")
       }
       return item
     }
@@ -151,6 +174,21 @@ export default Plugin.define({
             directory: input.directory,
             clone: input.clone,
             mode: input.mode,
+            model: input.model,
+            sessions: ctx.session,
+            signal: timeout(rpcContext.signal, CHECKOUT_TIMEOUT_MS),
+          })
+          if (result.status === "started" && input.model) {
+            await rememberModel(ctx.storage, input.model)
+          }
+          return result
+        }),
+      addressReview: (input, rpcContext) =>
+        reported(rpcContext, async () => {
+          const result = await current.addressing.start({
+            item: await queued(input.key),
+            directory: input.directory,
+            worktree: input.worktree,
             model: input.model,
             sessions: ctx.session,
             signal: timeout(rpcContext.signal, CHECKOUT_TIMEOUT_MS),
@@ -215,6 +253,9 @@ export default Plugin.define({
           return
         case "discovered":
           void registration.events.emit("discovered", { item: event.item, eventID: event.eventID })
+          return
+        case "notice":
+          void registration.events.emit("notice", { notice: event.notice, item: event.item, eventID: event.eventID })
           return
       }
     }

@@ -1,3 +1,4 @@
+import { myStatusLabel } from "../../domain/my-pull-request.js"
 import { pendingFindings, postBlocker, type ReviewDraft } from "../../domain/review-draft.js"
 import { followUpOf, type ReviewedRecord as Reviewed, reviewedFor } from "../../domain/review-history.js"
 import type { ReviewRequest } from "../../domain/review-request.js"
@@ -29,6 +30,9 @@ export function reviewLabel(
   draft: ReviewDraft | undefined,
   previous: Reviewed | undefined,
 ): string | undefined {
+  if (item.authored && !resumable(draft)) {
+    return myStatusLabel(item)
+  }
   if (!resumable(draft) && followUpOf(item, previous)) {
     return "new commits since your review"
   }
@@ -73,6 +77,11 @@ export type ReviewProgress = {
   label: string
   tone: "warning" | "success" | undefined
   blocker: string | undefined
+}
+
+export function pillStatus(draft: ReviewDraft): string {
+  const label = draftLabel(draft) ?? "reviewing"
+  return `${label.charAt(0).toUpperCase()}${label.slice(1)}`
 }
 
 export function reviewProgress(draft: ReviewDraft): ReviewProgress {
