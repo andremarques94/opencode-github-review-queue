@@ -7,6 +7,7 @@ const git = vi.hoisted(() => ({ currentBranch: vi.fn(), createBranchWorktree: vi
 const github = vi.hoisted(() => ({ fetchPullRequestBranch: vi.fn(), fetchOpenThreads: vi.fn() }))
 const checkout = vi.hoisted(() => ({
   sessionCheckout: vi.fn(),
+  checkoutProblem: vi.fn(async () => "/work/api is a clone of acme/web, not acme/api."),
   addressWorktreePath: vi.fn(() => "/cache/address/acme/api/pr-7"),
 }))
 vi.mock("../src/server/git/worktrees.js", () => git)
@@ -115,7 +116,7 @@ describe("AddressSessions", () => {
 
   it("refuses without the user's own clone, a fork branch elsewhere, a closed pull request, or a review request", async () => {
     checkout.sessionCheckout.mockResolvedValueOnce(undefined)
-    await expect(start({ model })).rejects.toThrow(/your clone of acme\/api/)
+    await expect(start({ model })).rejects.toThrow("/work/api is a clone of acme/web, not acme/api.")
 
     git.currentBranch.mockResolvedValueOnce("main")
     github.fetchPullRequestBranch.mockResolvedValueOnce({ state: "OPEN", headRefName: "b", isCrossRepository: true })

@@ -46,6 +46,33 @@ describe("remoteFor", () => {
   })
 })
 
+describe("remoteFor with SSH aliases", () => {
+  it("resolves a host alias from ~/.ssh/config, as ssh and gh do", async () => {
+    runProcess.mockImplementation(async (command: string, args: string[]) => {
+      if (command === "ssh") {
+        return {
+          stdout: `user git\nhostname ${args[1] === "github-work" ? "github.com" : args[1]}\nport 22\n`,
+          stderr: "",
+        }
+      }
+      return {
+        stdout: ["mine\thttps://github-work/acme/api (fetch)", "work\tgit@github-work:acme/api.git (fetch)"].join("\n"),
+        stderr: "",
+      }
+    })
+
+    expect(await remoteFor("/repo", { repository: "acme/api" }, signal)).toBe("work")
+    expect(await remoteFor("/repo", { host: "ghe.acme.com", repository: "acme/api" }, signal)).toBeUndefined()
+  })
+
+  it("never passes an alias that reads as an option to ssh", async () => {
+    runProcess.mockReset().mockResolvedValue({ stdout: "evil\tssh://-oProxyCommand=evil/acme/api (fetch)", stderr: "" })
+
+    expect(await remoteFor("/repo", { repository: "acme/api" }, signal)).toBeUndefined()
+    expect(runProcess).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe("cache paths", () => {
   it("places clones and worktrees under the cache directory", () => {
     expect(managedClonePath("/cache", { repository: "acme/api" })).toBe("/cache/repos/acme/api.git")

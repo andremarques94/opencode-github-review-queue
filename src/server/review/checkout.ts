@@ -75,6 +75,27 @@ export async function sessionCheckout(input: {
   return (await remoteFor(root, input, input.signal)) ? root : undefined
 }
 
+/** Why `sessionCheckout` found no clone of the repository in `directory`, in words the user can act on. */
+export async function checkoutProblem(input: {
+  host?: string | undefined
+  repository: string
+  directory?: string | undefined
+  signal: AbortSignal
+}): Promise<string> {
+  const wanted = qualifiedRepository(input)
+  if (!input.directory) {
+    return `OpenCode did not say which folder this session is in. Open it in your clone of ${wanted} and try again.`
+  }
+  const found = await repositoryForDirectory(input.directory, input.signal)
+  if (!found) {
+    return `${input.directory} is not a clone of a GitHub repository that gh recognizes. Open OpenCode in your clone of ${wanted}.`
+  }
+  if (qualifiedRepository(found).toLowerCase() !== wanted.toLowerCase()) {
+    return `${input.directory} is a clone of ${qualifiedRepository(found)}, not ${wanted}. Open OpenCode in your clone of ${wanted}.`
+  }
+  return `None of the git remotes in ${input.directory} points at ${wanted}. Check \`git remote -v\` there.`
+}
+
 export async function findCheckout(input: {
   host?: string | undefined
   repository: string

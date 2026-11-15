@@ -5,7 +5,7 @@ import { createBranchWorktree, currentBranch } from "../git/worktrees.js"
 import { fetchOpenThreads, fetchPullRequestBranch } from "../github/pull-request.js"
 import type { KeyedStore } from "../keyed-store.js"
 import { addressInstructions, addressPrompt } from "./agent/address-instructions.js"
-import { addressWorktreePath, sessionCheckout } from "./checkout.js"
+import { addressWorktreePath, checkoutProblem, sessionCheckout } from "./checkout.js"
 
 type SessionModel = NonNullable<NonNullable<Parameters<Plugin.Context["session"]["create"]>[0]>["model"]>
 
@@ -84,7 +84,7 @@ export class AddressSessions {
       )
     }
     if (!checkout) {
-      throw new Error(`Open OpenCode in your clone of ${item.repository} to address its review there.`)
+      throw new Error(await checkoutProblem({ host: item.host, repository: item.repository, directory, signal }))
     }
     const branch = pullRequest.headRefName
     const current = await currentBranch(checkout, signal)
