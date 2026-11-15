@@ -41,6 +41,13 @@ export async function fetchPullRequest(repository: string, number: number, signa
   return parseJson(PullRequestInfo, result.stdout, `${repository}#${number}`)
 }
 
+const PullRequestText = v.object({ title: v.string(), body: v.string() })
+
+export async function fetchPullRequestText(repository: string, number: number, signal: AbortSignal) {
+  const result = await runGh(["pr", "view", String(number), "--repo", repository, "--json", "title,body"], { signal })
+  return parseJson(PullRequestText, result.stdout, `${repository}#${number}`)
+}
+
 export async function viewerLogin(signal: AbortSignal): Promise<string> {
   const result = await runGh(["api", "user", "--jq", ".login"], { signal })
   return result.stdout.trim()

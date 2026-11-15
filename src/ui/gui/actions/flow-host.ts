@@ -2,9 +2,11 @@ import type { Context, ServerRef } from "@opencode/plugin/gui"
 import type { FindingFlowHost } from "../../../shared/review/finding-flows.js"
 import type { ReviewFlowHost } from "../../../shared/review/flows.js"
 import type { SnoozeFlowHost } from "../../../shared/review/snooze.js"
+import type { SummaryFlowHost } from "../../../shared/review/summary.js"
 import { ReviewQueue } from "../../../shared/rpc.js"
 import { editFindingBody } from "../components/edit-finding-dialog.js"
 import { confirmPost } from "../components/post-review-dialog.js"
+import { showSummary } from "../components/summary-dialog.js"
 
 /** `server` is the review session's server: its pending questions live there. */
 export function createFindingFlowHost(context: Context, server: () => ServerRef): FindingFlowHost {
@@ -19,7 +21,7 @@ export function createFindingFlowHost(context: Context, server: () => ServerRef)
   }
 }
 
-export function createFlowHost(context: Context): ReviewFlowHost & SnoozeFlowHost {
+export function createFlowHost(context: Context): ReviewFlowHost & SnoozeFlowHost & SummaryFlowHost {
   const rpc = () => context.client.rpc(ReviewQueue)
   return {
     confirm: (options) =>
@@ -38,5 +40,7 @@ export function createFlowHost(context: Context): ReviewFlowHost & SnoozeFlowHos
     resetReview: (request) => rpc().resetReview(request),
     prompt: (options) => context.dialogs.prompt({ ...options, submit: "Snooze" }),
     snooze: (request) => rpc().snooze(request),
+    summarize: (request) => rpc().summarize(request),
+    showSummary: (view) => showSummary(context, view),
   }
 }

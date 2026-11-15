@@ -77,6 +77,11 @@ export const ReviewQueue = Rpc.define({
       errors,
     },
     askAboutFinding: { input: v.strictObject(byFinding), output: empty, errors },
+    summarize: {
+      input: v.strictObject({ key: v.string(), model: ModelRef }),
+      output: v.strictObject({ summary: v.string(), truncated: v.boolean() }),
+      errors,
+    },
     snooze: { input: v.strictObject({ key: v.string(), until: SnoozeUntil }), output: drafts, errors },
     wake: { input: byKey, output: drafts, errors },
   },

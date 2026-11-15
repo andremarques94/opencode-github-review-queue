@@ -54,6 +54,13 @@ export function pullRequestOptions(
       category: PULL_REQUEST,
     },
     { title: "Copy link", value: () => actions.copy("link"), footer: "u", category: PULL_REQUEST },
+    {
+      title: "Summarize",
+      value: actions.summarize,
+      description: "Intent, main changes, and what to inspect",
+      footer: "i",
+      category: PULL_REQUEST,
+    },
     snooze
       ? {
           title: "Wake up",

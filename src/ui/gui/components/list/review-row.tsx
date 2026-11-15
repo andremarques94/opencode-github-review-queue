@@ -131,6 +131,7 @@ export function ReviewRow(props: ReviewRowProps) {
               onSelect: () => props.copy(fullReference(props.item), "Reference"),
             },
             { label: "Copy link", icon: "link", onSelect: () => props.copy(props.item.url, "Link") },
+            { label: "Summarize", icon: "file-document", onSelect: () => void props.actions.summarize(props.item) },
             snoozeItem(),
             ...draftItems(),
           ]}

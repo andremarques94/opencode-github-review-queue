@@ -30,6 +30,7 @@ in the background, with a notification only when something actually needs you.
 - **Re-reviews that focus on what changed.** When a pull request you reviewed comes back with new commits, the row
   says so, and the next review can cover only the commits since.
 - **Snooze** a pull request until its checks finish, until the author pushes, or until a time you pick.
+- **Summaries on demand:** a pull request's intent, main changes, and what to inspect, without starting a review.
 - **Grouped by repository**, with a **Current** scope for the repository in the session.
 - **Notifications that respect you.** New requests are batched into one notification; a request that briefly drops
   out of GitHub's search index does not notify twice.
@@ -80,6 +81,7 @@ Then open the queue with `/reviews`, or **Show GitHub review requests** from the
 | `Enter`   | Start a review of the selected pull request, or resume it     |
 | `o`       | Open the pull request on GitHub                               |
 | `p`       | Post the selected review, after a preview                     |
+| `i`       | Summarize the selected pull request                           |
 | `s`       | Snooze the selected pull request, or wake it                  |
 | `z`       | Show or hide snoozed pull requests                            |
 | `m`       | Actions menu, listing every action with its key               |
@@ -100,7 +102,7 @@ Copying uses OSC 52, so it needs a terminal that supports it.
 
 Open the pinned **Review requests** tab in the side panel, or **Show GitHub review requests** from the command palette.
 Click a row to start or resume its review. Its menu (or a right-click) opens it on GitHub, copies its reference or
-link, snoozes or wakes it, and posts or resets its review. Hover a readiness mark for its meaning, and
+link, summarizes it, snoozes or wakes it, and posts or resets its review. Hover a readiness mark for its meaning, and
 click **N snoozed** under the title to show snoozed requests. New requests also raise a toast with a **Show reviews**
 button.
 
@@ -118,6 +120,13 @@ computed, shows nothing.
 a time (`14:30`), or a date (`2026-11-20 09:00`). A snoozed request comes back on its own when its condition is met.
 The header counts the snoozed requests; show them to see what each waits for, or to wake one early. A snooze is
 dropped when its pull request leaves the queue.
+
+### Summaries
+
+**Summarize** asks which model to use (your last review model is selected), reads the pull request's title,
+description, and diff with `gh`, and asks that model for its intent, main changes, and the areas worth inspecting. The
+Desktop shows it as Markdown, the TUI in a dialog. Diffs beyond about 80,000 characters are cut, and the dialog says
+so.
 
 ### Reviews
 
