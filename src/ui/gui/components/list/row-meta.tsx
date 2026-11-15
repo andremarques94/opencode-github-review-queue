@@ -9,7 +9,6 @@ import type { LocalReviews } from "../../../../shared/rpc.js"
 
 const postBlockerOf = (draft: ReturnType<typeof draftFor>) => (draft ? postBlocker(draft) : undefined)
 
-/** Number, readiness, size, author, team, wait, draft, and the local review, under the title. */
 export function RowMeta(props: { context: Context; item: ReviewRequest; local: LocalReviews; now: number }) {
   const draft = () => draftFor(props.local.drafts, props.item.key)
   const wait = () => waitMark(props.item, parseOptions(props.context.options).staleAfterMs, props.now)

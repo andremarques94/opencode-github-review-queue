@@ -52,7 +52,7 @@ const detail = (error: unknown): QueueError => {
 
 type Failure = { host: string; error: QueueError }
 
-/** One host's failure reads as before; several name their hosts. */
+/** A lone failure keeps its own message; several, or one beside a working host, are prefixed with their hosts. */
 function combined(failures: readonly [Failure, ...Failure[]], partial: boolean): QueueError {
   const [first] = failures
   const message =
@@ -178,7 +178,6 @@ type HostOutcome = { host: string; queue: HostQueue; error?: QueueError }
 const onHost = <T extends { host?: string }>(list: readonly T[] | undefined, host: string) =>
   (list ?? []).filter((entry) => hostOf(entry) === hostOf(hostField(host)))
 
-/** One queue from every host's; throws only when every host failed. */
 function merge(outcomes: readonly HostOutcome[], retryAt: string | undefined, options: PluginOptions): FetchResult {
   const failures = outcomes.flatMap(({ host, error }) => (error ? [{ host, error }] : []))
   const [first, ...rest] = failures

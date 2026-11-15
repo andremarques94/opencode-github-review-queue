@@ -3,7 +3,6 @@
 import { usePlugin } from "@opencode/plugin/tui"
 import type { RGBA } from "@opentui/core"
 
-/** The bar beside a selected or hovered row, and the dot on a new one. */
 export function RowGutter(props: { selected: boolean; hovered: boolean; isNew: boolean; bar: RGBA }) {
   const theme = usePlugin().theme
 

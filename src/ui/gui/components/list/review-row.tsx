@@ -17,7 +17,6 @@ import type { ReviewActions } from "../../actions/review-actions.js"
 import { RowDetails } from "./row-details.js"
 import { RowMeta } from "./row-meta.js"
 
-/** Which rows show their details; the panel holds it, so it can expand or collapse every row at once. */
 export type DetailsState = {
   isOpen(key: string): boolean
   toggle(key: string): void

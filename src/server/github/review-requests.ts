@@ -211,7 +211,6 @@ const PullRequest = v.pipe(
   }),
 )
 
-/** Checks on the last commit, and whether the branch conflicts with or is behind its base. */
 function mergeState(node: {
   mergeable?: string | null | undefined
   mergeStateStatus?: string | null | undefined
@@ -226,7 +225,6 @@ function mergeState(node: {
   }
 }
 
-/** Who is still asked to review, and when each was asked. */
 function requestHistory(node: {
   reviewRequests?: v.InferOutput<typeof ReviewRequests> | null | undefined
   timelineItems?: v.InferOutput<typeof RequestEvents> | null | undefined
