@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.0](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v0.5.0...opencode-github-review-queue-v0.6.0) (2026-11-15)
+
+
+### Features
+
+* address the review of your own pull request from OpenCode ([#37](https://github.com/andremarques94/opencode-github-review-queue/issues/37)) ([5ce998c](https://github.com/andremarques94/opencode-github-review-queue/commit/5ce998cceb188f3ef74de68d89bf0480ac1adfb8))
+* bring reviewed pull requests back to the queue when new commits arrive ([#33](https://github.com/andremarques94/opencode-github-review-queue/issues/33)) ([56fb989](https://github.com/andremarques94/opencode-github-review-queue/commit/56fb989f872eabbf8c46a48e2126478ea234a848))
+* filter the queue and mark requests made to a team ([#32](https://github.com/andremarques94/opencode-github-review-queue/issues/32)) ([3cde0e6](https://github.com/andremarques94/opencode-github-review-queue/commit/3cde0e68cc02546c23928c29651605ff685efeb9))
+* list your own pull requests and notify when they need you ([#36](https://github.com/andremarques94/opencode-github-review-queue/issues/36)) ([8f03962](https://github.com/andremarques94/opencode-github-review-queue/commit/8f03962c9b3eb060f3522825725179a19738aea4))
+* post concrete fixes as GitHub suggestions ([#35](https://github.com/andremarques94/opencode-github-review-queue/issues/35)) ([b5771fe](https://github.com/andremarques94/opencode-github-review-queue/commit/b5771fef50496f2c55492b51a7caf46653d5b5a8))
+* show how long a pull request has waited and how big it is ([#34](https://github.com/andremarques94/opencode-github-review-queue/issues/34)) ([a384a85](https://github.com/andremarques94/opencode-github-review-queue/commit/a384a852a6e0914791fc7e1f4649d8a3378a73dc))
+
+
+### Bug Fixes
+
+* show a lower bound for pull requests with over 100 review threads ([#31](https://github.com/andremarques94/opencode-github-review-queue/issues/31)) ([d574c4d](https://github.com/andremarques94/opencode-github-review-queue/commit/d574c4d5d8e2c9241179e0b0e6e1c98ab4f31231))
+* show progress while summarizing and tidy the review pill ([#38](https://github.com/andremarques94/opencode-github-review-queue/issues/38)) ([407f777](https://github.com/andremarques94/opencode-github-review-queue/commit/407f777d5aa893f76bf72b4fe4eaa60bc9a123ed))
+
 ## [0.5.0](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v0.4.0...opencode-github-review-queue-v0.5.0) (2026-11-15)
 
 
