@@ -67,6 +67,13 @@ export function emptyMessage(filter: QueueFilter): string {
 export const needingYou = (state: Pick<QueueSnapshot, "authored">): number | undefined =>
   state.authored?.filter(needsYou).length
 
+/** How long a wait has run, such as `(12s)` or `(1m 05s)`, so a slow model still visibly counts up. */
+export function elapsedLabel(startedAt: number, now: number): string {
+  const seconds = Math.max(0, Math.floor((now - startedAt) / 1_000))
+  const minutes = Math.floor(seconds / 60)
+  return minutes > 0 ? `(${minutes}m ${String(seconds % 60).padStart(2, "0")}s)` : `(${seconds}s)`
+}
+
 export function ago(createdAt: string, now = Date.now()): string {
   const value = age(createdAt, now)
   return value === "now" ? "just now" : `${value} ago`

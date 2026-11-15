@@ -272,7 +272,8 @@ const actionStyles = `
 `
 
 export const progressStyles = `${actionStyles}
-.grq-progress { display: flex; flex-direction: column; gap: 10px; min-width: 240px; font-size: 13px; }
+/* The host insets the popover heading further than its content; this lines the content up under it. */
+.grq-progress { display: flex; flex-direction: column; gap: 10px; min-width: 240px; padding: 0 15px 6px; font-size: 13px; }
 `
 
 export const findingStyles = `${badgeStyles}${actionStyles}

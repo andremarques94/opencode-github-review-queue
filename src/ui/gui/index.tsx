@@ -19,7 +19,7 @@ import {
   notificationText,
 } from "../../shared/notifications/notification-text.js"
 import { parseOptions } from "../../shared/options.js"
-import { draftForSession, replaceDraft, reviewProgress } from "../../shared/review/draft-status.js"
+import { draftForSession, pillStatus, replaceDraft, reviewProgress } from "../../shared/review/draft-status.js"
 import { type LocalReviews, ReviewQueue } from "../../shared/rpc.js"
 import { createFindingActions, FINDINGS_PANEL } from "./actions/finding-actions.js"
 import { FindingsPanel } from "./components/findings/findings-panel.js"
@@ -191,11 +191,13 @@ export default Plugin.define({
           return undefined
         }
         const progress = reviewProgress(draft)
+        // The capsule truncates, so it carries the short status; `title` is also the popover's heading, so it names
+        // the pull request and leaves the details to the popover body instead of repeating them.
         return {
-          label: `Review · ${progress.label}`,
+          label: `Review · ${pillStatus(draft)}`,
           icon: "github",
           ...(progress.tone ? { tone: progress.tone } : {}),
-          title: `${draft.repository}#${draft.number} · ${progress.label}`,
+          title: `Review of ${draft.repository}#${draft.number}`,
         }
       },
       menu: (input) => (

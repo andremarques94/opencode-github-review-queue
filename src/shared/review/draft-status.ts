@@ -82,6 +82,12 @@ export type ReviewProgress = {
   blocker: string | undefined
 }
 
+/** The few words that fit the composer pill: _Reviewing_, _2 to decide_, _Ready to post_, or _Posted_. */
+export function pillStatus(draft: ReviewDraft): string {
+  const label = draftLabel(draft) ?? "reviewing"
+  return `${label.charAt(0).toUpperCase()}${label.slice(1)}`
+}
+
 export function reviewProgress(draft: ReviewDraft): ReviewProgress {
   const blocker = postBlocker(draft)
   switch (draft.status) {

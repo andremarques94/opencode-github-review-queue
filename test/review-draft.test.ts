@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { commentableLines, commentProblem } from "../src/domain/pull-request-diff.js"
 import { postBlocker, type ReviewDraft, reviewPayload } from "../src/domain/review-draft.js"
-import { draftActions, draftLabel, resumable, reviewLabel } from "../src/shared/review/draft-status.js"
+import { draftActions, draftLabel, pillStatus, resumable, reviewLabel } from "../src/shared/review/draft-status.js"
 import { reviewPreview } from "../src/shared/review/preview.js"
 
 const DIFF = `diff --git a/src/app.ts b/src/app.ts
@@ -146,6 +146,14 @@ describe("posting rules", () => {
         { location: "src/app.ts:11-12", body: "Dropped one." },
       ],
     })
+  })
+})
+
+describe("pillStatus", () => {
+  it("keeps the composer pill to a few words", () => {
+    expect(pillStatus(draft({ status: "investigating" }))).toBe("Reviewing")
+    expect(pillStatus(draft())).toBe("Ready to post")
+    expect(pillStatus(draft({ status: "posted" }))).toBe("Posted")
   })
 })
 
