@@ -109,7 +109,6 @@ export class ReviewSessions {
     }
   }
 
-  /** The user's clone of the repository, or a managed one when allowed to clone. */
   private async checkout(input: {
     item: ReviewRequest
     directory?: string | undefined
@@ -131,7 +130,6 @@ export class ReviewSessions {
     return cloneRepository(item, cacheDirectory, signal)
   }
 
-  /** Creates the session, saves its draft, and sends the first prompt. */
   private async openSession(
     input: {
       item: ReviewRequest

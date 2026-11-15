@@ -6,7 +6,6 @@ import type { ReviewRequest } from "../../../../domain/review-request.js"
 import { parseOptions } from "../../../../shared/options.js"
 import { readinessMarks, sizeMark, teamRequest, waitMark } from "../../../../shared/presentation.js"
 
-/** Number, readiness, size, author, team, wait, draft, and the local review, on one line. */
 export function RowMeta(props: { item: ReviewRequest; review: string | undefined }) {
   const plugin = usePlugin()
   const theme = plugin.theme

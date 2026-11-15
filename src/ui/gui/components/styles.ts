@@ -153,6 +153,9 @@ export const panelStyles = `${badgeStyles}
 .grq-row:hover,
 .grq-row:has([aria-expanded="true"]) { background: var(--surface-raised-base-hover); }
 .grq-row:has(.grq-row-main:focus-visible) { box-shadow: inset 0 0 0 2px var(--border-focus); }
+/* Open rows share a background, so without a gap two of them read as one card. */
+.grq-row:has(> [aria-expanded="true"]) + .grq-row,
+.grq-row + .grq-row:has(> [aria-expanded="true"]) { margin-top: 4px; }
 .grq-dot {
   flex-shrink: 0;
   width: 6px;

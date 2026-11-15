@@ -31,7 +31,6 @@ export type FetchResult = {
   error?: QueueError
 }
 export type FetchContext = {
-  /** The user asked for this refresh. */
   manual: boolean
   previous: Pick<QueueSnapshot, "items" | "authored">
 }
@@ -43,11 +42,6 @@ export type PollerEvent =
   /** Only on the instance that fetched the queue from GitHub. */
   | { type: "fetched"; state: QueueSnapshot }
 
-/**
- * Every OpenCode location runs its own instance. The one holding the lease polls GitHub and persists the queue; the
- * others follow the persisted queue, and take the lease over once it lapses.
- */
-/** When each saved item was last seen; items without a saved time count from `fallback`. */
 function seenTimes(saved: PersistedQueue, fallback: number): Map<string, number> {
   const seen = new Map(saved.items.map((item) => [item.key, fallback]))
   for (const [key, at] of Object.entries(saved.seen ?? {})) {
@@ -59,6 +53,10 @@ function seenTimes(saved: PersistedQueue, fallback: number): Map<string, number>
   return seen
 }
 
+/**
+ * Every OpenCode location runs its own instance. The one holding the lease polls GitHub and persists the queue; the
+ * others follow the persisted queue, and take the lease over once it lapses.
+ */
 export class ReviewQueuePoller {
   private state: QueueSnapshot = emptySnapshot()
   private listeners = new Set<(event: PollerEvent) => void>()
@@ -183,7 +181,6 @@ export class ReviewQueuePoller {
     }
   }
 
-  /** The saved error differs from the shown one, or this instance still shows a refresh in progress. */
   private changedBesidesItems(saved: PersistedQueue): boolean {
     return saved.error?.message !== this.state.error?.message || this.state.loading
   }

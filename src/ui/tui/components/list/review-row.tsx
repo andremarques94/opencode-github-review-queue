@@ -14,7 +14,6 @@ const RIGHT_BUTTON = 2
 
 export const rowID = (key: string) => `github-review-queue:${key}`
 
-/** Selected rows are highlighted and wrap their title; the others fit it on one line. */
 function rowLook(selected: boolean, title: string, width: number, theme: ReturnType<typeof usePlugin>["theme"]) {
   if (selected) {
     return {
