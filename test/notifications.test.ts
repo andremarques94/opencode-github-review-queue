@@ -69,4 +69,14 @@ describe("notificationText", () => {
       message: "api #1, api #2, api #3 +1 more",
     })
   })
+
+  it("says when a pull request is back for new commits", () => {
+    const followUp = { ...item("acme/api", 7, "Fix login"), followUp: true as const }
+
+    expect(notificationText([followUp]).title).toBe("New commits since your review · api #7")
+    expect(notificationText([followUp, { ...followUp, key: "acme/api#8", number: 8 }]).title).toBe(
+      "2 pull requests with new commits since your review",
+    )
+    expect(notificationText([followUp, item("acme/api", 9)]).title).toBe("2 pull requests to review")
+  })
 })

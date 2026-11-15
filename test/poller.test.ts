@@ -130,6 +130,29 @@ describe("ReviewQueuePoller", () => {
     poller.stop()
   })
 
+  it("announces a follow-up once, and not again when it is re-requested", async () => {
+    const followUp = { ...item("acme/api", 4), followUp: true as const }
+    const queues = [[], [followUp], [item("acme/api", 4)]]
+    const poller = new ReviewQueuePoller(
+      async () => ({ items: queues.shift() ?? [] }),
+      memoryPersistence().persistence,
+      options,
+    )
+    const discovered: ReviewRequest[] = []
+    poller.on((event) => {
+      if (event.type === "discovered") {
+        discovered.push(event.item)
+      }
+    })
+
+    await poller.start()
+    await poller.refresh()
+    await poller.refresh()
+
+    expect(discovered).toEqual([followUp])
+    poller.stop()
+  })
+
   it("notifies when a request returns after the renotify window", async () => {
     const request = item("acme/api", 3)
     const queues = [[request], [], [request]]

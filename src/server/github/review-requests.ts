@@ -2,8 +2,12 @@ import * as v from "valibot"
 import { type Checks, type RequestedVia, type ReviewRequest, requestKey } from "../../domain/review-request.js"
 import { GhError, runGh } from "./cli.js"
 
-const QUERY = `query($endCursor: String) {
-  search(query: "is:pr is:open review-requested:@me", type: ISSUE, first: 100, after: $endCursor) {
+const REQUESTED = "is:pr is:open review-requested:@me"
+/** Reviewed pull requests that no longer ask for the user; the queue keeps those with new commits since. */
+const REVIEWED = "is:pr is:open reviewed-by:@me -review-requested:@me"
+
+const QUERY = `query($search: String!, $endCursor: String) {
+  search(query: $search, type: ISSUE, first: 100, after: $endCursor) {
     pageInfo { hasNextPage endCursor }
     nodes {
       ... on PullRequest {
@@ -173,8 +177,13 @@ function readNode(node: unknown, viewer: string | undefined): ReviewRequest {
   return via ? { ...request, requestedVia: via } : request
 }
 
-export async function fetchReviewRequests(signal: AbortSignal): Promise<{ items: ReviewRequest[]; retryAt?: string }> {
-  const result = await runGh(["api", "graphql", "--paginate", "--slurp", "-f", `query=${QUERY}`], { signal })
+export type SearchResult = { items: ReviewRequest[]; retryAt?: string }
+
+async function searchPullRequests(search: string, signal: AbortSignal): Promise<SearchResult> {
+  const result = await runGh(
+    ["api", "graphql", "--paginate", "--slurp", "-f", `query=${QUERY}`, "-f", `search=${search}`],
+    { signal },
+  )
   const pages = parsePages(result.stdout).map(readPage)
   const viewer = pages.find((page) => page.viewer)?.viewer
   const items = pages.flatMap((page) => page.nodes.map((node) => readNode(node, viewer)))
@@ -182,3 +191,7 @@ export async function fetchReviewRequests(signal: AbortSignal): Promise<{ items:
   const retryAt = pages.reduce<string | undefined>((last, page) => page.retryAt ?? last, undefined)
   return { items, ...(retryAt ? { retryAt } : {}) }
 }
+
+export const fetchReviewRequests = (signal: AbortSignal) => searchPullRequests(REQUESTED, signal)
+
+export const fetchReviewedPullRequests = (signal: AbortSignal) => searchPullRequests(REVIEWED, signal)

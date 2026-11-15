@@ -1,13 +1,12 @@
 import { Plugin } from "@opencode/plugin"
-import { applyQueueRules } from "../domain/queue-filter.js"
 import { ReviewedRecord } from "../domain/review-history.js"
 import { Snooze } from "../domain/snooze.js"
 import { type PluginOptions, parseOptions } from "../shared/options.js"
 import { type LocalReviews, ReviewQueue } from "../shared/rpc.js"
 import { openReview, repositoryForDirectory } from "./github/repository.js"
-import { fetchReviewRequests } from "./github/review-requests.js"
 import { type KeyedPersistence, KeyedStore } from "./keyed-store.js"
 import { StorageLease } from "./queue-lease.js"
+import { queueSource } from "./queue-source.js"
 import { nextStep } from "./review/agent/instructions.js"
 import { addReviewTools, hideReviewTools } from "./review/agent/tools.js"
 import { defaultCacheDirectory, expandHome } from "./review/checkout.js"
@@ -82,11 +81,9 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
     },
     LEASE_INTERVALS * options.intervalMs + options.timeoutMs,
   )
+  const reviewed = new KeyedStore(ReviewedRecord, prefixed(storage, REVIEWED_PREFIX))
   const poller = new ReviewQueuePoller(
-    async (signal) => {
-      const result = await fetchReviewRequests(signal)
-      return { ...result, items: applyQueueRules(result.items, options) }
-    },
+    queueSource(options, reviewed),
     {
       load: () => storage.get("baseline"),
       save: (value) => storage.set("baseline", value),
@@ -101,7 +98,6 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
     save: (draft) => storage.set(`${DRAFT_PREFIX}${draft.key}`, draft),
     remove: (key) => storage.remove(`${DRAFT_PREFIX}${key}`),
   })
-  const reviewed = new KeyedStore(ReviewedRecord, prefixed(storage, REVIEWED_PREFIX))
   const snoozes = new KeyedStore(Snooze, prefixed(storage, SNOOZE_PREFIX))
   const reviews = new ReviewSessions(drafts, reviewed, {
     cacheDirectory: options.cacheDirectory ? expandHome(options.cacheDirectory) : defaultCacheDirectory(),
