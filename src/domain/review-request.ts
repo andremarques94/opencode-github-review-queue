@@ -1,4 +1,5 @@
 import * as v from "valibot"
+import { Authored } from "./my-pull-request.js"
 
 const Checks = v.picklist(["passing", "failing", "pending"])
 export type Checks = v.InferOutput<typeof Checks>
@@ -36,6 +37,8 @@ export const ReviewRequest = v.object({
   /** When the user, or one of the requested teams, was last asked to review. */
   requestedAt: v.exactOptional(v.string()),
   lastCommitAt: v.exactOptional(v.string()),
+  /** Only on the user's own pull requests. */
+  authored: v.exactOptional(Authored),
 })
 export type ReviewRequest = v.InferOutput<typeof ReviewRequest>
 

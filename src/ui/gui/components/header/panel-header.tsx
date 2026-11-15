@@ -2,7 +2,7 @@ import type { Context } from "@opencode/plugin/gui"
 import { Show } from "solid-js"
 import type { Store } from "solid-js/store"
 import type { QueueSnapshot } from "../../../../domain/review-queue.js"
-import { type QueueFilter, refreshLabel } from "../../../../shared/presentation.js"
+import { needingYou, type QueueFilter, refreshLabel } from "../../../../shared/presentation.js"
 import { type QueueView, snoozedToggleLabel } from "../../../../shared/review/snooze.js"
 import { ScopeToggle } from "./scope-toggle.js"
 
@@ -27,11 +27,16 @@ export function PanelHeader(props: {
     <header class="grq-header">
       <div class="grq-header-top">
         <div class="grq-heading">
-          <span>Review requests</span>
+          <span>{props.filter === "mine" ? "Your pull requests" : "Review requests"}</span>
           <span class="grq-count">{props.count}</span>
         </div>
         <div class="grq-tools">
-          <ScopeToggle filter={props.filter} canFilter={!!props.repository} setFilter={props.setFilter} />
+          <ScopeToggle
+            filter={props.filter}
+            canFilter={!!props.repository}
+            mine={needingYou(props.state)}
+            setFilter={props.setFilter}
+          />
           <props.context.ui.Tooltip value="Refresh">
             <props.context.ui.IconButton
               icon="outline-rotate-clockwise"

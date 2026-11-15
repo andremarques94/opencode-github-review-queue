@@ -1,3 +1,4 @@
+import { myStatusLabel } from "../../domain/my-pull-request.js"
 import { pendingFindings, postBlocker, type ReviewDraft } from "../../domain/review-draft.js"
 import { followUpOf, type ReviewedRecord as Reviewed, reviewedFor } from "../../domain/review-history.js"
 import type { ReviewRequest } from "../../domain/review-request.js"
@@ -23,12 +24,18 @@ export function draftLabel(draft: ReviewDraft | undefined): string | undefined {
 
 export const resumable = (draft: ReviewDraft | undefined) => draft !== undefined && draft.status !== "posted"
 
-/** A draft in progress wins; otherwise new commits matter more than a review that is already posted. */
+/**
+ * A draft in progress wins; otherwise new commits matter more than a review that is already posted. The user's own
+ * pull request says how its reviews stand instead.
+ */
 export function reviewLabel(
   item: ReviewRequest,
   draft: ReviewDraft | undefined,
   previous: Reviewed | undefined,
 ): string | undefined {
+  if (item.authored && !resumable(draft)) {
+    return myStatusLabel(item)
+  }
   if (!resumable(draft) && followUpOf(item, previous)) {
     return "new commits since your review"
   }

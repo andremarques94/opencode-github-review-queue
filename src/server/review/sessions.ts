@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises"
 import type { Location, Plugin } from "@opencode/plugin"
 import { postBlocker, type ReviewDraft, reviewPayload } from "../../domain/review-draft.js"
 import type { ReviewedRecord } from "../../domain/review-history.js"
-import type { QueueSnapshot } from "../../domain/review-queue.js"
+import { everyPullRequest, type QueueSnapshot } from "../../domain/review-queue.js"
 import type { ReviewRequest } from "../../domain/review-request.js"
 import { createWorktree, fetchCommit } from "../git/worktrees.js"
 import { fetchPullRequest, postReview, pullRequestStates, viewerLogin } from "../github/pull-request.js"
@@ -200,7 +200,7 @@ export class ReviewSessions {
     if (state.loading || state.error || this.pruning) {
       return this.pruning ?? Promise.resolve()
     }
-    const queued = new Set(state.items.map((item) => item.key))
+    const queued = new Set(everyPullRequest(state).map((item) => item.key))
     this.pruning = this.prune(queued, signal)
       .catch(() => undefined)
       .finally(() => {

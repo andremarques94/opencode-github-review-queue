@@ -2,7 +2,7 @@
 
 import { usePlugin } from "@opencode/plugin/tui"
 import type { Store } from "solid-js/store"
-import type { QueueFilter } from "../../../../shared/presentation.js"
+import { emptyMessage, type QueueFilter } from "../../../../shared/presentation.js"
 import type { TuiState } from "../../state.js"
 
 export function EmptyState(props: { state: Store<TuiState>; filter: QueueFilter; snoozed: number }) {
@@ -14,7 +14,7 @@ export function EmptyState(props: { state: Store<TuiState>; filter: QueueFilter;
     if (props.snoozed > 0) {
       return "Everything left is snoozed. Press z to show it."
     }
-    return props.filter === "current" ? "No review requests in this repository." : "You're all caught up."
+    return emptyMessage(props.filter)
   }
 
   return (

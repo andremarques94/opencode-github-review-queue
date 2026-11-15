@@ -56,8 +56,11 @@ export function ReviewRow(props: ReviewRowProps) {
     }
   }
 
+  // The user's own pull request has nobody's review to start, so a click opens it on GitHub instead.
   const review = () =>
-    void props.actions.review(props.item, resumable(draft()), reviewedFor(props.local.reviewed, props.item.key))
+    props.item.authored && !resumable(draft())
+      ? open()
+      : void props.actions.review(props.item, resumable(draft()), reviewedFor(props.local.reviewed, props.item.key))
   const snoozeItem = () => {
     const current = snooze()
     return current
@@ -105,8 +108,10 @@ export function ReviewRow(props: ReviewRowProps) {
               </span>
             )}
           </Show>
-          <span class="grq-sep">·</span>
-          <span>@{props.item.author}</span>
+          <Show when={!props.item.authored}>
+            <span class="grq-sep">·</span>
+            <span>@{props.item.author}</span>
+          </Show>
           <Show when={teamRequest(props.item)}>
             {(team) => (
               <span class="grq-team" title={team().detail}>

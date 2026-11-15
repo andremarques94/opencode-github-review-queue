@@ -17,6 +17,12 @@ export type MenuOption = {
 const PULL_REQUEST = "Pull request"
 const QUEUE = "Queue"
 
+const SCOPE_TITLES: Record<QueueFilter, string> = {
+  all: "Show all repositories",
+  current: "Show only this repository",
+  mine: "Show your pull requests",
+}
+
 const withDescription = (description: string | undefined) => (description ? { description } : {})
 
 function draftOption(actions: ReviewActions, action: DraftAction): MenuOption {
@@ -78,11 +84,11 @@ export function pullRequestOptions(
 
 export function queueOptions(
   actions: ReviewActions,
-  queue: { filter: QueueFilter; snoozed: number; showSnoozed: boolean; toggleFullscreen: () => void },
+  queue: { nextFilter: QueueFilter; snoozed: number; showSnoozed: boolean; toggleFullscreen: () => void },
 ): MenuOption[] {
   return [
     {
-      title: queue.filter === "all" ? "Show only this repository" : "Show all repositories",
+      title: SCOPE_TITLES[queue.nextFilter],
       value: actions.toggleFilter,
       footer: "f / ←→",
       category: QUEUE,

@@ -1,16 +1,15 @@
-import type { ReviewRequest } from "../../domain/review-request.js"
-
-export type DiscoveryBatcher = {
-  push(item: ReviewRequest): void
+export type DiscoveryBatcher<T> = {
+  push(item: T): void
   dispose(): void
 }
 
-export function createDiscoveryBatcher(
-  deliver: (items: ReviewRequest[]) => void,
+/** Batches what arrives together into one delivery, dropping a key it delivered within the window. */
+export function createDiscoveryBatcher<T extends { key: string }>(
+  deliver: (items: T[]) => void,
   { delayMs = 750, windowMs = 60 * 60_000, now = Date.now } = {},
-): DiscoveryBatcher {
+): DiscoveryBatcher<T> {
   const recent = new Map<string, number>()
-  let pending: ReviewRequest[] = []
+  let pending: T[] = []
   let timer: ReturnType<typeof setTimeout> | undefined
 
   const flush = () => {

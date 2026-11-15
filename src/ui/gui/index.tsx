@@ -10,8 +10,14 @@ import {
 import { createEffect, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { emptySnapshot, type QueueSnapshot } from "../../domain/review-queue.js"
+import type { ReviewRequest } from "../../domain/review-request.js"
 import { createDiscoveryBatcher } from "../../shared/notifications/discovery-batcher.js"
-import { notificationText } from "../../shared/notifications/notification-text.js"
+import {
+  type MyUpdate,
+  myUpdate,
+  myUpdateText,
+  notificationText,
+} from "../../shared/notifications/notification-text.js"
 import { parseOptions } from "../../shared/options.js"
 import { draftForSession, replaceDraft, reviewProgress } from "../../shared/review/draft-status.js"
 import { type LocalReviews, ReviewQueue } from "../../shared/rpc.js"
@@ -78,8 +84,7 @@ export default Plugin.define({
         ctx.layout.open(`${ctx.id}:main`, session)
       }
     }
-    const batcher = createDiscoveryBatcher((items) => {
-      const { title, message } = notificationText(items)
+    const announce = ({ title, message }: { title: string; message: string }, keys: string[]) => {
       ctx.toast.show({
         title,
         description: message,
@@ -88,17 +93,24 @@ export default Plugin.define({
       })
       if (options.notifications) {
         const session = ctx.sessions.current() ?? ctx.sessions.list()[0]
-        const keys = items.map((item) => item.key).sort()
         void ctx.attention.notify({
           title,
           message,
-          id: `${keys.join(",")}:${Math.floor(Date.now() / 3_600_000)}`,
+          id: `${keys.sort().join(",")}:${Math.floor(Date.now() / 3_600_000)}`,
           ...(session ? { session: { server: session.server.id, id: session.id } } : {}),
         })
       }
-    })
+    }
+    const keysOf = (entries: readonly { key: string }[]) => entries.map((entry) => entry.key)
+    const batcher = createDiscoveryBatcher((items: ReviewRequest[]) => announce(notificationText(items), keysOf(items)))
     const stopDiscovered = rpc().events.on("discovered", (event) => {
       batcher.push(event.data.item)
+    })
+    const updates = createDiscoveryBatcher((entries: MyUpdate[]) => announce(myUpdateText(entries), keysOf(entries)))
+    const stopNotices = rpc().events.on("notice", (event) => {
+      if (options.notifyOnMyPullRequests) {
+        updates.push(myUpdate(event.data.notice, event.data.item))
+      }
     })
 
     const tab: PanelTab = {
@@ -233,6 +245,8 @@ export default Plugin.define({
       stopDrafts()
       stopDiscovered()
       batcher.dispose()
+      stopNotices()
+      updates.dispose()
     }
   },
 })

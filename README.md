@@ -29,6 +29,8 @@ in the background, with a notification only when something actually needs you.
   unresolved review threads.
 - **Re-reviews that focus on what changed.** A pull request you reviewed comes back to the queue when the author
   pushes, even without a re-request, and the next review can cover only the commits since.
+- **Your own pull requests too.** **Mine** lists them with how their reviews stand, and you are notified when one
+  gets changes requested, becomes ready to merge, or starts failing its checks.
 - **Snooze** a pull request until its checks finish, until the author pushes, or until a time you pick.
 - **Summaries on demand:** a pull request's intent, main changes, and what to inspect, without starting a review.
 - **Grouped by repository**, with a **Current** scope for the repository in the session.
@@ -91,7 +93,7 @@ Then open the queue with `/reviews`, or **Show GitHub review requests** from the
 | `m`       | Actions menu, listing every action with its key               |
 | `y`       | Copy `owner/repo#123`                                         |
 | `u`       | Copy the URL                                                  |
-| `f`       | Switch between **Current** and **All** (or `←` / `→`)          |
+| `f`       | Switch between **All**, **Current**, and **Mine** (or `←` / `→`) |
 | `r`       | Refresh                                                       |
 | `Shift+F` | Toggle full screen                                            |
 | `Esc`     | Close the panel                                               |
@@ -121,6 +123,19 @@ mark reads _N+ threads_.
 Next come the lines added and removed (_+120 −30_), the author, and how long the pull request has waited on you:
 since you, or a team you are in, were last asked to review, or for a follow-up since its last commit. Hover it on the
 Desktop for the exact time.
+
+### Your pull requests
+
+**Mine** lists your own open pull requests, grouped by repository like the queue, with their readiness and where
+their reviews stand: _changes requested by @alice_, _blocked_ (conflicts or failing checks), _ready to merge_,
+_approved_ (but not mergeable yet, such as while checks run), or _waiting on @bob, @acme/web_. The scope shows how
+many need you, which means changes requested or ready to merge. Selecting one opens it on GitHub; its menu copies,
+summarizes, and snoozes it as in the queue.
+
+You are notified when one of them gets changes requested, becomes ready to merge, or its checks go from passing or
+running to failing. A pull request seen for the first time, such as one you just opened, never notifies. Set
+`"notifyOnMyPullRequests": false` to keep the list without the notifications, or `"myPullRequests": false` to turn
+both off.
 
 ### Snooze
 
@@ -212,6 +227,10 @@ in a direct tone. Point `reviewGuidelines` at a Markdown file to replace them wi
 Desktop notifications follow **Settings › Notifications**; TUI notifications follow the TUI's attention settings.
 Set `"notifications": false` to keep the in-app toasts but silence native ones.
 
+Each poll runs up to three GitHub searches (requests, follow-ups once you have posted a review, and your own pull
+requests), about 13 points of GitHub's 5,000-an-hour GraphQL budget together. Raise `intervalMs` if you share that
+budget with other tools.
+
 ## Configuration
 
 ```jsonc
@@ -228,6 +247,8 @@ Set `"notifications": false` to keep the in-app toasts but silence native ones.
         "reviewGuidelines": "/path/to/review-guidelines.md",
         "keepClones": false,
         "followUps": true,
+        "myPullRequests": true,
+        "notifyOnMyPullRequests": true,
         "sort": "oldest",
         "staleAfter": "2d",
         "includeDrafts": true,
@@ -250,6 +271,8 @@ Set `"notifications": false` to keep the in-app toasts but silence native ones.
 | `reviewGuidelines` | built-in | Path to a Markdown file that replaces the review quality bar and tone |
 | `keepClones` | `false` | Keep the plugin's clones after their last review instead of deleting them |
 | `followUps` | `true` | Queue pull requests you reviewed when new commits arrive, without waiting for a re-request |
+| `myPullRequests` | `true` | List your own open pull requests under **Mine** |
+| `notifyOnMyPullRequests` | `true` | Notify when one of them gets changes requested, becomes ready to merge, or starts failing its checks |
 | `sort` | `"oldest"` | `"oldest"` (longest wait first), `"smallest"` (fewest changed lines), or `"ready"` (checks passing and no conflicts first, then smallest) |
 | `staleAfter` | none | Highlight the wait once it passes this, such as `"4h"` or `"2d"` |
 | `includeDrafts` | `true` | Show draft pull requests |

@@ -3,7 +3,7 @@
 import { usePlugin } from "@opencode/plugin/tui"
 import { Show } from "solid-js"
 import type { Store } from "solid-js/store"
-import { type QueueFilter, refreshLabel } from "../../../../shared/presentation.js"
+import { needingYou, type QueueFilter, refreshLabel } from "../../../../shared/presentation.js"
 import { type QueueView, snoozedToggleLabel } from "../../../../shared/review/snooze.js"
 import type { ReviewActions } from "../../actions/review-actions.js"
 import type { TuiState } from "../../state.js"
@@ -31,10 +31,10 @@ export function PanelHeader(props: {
     <box flexDirection="column">
       <box flexDirection="row" justifyContent="space-between">
         <text fg={theme.text.base}>
-          <b>Review requests</b>
+          <b>{props.filter === "mine" ? "Your pull requests" : "Review requests"}</b>
           <span style={{ fg: theme.text.muted }}> {props.count}</span>
         </text>
-        <ScopeToggle filter={props.filter} setFilter={props.actions.setFilter} />
+        <ScopeToggle filter={props.filter} mine={needingYou(props.state)} setFilter={props.actions.setFilter} />
       </box>
       <box flexDirection="row">
         <text fg={theme.text.muted} wrapMode="none" truncate>

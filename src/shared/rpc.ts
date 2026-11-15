@@ -1,5 +1,6 @@
 import { Rpc } from "@opencode/plugin/rpc"
 import * as v from "valibot"
+import { MyNotice } from "../domain/my-pull-request.js"
 import { FindingFields, ReviewDraft } from "../domain/review-draft.js"
 import { ReviewedRecord } from "../domain/review-history.js"
 import { QueueSnapshot } from "../domain/review-queue.js"
@@ -103,6 +104,7 @@ export const ReviewQueue = Rpc.define({
   events: {
     state: { schema: QueueSnapshot },
     discovered: { schema: v.object({ item: ReviewRequest, eventID: v.string() }) },
+    notice: { schema: v.object({ notice: MyNotice, item: ReviewRequest, eventID: v.string() }) },
     drafts: { schema: drafts },
   },
 } satisfies Rpc.PortableDefinition)
