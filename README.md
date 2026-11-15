@@ -187,6 +187,10 @@ or says why it found nothing; the comments are removed from the composer once se
 A decision made there is yours: the agent skips it and moves on instead of asking again. Saving an edited comment keeps
 the finding. The `review_*` tools only appear in review sessions.
 
+When a fix is concrete, the agent attaches it as a GitHub **suggestion**, which the author can apply with one click.
+It is posted under the comment as a `suggestion` block, and only on new lines within one hunk, which is where GitHub can
+apply it. Editing a comment shows the block as it will be posted: change it, or delete it to post the comment alone.
+
 **Post review** shows the verdict, summary, and every retained comment, and posts only after you confirm. It refuses
 while findings are undecided, and asks again if new commits were pushed since the draft. The agent cannot post.
 After posting, the worktree is removed, and so is a clone the plugin made once no other review uses it (set

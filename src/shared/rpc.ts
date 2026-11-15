@@ -81,6 +81,7 @@ export const ReviewQueue = Rpc.define({
       errors,
     },
     editFinding: {
+      /** The comment as posted: a closing suggestion block becomes the finding's suggestion. */
       input: v.strictObject({ ...byFinding, body: FindingFields.body }),
       output: draft,
       errors,

@@ -21,6 +21,8 @@ export const FindingFields = {
   confidence: Confidence,
   evidence: v.string(),
   body: v.pipe(v.string(), v.nonEmpty()),
+  /** The new text for the commented RIGHT lines, posted as a GitHub suggestion; empty deletes them. */
+  suggestion: v.exactOptional(v.string()),
 }
 
 const Finding = v.object({
@@ -30,7 +32,10 @@ const Finding = v.object({
 })
 export type Finding = v.InferOutput<typeof Finding>
 export type FindingInput = Omit<Finding, "id" | "decision">
-export type FindingChanges = { [K in keyof FindingInput]?: FindingInput[K] | undefined }
+/** `suggestion: null` removes the suggestion. */
+export type FindingChanges = { [K in Exclude<keyof FindingInput, "suggestion">]?: FindingInput[K] | undefined } & {
+  suggestion?: string | null | undefined
+}
 
 const DraftStatus = v.picklist(["investigating", "ready", "posted"])
 
@@ -71,6 +76,37 @@ export type ReviewPayload = {
     start_side?: "LEFT" | "RIGHT"
     body: string
   }[]
+}
+
+const SUGGESTION_OPENING = /^(`{3,})suggestion[ \t]*$/
+
+/** A fence longer than any backtick run in the text, so a suggestion that quotes a fence still closes where it should. */
+function fenceFor(text: string): string {
+  const longest = Math.max(2, ...(text.match(/`+/g) ?? []).map((run) => run.length))
+  return "`".repeat(longest + 1)
+}
+
+/** The comment as GitHub gets it: the body, then the suggestion block. */
+export function commentBody(finding: Pick<Finding, "body" | "suggestion">): string {
+  if (finding.suggestion === undefined) {
+    return finding.body
+  }
+  const fence = fenceFor(finding.suggestion)
+  const lines = finding.suggestion === "" ? "" : `${finding.suggestion}\n`
+  return `${finding.body.trimEnd()}\n\n${fence}suggestion\n${lines}${fence}`
+}
+
+/** The reverse of `commentBody`: a suggestion block closing the text becomes the suggestion. */
+export function splitComment(text: string): { body: string; suggestion?: string } {
+  const lines = text.trimEnd().split("\n")
+  const closing = lines.at(-1)?.trim()
+  const opening = lines.findLastIndex(
+    (line, index) => index < lines.length - 1 && SUGGESTION_OPENING.exec(line.trim())?.[1] === closing,
+  )
+  if (opening === -1) {
+    return { body: text }
+  }
+  return { body: lines.slice(0, opening).join("\n").trimEnd(), suggestion: lines.slice(opening + 1, -1).join("\n") }
 }
 
 export const keptFindings = (draft: ReviewDraft) => draft.findings.filter((finding) => finding.decision === "keep")
@@ -135,7 +171,7 @@ export function reviewPayload(draft: ReviewDraft): ReviewPayload {
       ...(finding.startLine === undefined
         ? {}
         : { start_line: finding.startLine, start_side: finding.startSide ?? finding.side }),
-      body: finding.body,
+      body: commentBody(finding),
     })),
   }
 }

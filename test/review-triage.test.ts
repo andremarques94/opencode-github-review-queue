@@ -130,6 +130,23 @@ describe("panel triage", () => {
     })
   })
 
+  it("reads a closing suggestion block from the user's rewrite, and drops one they deleted", async () => {
+    const actions = triage(panel, prompt)
+    const text = "Use a constant.\n\n```suggestion\nconst b = LIMIT\n```"
+
+    const { draft } = await actions.edit({ sessionID: "ses_1", id: 1, body: text })
+    expect(draft.findings.find((entry) => entry.id === 1)).toMatchObject({
+      body: "Use a constant.",
+      suggestion: "const b = LIMIT",
+    })
+
+    const cleared = (await actions.edit({ sessionID: "ses_1", id: 1, body: "Use a constant." })).draft
+    expect(cleared.findings.find((entry) => entry.id === 1)).not.toHaveProperty("suggestion")
+    await expect(actions.edit({ sessionID: "ses_1", id: 1, body: "```suggestion\nx\n```" })).rejects.toThrow(
+      /comment above/,
+    )
+  })
+
   it("asks the agent about one finding in the review session", async () => {
     await triage(panel, prompt).ask({ sessionID: "ses_1", id: 2 })
 
@@ -147,6 +164,26 @@ describe("panel triage", () => {
 
     saved.set(base.key, { ...(saved.get(base.key) as ReviewDraft), status: "posted" })
     await expect(actions.edit({ sessionID: "ses_1", id: 1, body: "Late." })).rejects.toThrow(/already posted/)
+  })
+})
+
+describe("agent suggestions", () => {
+  it("records a suggestion on new lines", async () => {
+    const added = await agent.add("ses_1", { ...finding, line: 3, startLine: 2, suggestion: "const b = 2, c = 3" })
+
+    expect(added.suggestion).toBe("const b = 2, c = 3")
+    expect((await agent.update("ses_1", added.id, { body: "Merge them." })).suggestion).toBe("const b = 2, c = 3")
+    expect(await agent.update("ses_1", added.id, { suggestion: null })).not.toHaveProperty("suggestion")
+  })
+
+  it("rejects a suggestion on removed lines, or one written into the body", async () => {
+    await expect(agent.add("ses_1", { ...finding, line: 1, side: "LEFT", suggestion: "x" })).rejects.toThrow(
+      /side RIGHT/,
+    )
+    await expect(agent.add("ses_1", { ...finding, body: "Do this:\n```suggestion\nx\n```" })).rejects.toThrow(
+      /in `suggestion`/,
+    )
+    await expect(agent.update("ses_1", 1, { side: "LEFT", line: 1, suggestion: "x" })).rejects.toThrow(/side RIGHT/)
   })
 })
 

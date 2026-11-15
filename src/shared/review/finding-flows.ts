@@ -1,4 +1,10 @@
-import { type Finding, isFindingQuestion, questionHeader, type ReviewDraft } from "../../domain/review-draft.js"
+import {
+  commentBody,
+  type Finding,
+  isFindingQuestion,
+  questionHeader,
+  type ReviewDraft,
+} from "../../domain/review-draft.js"
 import type { RpcInput, RpcOutput } from "../rpc.js"
 
 /** The part of a pending OpenCode form this needs; the question tool puts each question's header in `title`. */
@@ -61,8 +67,9 @@ export async function editFindingFlow(
   draft: ReviewDraft,
   finding: Finding,
 ): Promise<ReviewDraft | undefined> {
-  const body = await host.editBody({ title: `Edit the comment for ${questionHeader(finding.id)}`, body: finding.body })
-  if (body === undefined || body === finding.body) {
+  const current = commentBody(finding)
+  const body = await host.editBody({ title: `Edit the comment for ${questionHeader(finding.id)}`, body: current })
+  if (body === undefined || body === current) {
     return undefined
   }
   const result = await host.editFinding({ sessionID: draft.sessionID, id: finding.id, body })
