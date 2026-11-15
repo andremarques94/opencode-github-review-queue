@@ -56,14 +56,15 @@ Open the queue with `/reviews`, or **Review requests** in the Desktop side panel
 | `i`       | Summarize                                    |
 | `a`       | Address the review of your own pull request  |
 | `s` / `z` | Snooze or wake, show snoozed                 |
-| `f`       | Switch between **All**, **Current**, **Mine** |
+| `f` / `←` `→` | Switch between **All**, **Current**, **Mine** |
 | `r`       | Refresh                                      |
 | `m`       | Every action                                 |
 
 On the Desktop, click a row to start its review, its chevron to show its details, or right-click it for the other
-actions. Inside a review session,
-`/findings` (TUI) or the **Review** pill (Desktop) lists the findings and posts the review. On the Desktop, **Open in**
-opens the review's worktree in your editor, so you can run the changes.
+actions.
+
+Inside a review session, `/findings` (TUI) or the **Review** pill (Desktop) lists the findings and posts the review.
+On the Desktop, **Open in** opens the review's worktree in your editor, so you can run the changes.
 
 ## Configuration
 
@@ -97,6 +98,9 @@ gh auth login --hostname github.example.com
 ```
 
 If one host is down, its last results stay listed and the other hosts keep refreshing.
+
+If your company uses Enterprise Cloud on github.com itself, your work and personal accounts share one host, and the
+queue follows the active one. Switch with `gh auth switch --hostname github.com --user <login>`.
 
 ## Development
 
