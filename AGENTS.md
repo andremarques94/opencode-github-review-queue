@@ -29,8 +29,9 @@ Use relative imports (`./header/panel-header.js`, `../../shared/rpc.js`). OpenCo
 resolver that honours neither `tsconfig.json` paths nor `package.json` imports, so an alias such as `@/` fails at
 load time even when TypeScript, Vite and Vitest accept it. Adding an alias means adding a build step first.
 
-Plugin storage keys: `baseline` (the queue, the user's own pull requests, and the last poll's notices), `lease` (which instance polls), `draft/<key>`, `reviewed/<key>`, and
-`snooze/<key>`. Only the lease holder fetches from GitHub and prunes; the others re-read `baseline` each interval.
+Plugin storage keys: `baseline` (the queue, the user's own pull requests, and the last poll's notices), `lease`
+(which instance polls), `draft/<key>`, `reviewed/<key>`, and `snooze/<key>`. Only the lease holder fetches from
+GitHub and prunes; the others re-read `baseline` each interval.
 
 Keep runtime-specific code out of `src/domain` and `src/shared`. `src/server/github/cli.ts` spawns `gh` without a
 shell; never interpolate pull request data into a command or persist credentials.
