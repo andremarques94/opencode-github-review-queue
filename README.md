@@ -145,6 +145,9 @@ your last pick selected, then prepares a local review and opens its session:
 The row shows where the review stands: _reviewing_, _N to decide_, _ready to post_, or _posted_. **Resume review**
 returns to the same session.
 
+The agent's comments are checked against the exact commits under review, so a push during the review does not move
+the lines it may comment on.
+
 After you post, the plugin remembers the commit you reviewed and your verdict until the pull request is closed or
 merged. When the author pushes and the request comes back, the row shows _new commits since your review_, and
 starting a review offers **Review changes since last review** (the default) or **Full review**. A follow-up review

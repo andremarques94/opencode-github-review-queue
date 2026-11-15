@@ -7,7 +7,7 @@ import type {
   ReviewDraft,
   Verdict,
 } from "../../domain/review-draft.js"
-import { fetchDiff } from "../github/pull-request.js"
+import { fetchCompareDiff, fetchDiff } from "../github/pull-request.js"
 import type { DraftStore } from "./draft-store.js"
 
 /** The draft edits behind the agent's review tools, each scoped to the review session that calls it. */
@@ -101,9 +101,7 @@ export class Findings {
   private async assertCommentable(draft: ReviewDraft, target: FindingInput): Promise<void> {
     const problem = commentProblem(await this.commentableLines(draft), target)
     if (problem) {
-      throw new Error(
-        `${problem} Check \`gh pr diff ${draft.number} --repo ${draft.repository}\` and pick a line in a hunk.`,
-      )
+      throw new Error(`${problem} Check \`${diffCommand(draft)}\` and pick a line in a hunk.`)
     }
   }
 
@@ -113,13 +111,23 @@ export class Findings {
     if (cached) {
       return cached
     }
-    const loading = fetchDiff(draft.repository, draft.number, AbortSignal.timeout(this.timeoutMs)).then(
-      commentableLines,
-    )
+    const signal = AbortSignal.timeout(this.timeoutMs)
+    const diff = draft.baseSha
+      ? fetchCompareDiff(draft.repository, draft.baseSha, draft.headSha, signal)
+      : fetchDiff(draft.repository, draft.number, signal)
+    const loading = diff.then(commentableLines)
     loading.catch(() => this.diffs.delete(key))
     this.diffs.set(key, loading)
     return loading
   }
+}
+
+/** Drafts started before the base commit was recorded fall back to the pull request's current diff. */
+export function diffCommand(draft: Pick<ReviewDraft, "repository" | "number" | "headSha" | "baseSha">): string {
+  if (!draft.baseSha) {
+    return `gh pr diff ${draft.number} --repo ${draft.repository}`
+  }
+  return `gh api repos/${draft.repository}/compare/${draft.baseSha}...${draft.headSha} -H "Accept: application/vnd.github.diff"`
 }
 
 function findingIn(draft: ReviewDraft, id: number): Finding {

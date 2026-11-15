@@ -3,6 +3,7 @@ import type { ReviewDraft } from "../src/domain/review-draft.js"
 import type { ReviewedRecord as Reviewed } from "../src/domain/review-history.js"
 
 const github = vi.hoisted(() => ({
+  fetchCompareDiff: vi.fn(),
   fetchDiff: vi.fn(),
   fetchPullRequest: vi.fn(),
   postReview: vi.fn(),
@@ -90,6 +91,7 @@ beforeEach(async () => {
     mock.mockReset()
   }
   github.fetchDiff.mockResolvedValue(DIFF)
+  github.fetchCompareDiff.mockResolvedValue(DIFF)
   github.fetchPullRequest.mockResolvedValue({ headRefOid: HEAD, state: "OPEN" })
   github.postReview.mockResolvedValue("https://github.com/acme/api/pull/7#pullrequestreview-1")
   checkout.removeWorktree.mockResolvedValue(undefined)
@@ -126,7 +128,29 @@ describe("review workflow", () => {
     const added = await findings.add("ses_1", finding)
 
     expect(added).toMatchObject({ id: 1, decision: "pending" })
-    expect(github.fetchDiff).toHaveBeenCalledTimes(1)
+    expect(github.fetchCompareDiff).toHaveBeenCalledTimes(1)
+    expect(github.fetchCompareDiff).toHaveBeenCalledWith("acme/api", BASE, HEAD, expect.any(AbortSignal))
+    expect(github.fetchDiff).not.toHaveBeenCalled()
+  })
+
+  it("checks lines against the reviewed commits, not the branch the author keeps pushing to", async () => {
+    // The branch moved on: its current diff no longer has line 2, but the commits under review still do.
+    github.fetchDiff.mockResolvedValue(DIFF.replace("+const b = 2\n", ""))
+
+    await expect(findings.add("ses_1", finding)).resolves.toMatchObject({ id: 1 })
+    await expect(findings.add("ses_1", { ...finding, line: 9 })).rejects.toThrow(
+      `compare/${BASE}...${HEAD} -H "Accept: application/vnd.github.diff"`,
+    )
+  })
+
+  it("falls back to the pull request's diff for drafts without a base commit", async () => {
+    const { baseSha: _, ...older } = base
+    await store.put(older)
+
+    await findings.add("ses_1", finding)
+
+    expect(github.fetchDiff).toHaveBeenCalledWith("acme/api", 7, expect.any(AbortSignal))
+    expect(github.fetchCompareDiff).not.toHaveBeenCalled()
   })
 
   it("keeps every change when tool calls run at the same time", async () => {

@@ -58,6 +58,20 @@ export async function fetchDiff(repository: string, number: number, signal: Abor
   return result.stdout
 }
 
+/** The diff between two exact commits; unlike `gh pr diff`, it does not move when the author pushes. */
+export async function fetchCompareDiff(
+  repository: string,
+  base: string,
+  head: string,
+  signal: AbortSignal,
+): Promise<string> {
+  const result = await runGh(
+    ["api", `repos/${repository}/compare/${base}...${head}`, "-H", "Accept: application/vnd.github.diff"],
+    { signal },
+  )
+  return result.stdout
+}
+
 const PostedReview = v.object({ html_url: v.string() })
 
 export async function postReview(

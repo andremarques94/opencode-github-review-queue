@@ -12,7 +12,7 @@ review in the TUI and Desktop app.
   and summary; both UIs run these through their flow host)
 - `src/server`: server entry, the polling state machine, the lease that picks the one instance that polls
   (`queue-lease.ts`), plain keyed storage (`keyed-store.ts`) and snooze pruning, plus:
-  - `github/`: `gh` runner, review search, pull requests (including batched states), repository lookup
+  - `github/`: `gh` runner, review search, pull requests (states, compare diffs), repository lookup
   - `git/`: `git` runner, remotes, worktrees
   - `review/`: draft storage, review sessions (start, follow-up, reset, post, prune), findings, checkouts, models,
     summaries, and `agent/` (instructions and the `review_*` tools)
