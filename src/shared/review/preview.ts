@@ -1,4 +1,10 @@
-import { findingLocation, keptFindings, type ReviewDraft, reviewPayload } from "../../domain/review-draft.js"
+import {
+  commentBody,
+  findingLocation,
+  keptFindings,
+  type ReviewDraft,
+  reviewPayload,
+} from "../../domain/review-draft.js"
 
 export const VERDICT_LABELS = { REQUEST_CHANGES: "Request changes", COMMENT: "Comment", APPROVE: "Approve" } as const
 
@@ -17,7 +23,10 @@ export function reviewPreview(draft: ReviewDraft): ReviewPreview {
     reference: `${draft.repository}#${draft.number}`,
     verdict: VERDICT_LABELS[payload.event],
     summary: payload.body,
-    comments: keptFindings(draft).map((finding) => ({ location: findingLocation(finding), body: finding.body })),
+    comments: keptFindings(draft).map((finding) => ({
+      location: findingLocation(finding),
+      body: commentBody(finding),
+    })),
   }
 }
 

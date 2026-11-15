@@ -2,7 +2,7 @@
 
 import { usePlugin } from "@opencode/plugin/tui"
 import { Show } from "solid-js"
-import { type Finding, findingLocation } from "../../../../domain/review-draft.js"
+import { commentBody, type Finding, findingLocation } from "../../../../domain/review-draft.js"
 import { escapeInlineFences, fitLine } from "../../../../shared/presentation.js"
 import type { FindingActions } from "../../actions/finding-actions.js"
 import { MarkdownText } from "../markdown-text.js"
@@ -67,7 +67,7 @@ export function FindingRow(props: {
             </text>
           }
         >
-          <MarkdownText content={props.finding.body} tone={color().body} />
+          <MarkdownText content={commentBody(props.finding)} tone={color().body} />
           <Show when={props.expanded && props.finding.evidence}>
             {(evidence) => (
               <box flexDirection="column" marginTop={1}>

@@ -1,11 +1,17 @@
-import { type CommentableLines, commentableLines, commentProblem } from "../../domain/pull-request-diff.js"
-import type {
-  Decision,
-  Finding,
-  FindingChanges,
-  FindingInput,
-  ReviewDraft,
-  Verdict,
+import {
+  type CommentableLines,
+  commentableLines,
+  commentProblem,
+  suggestionProblem,
+} from "../../domain/pull-request-diff.js"
+import {
+  type Decision,
+  type Finding,
+  type FindingChanges,
+  type FindingInput,
+  type ReviewDraft,
+  splitComment,
+  type Verdict,
 } from "../../domain/review-draft.js"
 import { fetchCompareDiff, fetchDiff } from "../github/pull-request.js"
 import type { DraftStore } from "./draft-store.js"
@@ -38,15 +44,19 @@ export class Findings {
     return findingIn(saved, id)
   }
 
+  /** A `null` suggestion removes it; other fields left out stay as they are. */
   async update(sessionID: string, id: number, changes: FindingChanges): Promise<Finding> {
     const draft = await this.editableDraft(sessionID)
-    const defined = Object.fromEntries(Object.entries(changes).filter(([, value]) => value !== undefined))
-    await this.assertCommentable(draft, { ...findingIn(draft, id), ...defined })
+    const { suggestion, ...current } = findingIn(draft, id)
+    const kept = changes.suggestion === null || suggestion === undefined ? {} : { suggestion }
+    const defined = Object.fromEntries(
+      Object.entries(changes).filter(([, value]) => value !== undefined && value !== null),
+    )
+    const updated: Finding = { ...current, ...kept, ...defined, decision: "pending" }
+    await this.assertCommentable(draft, updated)
     const saved = await this.store.update(draft.key, (next) => {
       findingIn(next, id)
-      next.findings = next.findings.map((finding) =>
-        finding.id === id ? { ...finding, ...defined, decision: "pending" as const } : finding,
-      )
+      next.findings = next.findings.map((finding) => (finding.id === id ? updated : finding))
     })
     return findingIn(saved, id)
   }
@@ -55,12 +65,18 @@ export class Findings {
    * The user's own wording from the panel. Unlike the agent's `update`, it counts as keeping the finding: the user
    * wrote the comment that gets posted, so there is nothing left for them to approve.
    */
-  async reword(sessionID: string, id: number, body: string): Promise<ReviewDraft> {
+  async reword(sessionID: string, id: number, text: string): Promise<ReviewDraft> {
     const draft = await this.editableDraft(sessionID)
-    findingIn(draft, id)
+    const { body, suggestion } = splitComment(text)
+    if (!body.trim()) {
+      throw new Error("Write a comment above the suggestion; GitHub posts the two together.")
+    }
+    const { suggestion: _, ...rest } = findingIn(draft, id)
+    const reworded = { ...rest, body, ...(suggestion === undefined ? {} : { suggestion }) }
+    await this.assertCommentable(draft, reworded)
     return this.store.update(draft.key, (next) => {
       next.findings = next.findings.map((finding) =>
-        finding.id === id ? { ...finding, body, decision: "keep" as const } : finding,
+        finding.id === id ? { ...reworded, decision: "keep" as const } : finding,
       )
     })
   }
@@ -99,9 +115,17 @@ export class Findings {
   }
 
   private async assertCommentable(draft: ReviewDraft, target: FindingInput): Promise<void> {
-    const problem = commentProblem(await this.commentableLines(draft), target)
+    const lines = await this.commentableLines(draft)
+    const problem = commentProblem(lines, target)
     if (problem) {
       throw new Error(`${problem} Check \`${diffCommand(draft)}\` and pick a line in a hunk.`)
+    }
+    if (splitComment(target.body).suggestion !== undefined) {
+      throw new Error("Put the replacement lines in `suggestion`, without the fence, and keep the body to the comment.")
+    }
+    const suggestion = suggestionProblem(lines, target)
+    if (suggestion) {
+      throw new Error(suggestion)
     }
   }
 

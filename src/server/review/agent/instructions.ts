@@ -1,4 +1,5 @@
 import {
+  commentBody,
   type Finding,
   findingLocation,
   pendingFindings,
@@ -95,8 +96,10 @@ ${guidelines}${followUp ? followUpInstructions(draft, followUp) : ""}
 - Record every finding with \`review_add_finding\`. Only lines that are part of the diff can be commented on: use
   the new line number with side RIGHT for added or context lines, the old line number with side LEFT for removed
   lines, and startLine for ranges. The tool rejects lines outside the diff; fix the line rather than dropping it.
-- Keep severity, confidence, and evidence out of the comment body; they stay local. Use GitHub \`suggestion\`
-  blocks for concrete fixes.
+- Keep severity, confidence, and evidence out of the comment body; they stay local.
+- For a concrete fix of the commented lines, set \`suggestion\` to the exact new text of lines startLine..line (or just
+  line), without a fence; the plugin posts it as a GitHub suggestion block under the body. Empty deletes the lines.
+  Suggestions need side RIGHT and lines of one hunk. Never write a suggestion block in the body itself.
 - The comment body and the evidence are Markdown. To mention a literal fence (three backticks) inside a sentence or a
   quoted string, wrap it in a double-backtick code span with spaces, or the backticks pair up and garble the rest of
   the line. Quote test inputs as code blocks rather than as escaped strings with \\n.
@@ -164,7 +167,7 @@ point in the comment body. If you find nothing wrong there, tell me why instead 
 
 export function findingCard(draft: ReviewDraft, finding: Finding): string {
   const position = draft.findings.length - pendingFindings(draft).length + 1
-  const quoted = finding.body
+  const quoted = commentBody(finding)
     .split("\n")
     .map((line) => `> ${line}`)
     .join("\n")
