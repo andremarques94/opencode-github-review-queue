@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.5.0](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v0.4.0...opencode-github-review-queue-v0.5.0) (2026-11-15)
+
+
+### Features
+
+* one queue poller, readiness on rows, and follow-up reviews ([#24](https://github.com/andremarques94/opencode-github-review-queue/issues/24)) ([c12d3cb](https://github.com/andremarques94/opencode-github-review-queue/commit/c12d3cb3957c59db647e186e03ad92083480411c))
+* snooze pull requests until checks finish, a push, or a time ([#25](https://github.com/andremarques94/opencode-github-review-queue/issues/25)) ([8c60e57](https://github.com/andremarques94/opencode-github-review-queue/commit/8c60e57be75bf4c0c9668c448cace26c080e18b7))
+* summarize a pull request on demand ([#26](https://github.com/andremarques94/opencode-github-review-queue/issues/26)) ([9b3f65b](https://github.com/andremarques94/opencode-github-review-queue/commit/9b3f65b85b9bb26949405f3ac5ec55368e927b3f))
+* turn Desktop line comments into review findings ([#28](https://github.com/andremarques94/opencode-github-review-queue/issues/28)) ([fc096a7](https://github.com/andremarques94/opencode-github-review-queue/commit/fc096a70c00c64542a784a1a40b58ff5c77b7040))
+
+
+### Bug Fixes
+
+* check comment lines against the exact commits under review ([#27](https://github.com/andremarques94/opencode-github-review-queue/issues/27)) ([a04bdfd](https://github.com/andremarques94/opencode-github-review-queue/commit/a04bdfd5221bb551cc883a5f1a70eba45cafdd18))
+
 ## [0.4.0](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v0.3.0...opencode-github-review-queue-v0.4.0) (2026-11-14)
 
 
