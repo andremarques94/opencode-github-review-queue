@@ -64,6 +64,20 @@ export const needsYou = (item: ReviewRequest) => {
   return status === "changes-requested" || status === "ready-to-merge"
 }
 
+/** The session addressing a review of the user's pull request, so the panel can return to it. */
+export const AddressSession = v.object({
+  version: v.literal(1),
+  key: v.string(),
+  sessionID: v.string(),
+  directory: v.string(),
+  createdAt: v.string(),
+})
+export type AddressSession = v.InferOutput<typeof AddressSession>
+
+/** Worth addressing: someone asked for changes, or left threads nobody resolved. */
+export const canAddress = (item: ReviewRequest) =>
+  item.authored !== undefined && (myStatus(item) === "changes-requested" || (item.unresolvedThreads ?? 0) > 0)
+
 const MyNoticeKind = v.picklist(["changes-requested", "ready-to-merge", "checks-failed"])
 export const MyNotice = v.object({ key: v.string(), kind: MyNoticeKind })
 export type MyNotice = v.InferOutput<typeof MyNotice>

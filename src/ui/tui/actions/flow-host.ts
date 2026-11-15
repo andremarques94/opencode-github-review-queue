@@ -1,4 +1,5 @@
 import type { usePlugin } from "@opencode/plugin/tui"
+import type { AddressFlowHost } from "../../../shared/review/address.js"
 import type { FindingFlowHost } from "../../../shared/review/finding-flows.js"
 import type { ReviewFlowHost } from "../../../shared/review/flows.js"
 import type { SnoozeFlowHost } from "../../../shared/review/snooze.js"
@@ -22,9 +23,10 @@ export function createFindingFlowHost(context: ReturnType<typeof usePlugin>): Fi
 
 export function createFlowHost(
   context: ReturnType<typeof usePlugin>,
-): ReviewFlowHost & SnoozeFlowHost & SummaryFlowHost {
+): ReviewFlowHost & SnoozeFlowHost & SummaryFlowHost & AddressFlowHost {
   const rpc = context.client.rpc(ReviewQueue)
   return {
+    addressReview: (request) => rpc.addressReview(request),
     confirm: async (options) =>
       (await context.ui.dialog.confirm({
         title: options.title,

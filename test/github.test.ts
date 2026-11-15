@@ -8,6 +8,7 @@ vi.mock("../src/server/github/cli.js", async (importOriginal) => ({
 }))
 
 const { classifyGhError } = await import("../src/server/github/cli.js")
+const { fetchOpenThreads, fetchPullRequestBranch } = await import("../src/server/github/pull-request.js")
 const { fetchAuthoredPullRequests, fetchReviewRequests, fetchReviewedPullRequests } = await import(
   "../src/server/github/review-requests.js"
 )
@@ -261,6 +262,59 @@ describe("fetchReviewRequests", () => {
     await expect(fetchReviewRequests(signal)).rejects.toMatchObject({
       detail: { kind: "unknown", message: `GitHub returned ${problem}; the saved queue was left unchanged.` },
     })
+  })
+})
+
+describe("addressing a review", () => {
+  it("keeps only unresolved threads, without a line once the code moved on", async () => {
+    const thread = (isResolved: boolean, line: number | null, body: string) => ({
+      isResolved,
+      isOutdated: line === null,
+      path: "src/app.ts",
+      line,
+      comments: {
+        nodes: [
+          { author: { login: "alice" }, body },
+          { author: null, body: "+1" },
+        ],
+      },
+    })
+    respond({
+      data: {
+        repository: {
+          pullRequest: {
+            reviewThreads: {
+              nodes: [thread(false, 3, "Name this."), thread(true, 4, "Done"), thread(false, null, "Why?")],
+            },
+          },
+        },
+      },
+    })
+
+    expect(await fetchOpenThreads("acme/api", 7, signal)).toEqual([
+      {
+        path: "src/app.ts",
+        line: 3,
+        outdated: false,
+        comments: [
+          { author: "alice", body: "Name this." },
+          { author: "ghost", body: "+1" },
+        ],
+      },
+      { path: "src/app.ts", outdated: true, comments: expect.any(Array) },
+    ])
+    expect(runGh.mock.calls[0]?.[0]).toEqual(expect.arrayContaining(["owner=acme", "name=api", "number=7"]))
+  })
+
+  it("refuses a branch name git could read as an option", async () => {
+    const branch = (headRefName: string) => respond({ state: "OPEN", headRefName, isCrossRepository: false })
+
+    branch("feature/b")
+    expect((await fetchPullRequestBranch("acme/api", 7, signal)).headRefName).toBe("feature/b")
+    for (const name of ["--upload-pack=evil", "a..b", "feature/", "x.lock", "has space"]) {
+      branch(name)
+      await expect(fetchPullRequestBranch("acme/api", 7, signal)).rejects.toThrow(/unexpected response/)
+    }
   })
 })
 

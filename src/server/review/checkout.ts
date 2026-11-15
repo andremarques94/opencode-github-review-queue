@@ -50,20 +50,38 @@ export function worktreePath(cacheDirectory: string, repository: string, number:
   return join(worktreesDirectory(cacheDirectory), owner, name, `pr-${number}`)
 }
 
+/** Where addressing a review checks the pull request's branch out, when the user's checkout is on another one. */
+export function addressWorktreePath(cacheDirectory: string, repository: string, number: number): string {
+  const [owner, name] = segments(repository)
+  return join(cacheDirectory, "address", owner, name, `pr-${number}`)
+}
+
+/** The root of the session's own clone of `repository`, if that is what the session is in. */
+export async function sessionCheckout(input: {
+  repository: string
+  directory?: string | undefined
+  signal: AbortSignal
+}): Promise<string | undefined> {
+  if (!input.directory) {
+    return undefined
+  }
+  const repository = await repositoryForDirectory(input.directory, input.signal)
+  if (repository?.toLowerCase() !== input.repository.toLowerCase()) {
+    return undefined
+  }
+  const root = await runGit(input.directory, ["rev-parse", "--show-toplevel"], input.signal)
+  return (await remoteFor(root, input.repository, input.signal)) ? root : undefined
+}
+
 export async function findCheckout(input: {
   repository: string
   directory?: string | undefined
   cacheDirectory: string
   signal: AbortSignal
 }): Promise<string | undefined> {
-  if (input.directory) {
-    const repository = await repositoryForDirectory(input.directory, input.signal)
-    if (repository?.toLowerCase() === input.repository.toLowerCase()) {
-      const root = await runGit(input.directory, ["rev-parse", "--show-toplevel"], input.signal)
-      if (await remoteFor(root, input.repository, input.signal)) {
-        return root
-      }
-    }
+  const own = await sessionCheckout(input)
+  if (own) {
+    return own
   }
   const managed = managedClonePath(input.cacheDirectory, input.repository)
   return existsSync(managed) ? managed : undefined
