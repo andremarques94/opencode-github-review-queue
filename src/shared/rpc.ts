@@ -98,6 +98,25 @@ export const ReviewQueue = Rpc.define({
       output: v.strictObject({ summary: v.string(), truncated: v.boolean() }),
       errors,
     },
+    addressReview: {
+      input: v.strictObject({
+        key: v.string(),
+        directory: v.exactOptional(v.string()),
+        worktree: v.boolean(),
+        model: v.exactOptional(ModelRef),
+      }),
+      output: v.variant("status", [
+        v.strictObject({ status: v.picklist(["started", "resumed"]), sessionID: v.string() }),
+        v.strictObject({
+          status: v.literal("needs-worktree"),
+          branch: v.string(),
+          current: v.exactOptional(v.string()),
+          directory: v.string(),
+        }),
+        v.strictObject({ status: v.literal("needs-model") }),
+      ]),
+      errors,
+    },
     snooze: { input: v.strictObject({ key: v.string(), until: SnoozeUntil }), output: drafts, errors },
     wake: { input: byKey, output: drafts, errors },
   },

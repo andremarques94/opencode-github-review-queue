@@ -1,3 +1,4 @@
+import { canAddress } from "../../../domain/my-pull-request.js"
 import type { ReviewDraft } from "../../../domain/review-draft.js"
 import type { ReviewRequest } from "../../../domain/review-request.js"
 import type { Snooze } from "../../../domain/snooze.js"
@@ -69,6 +70,17 @@ export function pullRequestOptions(
       footer: "i",
       category: PULL_REQUEST,
     },
+    ...(canAddress(item)
+      ? [
+          {
+            title: "Address review…",
+            value: actions.address,
+            description: "Work through the review comments in your checkout",
+            footer: "a",
+            category: PULL_REQUEST,
+          },
+        ]
+      : []),
     snooze
       ? {
           title: "Wake up",

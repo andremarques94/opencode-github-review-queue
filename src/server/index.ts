@@ -1,4 +1,5 @@
 import { Plugin } from "@opencode/plugin"
+import { AddressSession } from "../domain/my-pull-request.js"
 import { ReviewedRecord } from "../domain/review-history.js"
 import { everyPullRequest } from "../domain/review-queue.js"
 import { Snooze } from "../domain/snooze.js"
@@ -8,6 +9,7 @@ import { openReview, repositoryForDirectory } from "./github/repository.js"
 import { type KeyedPersistence, KeyedStore } from "./keyed-store.js"
 import { StorageLease } from "./queue-lease.js"
 import { queueSource } from "./queue-source.js"
+import { AddressSessions } from "./review/address.js"
 import { nextStep } from "./review/agent/instructions.js"
 import { addReviewTools, hideReviewTools } from "./review/agent/tools.js"
 import { defaultCacheDirectory, expandHome } from "./review/checkout.js"
@@ -26,6 +28,7 @@ const SUMMARY_TIMEOUT_MS = 5 * 60_000
 const DRAFT_PREFIX = "draft/"
 const REVIEWED_PREFIX = "reviewed/"
 const SNOOZE_PREFIX = "snooze/"
+const ADDRESS_PREFIX = "address/"
 // Missing a few renewals, such as while the machine sleeps, should not hand the lease over.
 const LEASE_INTERVALS = 3
 
@@ -35,6 +38,7 @@ type Shared = {
   reviewed: KeyedStore<ReviewedRecord>
   snoozes: KeyedStore<Snooze>
   reviews: ReviewSessions
+  addressing: AddressSessions
   findings: Findings
   refs: number
   started?: Promise<void>
@@ -100,8 +104,13 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
     remove: (key) => storage.remove(`${DRAFT_PREFIX}${key}`),
   })
   const snoozes = new KeyedStore(Snooze, prefixed(storage, SNOOZE_PREFIX))
+  const cacheDirectory = options.cacheDirectory ? expandHome(options.cacheDirectory) : defaultCacheDirectory()
+  const addressing = new AddressSessions(
+    new KeyedStore(AddressSession, prefixed(storage, ADDRESS_PREFIX)),
+    cacheDirectory,
+  )
   const reviews = new ReviewSessions(drafts, reviewed, {
-    cacheDirectory: options.cacheDirectory ? expandHome(options.cacheDirectory) : defaultCacheDirectory(),
+    cacheDirectory,
     guidelinesFile: options.reviewGuidelines && expandHome(options.reviewGuidelines),
     keepClones: options.keepClones,
     timeoutMs: options.timeoutMs,
@@ -110,9 +119,22 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
     if (event.type === "fetched") {
       void reviews.pruneAfterRefresh(event.state, AbortSignal.timeout(options.timeoutMs))
       void pruneSnoozes(snoozes, everyPullRequest(event.state), Date.now()).catch(() => undefined)
+      const authored = event.state.authored
+      if (authored) {
+        void addressing.prune(new Set(authored.map((item) => item.key))).catch(() => undefined)
+      }
     }
   })
-  return { poller, drafts, reviewed, snoozes, reviews, findings: new Findings(drafts, options.timeoutMs), refs: 0 }
+  return {
+    poller,
+    drafts,
+    reviewed,
+    snoozes,
+    reviews,
+    addressing,
+    findings: new Findings(drafts, options.timeoutMs),
+    refs: 0,
+  }
 }
 
 export default Plugin.define({
@@ -152,6 +174,21 @@ export default Plugin.define({
             directory: input.directory,
             clone: input.clone,
             mode: input.mode,
+            model: input.model,
+            sessions: ctx.session,
+            signal: timeout(rpcContext.signal, CHECKOUT_TIMEOUT_MS),
+          })
+          if (result.status === "started" && input.model) {
+            await rememberModel(ctx.storage, input.model)
+          }
+          return result
+        }),
+      addressReview: (input, rpcContext) =>
+        reported(rpcContext, async () => {
+          const result = await current.addressing.start({
+            item: await queued(input.key),
+            directory: input.directory,
+            worktree: input.worktree,
             model: input.model,
             sessions: ctx.session,
             signal: timeout(rpcContext.signal, CHECKOUT_TIMEOUT_MS),

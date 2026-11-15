@@ -1,4 +1,5 @@
 import type { Context, ServerRef } from "@opencode/plugin/gui"
+import type { AddressFlowHost } from "../../../shared/review/address.js"
 import type { FindingFlowHost } from "../../../shared/review/finding-flows.js"
 import type { ReviewFlowHost } from "../../../shared/review/flows.js"
 import type { SnoozeFlowHost } from "../../../shared/review/snooze.js"
@@ -21,9 +22,10 @@ export function createFindingFlowHost(context: Context, server: () => ServerRef)
   }
 }
 
-export function createFlowHost(context: Context): ReviewFlowHost & SnoozeFlowHost & SummaryFlowHost {
+export function createFlowHost(context: Context): ReviewFlowHost & SnoozeFlowHost & SummaryFlowHost & AddressFlowHost {
   const rpc = () => context.client.rpc(ReviewQueue)
   return {
+    addressReview: (request) => rpc().addressReview(request),
     confirm: (options) =>
       context.dialogs.confirm({
         title: options.title,

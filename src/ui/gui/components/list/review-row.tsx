@@ -1,5 +1,6 @@
 import type { Context } from "@opencode/plugin/gui"
 import { For, Show } from "solid-js"
+import { canAddress } from "../../../../domain/my-pull-request.js"
 import { postBlocker } from "../../../../domain/review-draft.js"
 import { reviewedFor } from "../../../../domain/review-history.js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
@@ -155,6 +156,15 @@ export function ReviewRow(props: ReviewRowProps) {
             },
             { label: "Copy link", icon: "link", onSelect: () => props.copy(props.item.url, "Link") },
             { label: "Summarize", icon: "file-document", onSelect: () => void props.actions.summarize(props.item) },
+            ...(canAddress(props.item)
+              ? [
+                  {
+                    label: "Address review…",
+                    icon: "outline-code-brackets" as const,
+                    onSelect: () => void props.actions.address(props.item),
+                  },
+                ]
+              : []),
             snoozeItem(),
             ...draftItems(),
           ]}

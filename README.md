@@ -88,6 +88,7 @@ Then open the queue with `/reviews`, or **Show GitHub review requests** from the
 | `o`       | Open the pull request on GitHub                               |
 | `p`       | Post the selected review, after a preview                     |
 | `i`       | Summarize the selected pull request                           |
+| `a`       | Address the review of your selected pull request              |
 | `s`       | Snooze the selected pull request, or wake it                  |
 | `z`       | Show or hide snoozed pull requests                            |
 | `m`       | Actions menu, listing every action with its key               |
@@ -131,6 +132,14 @@ their reviews stand: _changes requested by @alice_, _blocked_ (conflicts or fail
 _approved_ (but not mergeable yet, such as while checks run), or _waiting on @bob, @acme/web_. The scope shows how
 many need you, which means changes requested or ready to merge. Selecting one opens it on GitHub; its menu copies,
 summarizes, and snoozes it as in the queue.
+
+**Address review** (`a` in the TUI, or the row's menu) appears when changes were requested or threads are still
+unresolved. It opens a session in your own clone, with every open review comment as a checklist, and the agent works
+through them with you: what each asks for, the fix it proposes, and a drafted reply where no change is needed. It can
+edit files there, but pushing, resolving threads, and posting on GitHub stay with you: those commands are denied in
+the session. If your clone is on another branch, the plugin asks before adding a worktree on the pull request's
+branch under the cache directory, and never switches your branch; that worktree is kept afterwards, since it may hold
+your commits. **Address review** returns to the same session until the pull request is closed or merged.
 
 You are notified when one of them gets changes requested, becomes ready to merge, or its checks go from passing or
 running to failing. A pull request seen for the first time, such as one you just opened, never notifies. Set
@@ -267,7 +276,7 @@ budget with other tools.
 | `timeoutMs`     | `20000`   | Timeout for each GitHub CLI request                               |
 | `maxBackoffMs`  | `900000`  | Longest delay after transient failures                            |
 | `notifications` | `true`    | Native and terminal-attention notifications                       |
-| `cacheDirectory` | `$XDG_CACHE_HOME/opencode-github-review-queue` | Plugin-made clones and review worktrees; falls back to `~/.cache` |
+| `cacheDirectory` | `$XDG_CACHE_HOME/opencode-github-review-queue` | Plugin-made clones, review worktrees, and worktrees for addressing a review; falls back to `~/.cache` |
 | `reviewGuidelines` | built-in | Path to a Markdown file that replaces the review quality bar and tone |
 | `keepClones` | `false` | Keep the plugin's clones after their last review instead of deleting them |
 | `followUps` | `true` | Queue pull requests you reviewed when new commits arrive, without waiting for a re-request |

@@ -3,6 +3,7 @@ import type { ReviewDraft } from "../../../domain/review-draft.js"
 import type { ReviewedRecord } from "../../../domain/review-history.js"
 import type { ReviewRequest } from "../../../domain/review-request.js"
 import { fullReference } from "../../../shared/presentation.js"
+import { addressReviewFlow } from "../../../shared/review/address.js"
 import { postReviewFlow, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
 import { snoozeFlow } from "../../../shared/review/snooze.js"
 import { summaryFlow } from "../../../shared/review/summary.js"
@@ -16,6 +17,7 @@ export type ReviewActions = {
   snooze(item: ReviewRequest): Promise<void>
   wake(item: ReviewRequest): Promise<void>
   summarize(item: ReviewRequest): Promise<void>
+  address(item: ReviewRequest): Promise<void>
 }
 
 export function attempting(context: Context) {
@@ -44,6 +46,13 @@ export function createReviewActions(input: {
   const attempt = attempting(context)
 
   return {
+    address: (item) =>
+      attempt(async () => {
+        const sessionID = await addressReviewFlow(host, item, input.directory())
+        if (sessionID) {
+          context.tabs.open({ server: input.server(), id: sessionID }, { focus: true })
+        }
+      }, "Could not address the review"),
     review: (item, resuming, previous) =>
       attempt(async () => {
         const sessionID = await startReviewFlow(host, item, input.directory(), resuming, previous)
