@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v1.0.0...opencode-github-review-queue-v1.0.1) (2026-11-16)
+
+
+### Bug Fixes
+
+* show each review finding in the chat and review in depth ([#47](https://github.com/andremarques94/opencode-github-review-queue/issues/47)) ([c4bdb8b](https://github.com/andremarques94/opencode-github-review-queue/commit/c4bdb8babd32a5b0faaab84dce37466fe451bbef))
+
 ## [1.0.0](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v0.6.0...opencode-github-review-queue-v1.0.0) (2026-11-15)
 
 
