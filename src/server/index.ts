@@ -1,5 +1,6 @@
 import { Plugin } from "@opencode/plugin"
 import { AddressSession } from "../domain/my-pull-request.js"
+import { nextFinding, questionHeader } from "../domain/review-draft.js"
 import { ReviewedRecord } from "../domain/review-history.js"
 import { everyPullRequest } from "../domain/review-queue.js"
 import { qualifiedRepository } from "../domain/review-request.js"
@@ -11,7 +12,7 @@ import { type KeyedPersistence, KeyedStore } from "./keyed-store.js"
 import { StorageLease } from "./queue-lease.js"
 import { queueSource } from "./queue-source.js"
 import { AddressSessions } from "./review/address.js"
-import { nextStep } from "./review/agent/instructions.js"
+import { decisionPrompt, nextStep } from "./review/agent/instructions.js"
 import { addReviewTools, hideReviewTools } from "./review/agent/tools.js"
 import { defaultCacheDirectory, expandHome } from "./review/checkout.js"
 import { DraftStore } from "./review/draft-store.js"
@@ -247,6 +248,26 @@ export default Plugin.define({
         event.system.push({ type: "text", text: step })
       }
     })
+    // The finding this session was last prompted to ask about; cleared when the agent opens a question.
+    const prompted = new Map<string, number>()
+    const opened = await ctx.tool.hook("execute.before", (event) => {
+      if (event.tool === "question") {
+        prompted.delete(event.sessionID)
+      }
+    })
+    const idle = await ctx.session.hook("experimental.idle", async (event) => {
+      const draft = await current.drafts.bySession(event.sessionID)
+      const finding = draft?.status === "ready" ? nextFinding(draft) : undefined
+      if (!finding || prompted.get(event.sessionID) === finding.id) {
+        return
+      }
+      prompted.set(event.sessionID, finding.id)
+      await ctx.session.synthetic({
+        sessionID: event.sessionID,
+        text: decisionPrompt(finding),
+        description: `Ask about ${questionHeader(finding.id)}`,
+      })
+    })
 
     const emit = (event: PollerEvent) => {
       switch (event.type) {
@@ -273,6 +294,8 @@ export default Plugin.define({
       unsubscribeDrafts()
       await tools.dispose()
       await reminder.dispose()
+      await opened.dispose()
+      await idle.dispose()
       await registration.dispose()
       current.refs -= 1
       if (current.refs === 0) {
