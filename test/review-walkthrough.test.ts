@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { type Finding, nextFinding, type ReviewDraft, walkthroughOrder } from "../src/domain/review-draft.js"
-import { findingCard, nextStep, presentFinding } from "../src/server/review/agent/instructions.js"
+import { decisionPrompt, findingCard, nextStep, presentFinding } from "../src/server/review/agent/instructions.js"
 
 const finding = (id: number, overrides: Partial<Finding> = {}): Finding => ({
   id,
@@ -68,17 +68,19 @@ describe("walkthrough", () => {
     expect(walkthroughOrder(draft(findings)).map((entry) => entry.id)).toEqual([2, 1])
   })
 
-  it("asks for each decision with the question tool, recommendation first", () => {
+  it("presents each finding in the chat, then has the plugin ask for the decision", () => {
     const step = nextStep(draft([finding(1)]))
 
-    expect(step).toMatch(/call the question tool with one question whose header is "Finding #<id>"/)
-    expect(step).toMatch(/Keep, Edit wording, Drop, Explain, Investigate, your recommended option first/)
+    expect(step).toMatch(/recommendation for Finding #<id> and end your turn\. Do not call the question tool yourself/)
     expect(step).toMatch(/Explain and Investigate are not decisions/)
     expect(step).toMatch(/cancelled because the user decided in the review panel, call review_next_finding/)
+    expect(decisionPrompt(finding(4))).toMatch(
+      /^Now call the question tool with one question whose header is "Finding #4" and whose options are Keep, Edit wording, Drop, Explain, Investigate, your recommended option first/,
+    )
 
     const presented = presentFinding(draft([finding(1), finding(4)]), finding(4))
     expect(presented).toMatch(/^\*\*Finding #4 \(1 of 2\)/)
-    expect(presented).toMatch(/header is "Finding #4"/)
+    expect(presented).toMatch(/recommendation for Finding #4/)
     expect(presented).toMatch(/proposed comment exactly as written/)
   })
 

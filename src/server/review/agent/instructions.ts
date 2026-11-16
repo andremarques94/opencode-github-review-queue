@@ -13,14 +13,21 @@ import { diffCommand } from "../findings.js"
 const CHOICES = "Keep, Edit wording, Drop, Explain, Investigate"
 
 /**
+ * The finding goes out as a plain final reply, because some models put the text before a tool call in hidden
+ * reasoning. Once the turn ends, the plugin prompts the agent to open the question (`decisionPrompt`).
+ */
+const askChoices = (header: string) =>
+  `end your message with your recommendation for ${header} and end your turn. Do not call the question tool yourself: the plugin then asks you to open it`
+
+/**
  * Typed replies keep working: the question tool always offers a free-form answer. The header lets the review panel
  * close this question when the user decides the finding there instead.
  */
-const askChoices = (header: string) =>
-  `call the question tool with one question whose header is "${header}" and whose options are ${CHOICES}, your recommended option first with " (Recommended)" appended`
+export const decisionPrompt = (finding: Finding) =>
+  `Now call the question tool with one question whose header is "${questionHeader(finding.id)}" and whose options are ${CHOICES}, your recommended option first with " (Recommended)" appended. The finding is already shown, so write nothing else.`
 
 const CHOICE_RULES =
-  "Explain and Investigate are not decisions: show the result for that finding only, then ask again with the question tool. If the question comes back cancelled because the user decided in the review panel, call review_next_finding and go on; never ask again about a finding that is no longer pending."
+  "Explain and Investigate are not decisions: show the result for that finding only and end your turn the same way. Answer any other question about the finding the same way. If the question comes back cancelled because the user decided in the review panel, call review_next_finding and go on; never ask again about a finding that is no longer pending."
 
 export const DEFAULT_GUIDELINES = `## Quality bar
 - Readability beats cleverness. If a line has to be read twice, flag it.
@@ -82,15 +89,24 @@ You cannot post the review. The user triages your findings and posts from the re
 ${guidelines}${followUp ? followUpInstructions(draft, followUp) : ""}
 
 ## Investigate
-- Read the repository's instructions, then the changed files in full, not just the hunks.
-- Load available skills whose descriptions match the actual scope of the changes (language, framework,
-  infrastructure, security) and use them as review criteria. Tell the user which ones you chose and why.
-- Grep for callers of anything the PR changes, renames, or removes, and check they still work.
+Do a complete, deep review; never a quick or partial pass, whatever the size of the pull request. The user decides
+which findings to keep, so do not filter for them.
+- Read the repository's instructions, then every changed file in full, not just the hunks. Do not skip files because
+  they look routine: moved or renamed files, DTOs, contracts, configuration, and tests all count.
+- Before reading the code, load with the skill tool every available skill whose description matches the scope of the
+  changes (language, framework, infrastructure, security), and review against each one alongside the quality bar.
+  Naming a skill is not loading it: if a skill fits, load it; never skip one that fits. Tell the user which skills you
+  loaded and why.
+- Grep for callers of anything the PR changes, moves, renames, or removes, including imports of old paths, and check
+  they still work.
 - Look for existing helpers or patterns the PR duplicates or ignores, and for tests covering the touched code.
-- Run the project's checks (lint, typecheck, tests) when they are cheap to set up, scoped to the affected area. Use a
-  failure as evidence only when this PR caused it. If setup is too heavy or fails, skip it and say so.
+- Run the project's checks (lint, typecheck, tests), scoped to the affected area. Install dependencies first when they
+  are missing, using the project's package manager and lockfile. Use a failure as evidence only when this PR caused
+  it. Skip a check only when it truly cannot run, and say why.
 - Separate demonstrated defects from assumptions and preferences. Verify facts before presenting them; label what
   you could not verify. Don't request hypothetical future-proofing.
+- Record every issue you notice that meets the quality bar, nits included, rather than judging it not worth a comment.
+- Before calling \`review_set_verdict\`, check that you read every changed file. If you did not, go back and finish.
 
 ## Record the draft
 - Record every finding with \`review_add_finding\`. Only lines that are part of the diff can be commented on: use
@@ -134,7 +150,7 @@ export function nextStep(draft: ReviewDraft): string | undefined {
     const scope = draft.sinceSha
       ? ` This is a follow-up: review only the changes since ${draft.sinceSha}, and say in the summary which earlier comments they address or leave unresolved.`
       : ""
-    return `Review status: investigating. Record findings with review_add_finding without presenting them to the user, then call review_set_verdict.${scope}`
+    return `Review status: investigating. Do a complete, deep review: load every skill that fits the changes with the skill tool, read every changed file in full and record every issue that meets the quality bar, nits included, with review_add_finding without presenting them to the user. Call review_set_verdict only once every changed file is read.${scope}`
   }
   const pending = pendingFindings(draft).length
   if (pending === 0) {
