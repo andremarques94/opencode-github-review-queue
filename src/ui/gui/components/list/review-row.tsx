@@ -72,8 +72,6 @@ export function ReviewRow(props: ReviewRowProps) {
     opensOnGitHub(props.item, draft())
       ? open()
       : void props.actions.review(props.item, resumable(draft()), reviewedFor(props.local.reviewed, props.item.key))
-  const primaryLabel = () =>
-    opensOnGitHub(props.item, draft()) ? "Open on GitHub" : resumable(draft()) ? "Resume review" : "Start review"
   const reviewItem = () =>
     opensOnGitHub(props.item, draft())
       ? []
@@ -134,40 +132,22 @@ export function ReviewRow(props: ReviewRowProps) {
     <article class="grq-row" onContextMenu={openMenu}>
       <span class="grq-dot" data-hidden={props.isNew ? undefined : ""} title={props.isNew ? "New" : undefined} />
       <div class="grq-row-body">
-        <button type="button" class="grq-row-main" title={props.item.title} onClick={() => toggleDetails()}>
+        <button
+          type="button"
+          class="grq-row-main"
+          title={`${props.item.title} · ${detailsLabel().toLowerCase()}`}
+          aria-expanded={expanded()}
+          aria-controls={detailsID}
+          onClick={() => toggleDetails()}
+        >
+          <props.context.ui.Icon name="outline-chevron-down" size="small" />
           <div class="grq-row-title">{props.item.title}</div>
           <RowMeta context={props.context} item={props.item} local={props.local} now={props.now} />
         </button>
         <Show when={expanded()}>
           <RowDetails id={detailsID} details={detailRows()} />
-          <div class="grq-row-primary">
-            <Show when={!opensOnGitHub(props.item, draft())}>
-              <props.context.ui.Button size="small" variant="ghost" icon="github" onClick={open}>
-                Open on GitHub
-              </props.context.ui.Button>
-            </Show>
-            <props.context.ui.Button
-              size="small"
-              variant="contrast"
-              icon={opensOnGitHub(props.item, draft()) ? "github" : "outline-code-brackets"}
-              onClick={review}
-            >
-              {primaryLabel()}
-            </props.context.ui.Button>
-          </div>
         </Show>
       </div>
-      <button
-        type="button"
-        class="grq-disclosure"
-        aria-expanded={expanded()}
-        aria-controls={detailsID}
-        aria-label={detailsLabel()}
-        title={detailsLabel()}
-        onClick={() => toggleDetails()}
-      >
-        <props.context.ui.Icon name="outline-chevron-down" size="small" />
-      </button>
       <div
         class="grq-row-actions"
         ref={(element) => {

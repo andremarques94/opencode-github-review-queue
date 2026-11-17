@@ -188,8 +188,8 @@ export const panelStyles = `${badgeStyles}
 .grq-row:has([aria-expanded="true"]) { background: var(--surface-raised-base-hover); }
 .grq-row:has(.grq-row-main:focus-visible) { box-shadow: inset 0 0 0 2px var(--border-focus); }
 /* Open rows share a background, so without a gap two of them read as one card. */
-.grq-row:has(> [aria-expanded="true"]) + .grq-row,
-.grq-row + .grq-row:has(> [aria-expanded="true"]) { margin-top: 4px; }
+.grq-row:has(.grq-row-main[aria-expanded="true"]) + .grq-row,
+.grq-row + .grq-row:has(.grq-row-main[aria-expanded="true"]) { margin-top: 4px; }
 .grq-dot {
   flex-shrink: 0;
   width: 6px;
@@ -201,7 +201,9 @@ export const panelStyles = `${badgeStyles}
 .grq-dot[data-hidden] { visibility: hidden; }
 .grq-row-body { flex: 1; min-width: 0; }
 .grq-row-main {
-  display: block;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  column-gap: 4px;
   width: 100%;
   padding: 0;
   border: 0;
@@ -244,26 +246,11 @@ export const panelStyles = `${badgeStyles}
 .grq-mark[data-tone="success"] { color: var(--icon-success-base); }
 .grq-mark[data-tone="error"] { color: var(--icon-critical-base); }
 .grq-mark[data-tone="warning"] { color: var(--icon-warning-base); }
-.grq-disclosure {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  margin-top: -3px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--icon-base);
-  cursor: pointer;
-}
-.grq-disclosure:hover { background: var(--surface-raised-base-hover); color: var(--text-strong); }
-.grq-disclosure:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
-.grq-disclosure svg { transition: transform 120ms; }
-.grq-disclosure[aria-expanded="false"] svg { transform: rotate(-90deg); }
-.grq-row-primary { display: flex; justify-content: flex-end; gap: 6px; margin: 10px 0 2px; }
+/* The chevron sits before the title, like the repository header's, with the meta line under the title. */
+.grq-row-main > svg { margin-top: 1px; color: var(--icon-base); transition: transform 120ms; }
+.grq-row-main[aria-expanded="false"] > svg { transform: rotate(-90deg); }
+.grq-row-main > :not(svg) { grid-column: 2; }
+.grq-row-body > .grq-details { margin-left: 20px; }
 .grq-details {
   display: grid;
   grid-template-columns: auto 1fr;
