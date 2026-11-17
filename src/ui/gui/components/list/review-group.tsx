@@ -66,7 +66,6 @@ export function ReviewGroup(props: {
               </Show>
               {props.group.name}
             </span>
-            <span class="grq-count">{props.group.items.length}</span>
           </button>
           <div class="grq-group-tools">
             <props.context.ui.Tooltip value={detailsLabel()}>
@@ -86,6 +85,9 @@ export function ReviewGroup(props: {
               />
             </props.context.ui.Tooltip>
           </div>
+          <span class="grq-group-count" title={`${props.group.items.length} pull requests`}>
+            {props.group.items.length}
+          </span>
         </div>
       </Show>
       {/* Keyed by pull request, so a refresh updates a row in place: its open details and menu stay open. */}

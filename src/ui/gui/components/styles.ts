@@ -158,7 +158,14 @@ export const panelStyles = `${badgeStyles}
   font-weight: var(--font-weight-medium);
 }
 .grq-group-owner { color: var(--text-weaker); font-weight: var(--font-weight-regular); }
-.grq-group-toggle .grq-count { flex-shrink: 0; text-align: center; }
+.grq-group-count {
+  flex-shrink: 0;
+  min-width: 16px;
+  margin-left: 4px;
+  color: var(--text-weaker);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
 .grq-group-tools {
   display: inline-flex;
   flex-shrink: 0;
