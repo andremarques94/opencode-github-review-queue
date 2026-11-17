@@ -249,6 +249,29 @@ describe("fetchReviewRequests", () => {
     expect(unknown).not.toHaveProperty("reviews")
   })
 
+  it("marks a pull request whose head the viewer already reviewed, wherever the review was posted", async () => {
+    const head = "a".repeat(40)
+    const mine = (oid: string) => ({
+      latestReviews: { nodes: [{ state: "APPROVED", author: { login: "Me" }, commit: { oid } }] },
+    })
+    respond([
+      {
+        data: {
+          ...page([
+            { ...node(1, "2026-01-01T00:00:00Z"), headRefOid: head, ...mine(head) },
+            { ...node(2, "2026-01-02T00:00:00Z"), headRefOid: head, ...mine("b".repeat(40)) },
+          ]).data,
+          viewer: { login: "me" },
+        },
+      },
+    ])
+
+    const [current, older] = (await fetchReviewRequests("github.com", signal)).items
+
+    expect(current?.reviewedHead).toBe(true)
+    expect(older).not.toHaveProperty("reviewedHead")
+  })
+
   it("reads the review status, and a branch behind its base, on every pull request", async () => {
     respond([
       page([

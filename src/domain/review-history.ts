@@ -25,7 +25,7 @@ export const reviewedFor = (records: readonly ReviewedRecord[], key: string) =>
   records.find((record) => record.key === key)
 
 export function followUpOf(item: ReviewRequest, record: ReviewedRecord | undefined): ReviewedRecord | undefined {
-  if (!record || !item.headSha || item.headSha === record.headSha) {
+  if (!record || !item.headSha || item.headSha === record.headSha || item.reviewedHead) {
     return undefined
   }
   return record
