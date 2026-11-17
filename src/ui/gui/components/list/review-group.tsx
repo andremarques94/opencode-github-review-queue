@@ -66,24 +66,26 @@ export function ReviewGroup(props: {
               </Show>
               {props.group.name}
             </span>
-            <span class="grq-group-count">{props.group.items.length}</span>
+            <span class="grq-count">{props.group.items.length}</span>
           </button>
-          <props.context.ui.Tooltip value={detailsLabel()}>
-            <props.context.ui.IconButton
-              icon={anyDetails() ? "collapse" : "expand"}
-              label={detailsLabel()}
-              size="small"
-              onClick={toggleDetails}
-            />
-          </props.context.ui.Tooltip>
-          <props.context.ui.Tooltip value={snoozeLabel()}>
-            <props.context.ui.IconButton
-              icon={repositorySnooze() ? "outline-eye" : "outline-eye-slash"}
-              label={snoozeLabel()}
-              size="small"
-              onClick={snooze}
-            />
-          </props.context.ui.Tooltip>
+          <div class="grq-group-tools">
+            <props.context.ui.Tooltip value={detailsLabel()}>
+              <props.context.ui.IconButton
+                icon={anyDetails() ? "collapse" : "expand"}
+                label={detailsLabel()}
+                size="small"
+                onClick={toggleDetails}
+              />
+            </props.context.ui.Tooltip>
+            <props.context.ui.Tooltip value={snoozeLabel()}>
+              <props.context.ui.IconButton
+                icon={repositorySnooze() ? "outline-eye" : "outline-eye-slash"}
+                label={snoozeLabel()}
+                size="small"
+                onClick={snooze}
+              />
+            </props.context.ui.Tooltip>
+          </div>
         </div>
       </Show>
       {/* Keyed by pull request, so a refresh updates a row in place: its open details and menu stay open. */}
