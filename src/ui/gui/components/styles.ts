@@ -263,7 +263,7 @@ export const panelStyles = `${badgeStyles}
 .grq-disclosure:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
 .grq-disclosure svg { transition: transform 120ms; }
 .grq-disclosure[aria-expanded="false"] svg { transform: rotate(-90deg); }
-.grq-row-primary { margin: 8px 0 2px; }
+.grq-row-primary { display: flex; justify-content: flex-end; gap: 6px; margin: 10px 0 2px; }
 .grq-details {
   display: grid;
   grid-template-columns: auto 1fr;

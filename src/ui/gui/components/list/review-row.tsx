@@ -139,9 +139,14 @@ export function ReviewRow(props: ReviewRowProps) {
         <Show when={expanded()}>
           <RowDetails id={detailsID} details={detailRows()} />
           <div class="grq-row-primary">
+            <Show when={!opensOnGitHub(props.item, draft())}>
+              <props.context.ui.Button size="small" variant="ghost" icon="github" onClick={open}>
+                Open on GitHub
+              </props.context.ui.Button>
+            </Show>
             <props.context.ui.Button
               size="small"
-              variant="neutral"
+              variant="contrast"
               icon={opensOnGitHub(props.item, draft()) ? "github" : "outline-code-brackets"}
               onClick={review}
             >
