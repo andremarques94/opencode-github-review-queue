@@ -51,6 +51,8 @@ export const ReviewRequest = v.object({
   lastCommitAt: v.exactOptional(v.string()),
   reviews: v.exactOptional(v.array(Review)),
   authored: v.exactOptional(Authored),
+  /** The user's latest review on GitHub is on the current head, wherever it was posted. */
+  reviewedHead: v.exactOptional(v.literal(true)),
 })
 export type ReviewRequest = v.InferOutput<typeof ReviewRequest>
 
