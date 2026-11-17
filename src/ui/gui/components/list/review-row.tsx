@@ -1,5 +1,5 @@
 import type { Context } from "@opencode/plugin/gui"
-import { createUniqueId, onCleanup, Show } from "solid-js"
+import { createUniqueId, Show } from "solid-js"
 import { canAddress } from "../../../../domain/my-pull-request.js"
 import { reviewedFor } from "../../../../domain/review-history.js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
@@ -35,8 +35,6 @@ export type ReviewRowProps = {
 }
 
 // The host's menu has no programmatic open, so right-click replays a real mouse click on its trigger.
-// Under most systems' double-click interval, so a double click never also opens the details.
-const DOUBLE_CLICK_MS = 250
 const mouse = { bubbles: true, cancelable: true, button: 0 }
 const pointer = { ...mouse, pointerType: "mouse", isPrimary: true }
 const CLICK_SEQUENCE = [
@@ -72,16 +70,12 @@ export function ReviewRow(props: ReviewRowProps) {
     opensOnGitHub(props.item, draft())
       ? open()
       : void props.actions.review(props.item, resumable(draft()), reviewedFor(props.local.reviewed, props.item.key))
-  // A double click also fires its first click, so the first click waits to see whether a second one follows.
-  let pendingToggle: ReturnType<typeof setTimeout> | undefined
-  onCleanup(() => clearTimeout(pendingToggle))
+  // A double click's first click already toggled the details, so the second one undoes that before reviewing.
   const clickRow = (event: MouseEvent) => {
-    clearTimeout(pendingToggle)
-    if (event.detail >= 2) {
+    toggleDetails()
+    if (event.detail === 2) {
       review()
-      return
     }
-    pendingToggle = setTimeout(toggleDetails, DOUBLE_CLICK_MS)
   }
   const reviewItem = () =>
     opensOnGitHub(props.item, draft())
