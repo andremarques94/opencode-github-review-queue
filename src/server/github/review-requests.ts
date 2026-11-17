@@ -30,7 +30,7 @@ const QUERY = `query($search: String!, $endCursor: String) {
         timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT], last: 20) {
           nodes { ... on ReviewRequestedEvent { createdAt requestedReviewer { ...reviewer } } }
         }
-        latestReviews(first: 20) { nodes { state submittedAt author { login } } }
+        latestReviews(first: 20) { nodes { state submittedAt author { login } commit { oid } } }
       }
     }
   }
@@ -120,6 +120,7 @@ const LatestReviews = v.object({
           state: v.picklist(["APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED"]),
           submittedAt: v.nullish(v.string()),
           author: v.object({ login: v.string() }),
+          commit: v.nullish(v.object({ oid: v.string() })),
         }),
       ),
       null,
@@ -137,6 +138,12 @@ const reviewsOf = (latest: v.InferOutput<typeof LatestReviews> | null | undefine
         ),
       }
     : {}
+
+/** The commit the viewer's latest review is on; reviews posted outside the plugin count too. */
+function reviewedAt(node: { latest?: v.InferOutput<typeof LatestReviews> | null | undefined }, viewer: string) {
+  const own = node.latest?.nodes.find((review) => review?.author.login.toLowerCase() === viewer.toLowerCase())
+  return own?.commit?.oid
+}
 
 const teamName = (team: { slug: string; organization: { login: string } }) => `${team.organization.login}/${team.slug}`
 
@@ -187,28 +194,37 @@ const PullRequest = v.pipe(
     timelineItems: optional(RequestEvents),
     latestReviews: optional(LatestReviews),
   }),
-  v.transform((node): { request: ReviewRequest; reviewers: Reviewer[]; events: RequestEvent[] } => {
-    const request: ReviewRequest = {
-      key: requestKey(node.repository.nameWithOwner, node.number),
-      repository: node.repository.nameWithOwner,
-      number: node.number,
-      title: node.title,
-      url: node.url,
-      createdAt: node.createdAt,
-      draft: node.isDraft,
-      author: node.author.login,
-      ...known("headSha", node.headRefOid),
-      ...known("baseSha", node.baseRefOid),
-      ...mergeState(node),
-      ...known("reviewDecision", node.reviewDecision),
-      ...threadReadiness(node.reviewThreads),
-      ...known("additions", node.additions),
-      ...known("deletions", node.deletions),
-      ...known("changedFiles", node.changedFiles),
-      ...reviewsOf(node.latestReviews),
-    }
-    return { request, ...requestHistory(node) }
-  }),
+  v.transform(
+    (
+      node,
+    ): {
+      request: ReviewRequest
+      reviewers: Reviewer[]
+      events: RequestEvent[]
+      latest: v.InferOutput<typeof LatestReviews> | null | undefined
+    } => {
+      const request: ReviewRequest = {
+        key: requestKey(node.repository.nameWithOwner, node.number),
+        repository: node.repository.nameWithOwner,
+        number: node.number,
+        title: node.title,
+        url: node.url,
+        createdAt: node.createdAt,
+        draft: node.isDraft,
+        author: node.author.login,
+        ...known("headSha", node.headRefOid),
+        ...known("baseSha", node.baseRefOid),
+        ...mergeState(node),
+        ...known("reviewDecision", node.reviewDecision),
+        ...threadReadiness(node.reviewThreads),
+        ...known("additions", node.additions),
+        ...known("deletions", node.deletions),
+        ...known("changedFiles", node.changedFiles),
+        ...reviewsOf(node.latestReviews),
+      }
+      return { request, ...requestHistory(node), latest: node.latestReviews }
+    },
+  ),
 )
 
 function mergeState(node: {
@@ -289,8 +305,10 @@ function readNode(node: unknown, viewer: string | undefined, host: string): Revi
   const via = viewer ? requestedVia(reviewers, viewer) : undefined
   const at = requestedAt(events, via, viewer)
   const hosted = hostField(host)
+  const reviewedHead = viewer !== undefined && reviewedAt(parsed.output, viewer) === request.headSha
   return {
     ...request,
+    ...(reviewedHead ? { reviewedHead: true as const } : {}),
     key: requestKey(request.repository, request.number, hosted.host),
     ...hosted,
     ...(via ? { requestedVia: via } : {}),
