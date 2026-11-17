@@ -26,6 +26,17 @@ const askChoices = (header: string) =>
 export const decisionPrompt = (finding: Finding) =>
   `Now call the question tool with one question whose header is "${questionHeader(finding.id)}" and whose options are ${CHOICES}, your recommended option first with " (Recommended)" appended. The finding is already shown, so write nothing else.`
 
+export const EARLY_QUESTION =
+  "Not yet: the user cannot see the finding. Write it as your reply (card, code quote, recommendation) and end your turn without calling any tool; the plugin then asks you to open the question."
+
+/** The finding id of a question tool call whose header is `Finding #N`. */
+export function findingQuestionId(input: unknown): number | undefined {
+  const questions = (input as { questions?: { header?: unknown }[] } | undefined)?.questions
+  const header = Array.isArray(questions) ? questions[0]?.header : undefined
+  const match = typeof header === "string" ? /^Finding #(\d+)$/.exec(header.trim()) : null
+  return match ? Number(match[1]) : undefined
+}
+
 const CHOICE_RULES =
   "Explain and Investigate are not decisions: show the result for that finding only and end your turn the same way. Answer any other question about the finding the same way. If the question comes back cancelled because the user decided in the review panel, call review_next_finding and go on; never ask again about a finding that is no longer pending."
 
