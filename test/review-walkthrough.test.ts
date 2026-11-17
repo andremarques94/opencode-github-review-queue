@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest"
 import { type Finding, nextFinding, type ReviewDraft, walkthroughOrder } from "../src/domain/review-draft.js"
-import { decisionPrompt, findingCard, nextStep, presentFinding } from "../src/server/review/agent/instructions.js"
+import {
+  decisionPrompt,
+  findingCard,
+  findingQuestionId,
+  nextStep,
+  presentFinding,
+} from "../src/server/review/agent/instructions.js"
 
 const finding = (id: number, overrides: Partial<Finding> = {}): Finding => ({
   id,
@@ -82,6 +88,12 @@ describe("walkthrough", () => {
     expect(presented).toMatch(/^\*\*Finding #4 \(1 of 2\)/)
     expect(presented).toMatch(/recommendation for Finding #4/)
     expect(presented).toMatch(/proposed comment exactly as written/)
+  })
+
+  it("reads the finding id from a question about a finding", () => {
+    expect(findingQuestionId({ questions: [{ header: "Finding #3" }] })).toBe(3)
+    expect(findingQuestionId({ questions: [{ header: "Deploy?" }] })).toBeUndefined()
+    expect(findingQuestionId(undefined)).toBeUndefined()
   })
 
   it("shows one finding with its position and the exact comment", () => {
