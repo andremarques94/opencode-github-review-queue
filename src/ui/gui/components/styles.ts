@@ -125,21 +125,30 @@ export const panelStyles = `${badgeStyles}
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 4px;
-  width: 100%;
-  padding: 10px 12px 4px 6px;
-  border: 0;
+  gap: 2px;
+  padding: 6px 8px 2px 6px;
   background: var(--background-base);
+  font-size: 12px;
+}
+.grq-group-toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px 4px 4px 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
   color: inherit;
   font: inherit;
-  font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
-.grq-group svg { flex-shrink: 0; color: var(--icon-weak-base); transition: transform 120ms; }
-.grq-group[aria-expanded="false"] svg { transform: rotate(-90deg); }
-.grq-group:hover .grq-group-name { color: var(--text-strong); }
-.grq-group:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
+.grq-group-toggle svg { flex-shrink: 0; color: var(--icon-base); transition: transform 120ms; }
+.grq-group-toggle[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.grq-group-toggle:hover .grq-group-name { color: var(--text-strong); }
+.grq-group-toggle:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
 .grq-group-name {
   min-width: 0;
   overflow: hidden;
@@ -232,7 +241,7 @@ export const panelStyles = `${badgeStyles}
   border: 0;
   border-radius: var(--radius-sm);
   background: none;
-  color: var(--icon-weak-base);
+  color: var(--icon-base);
   cursor: pointer;
 }
 .grq-disclosure:hover { background: var(--surface-raised-base-hover); color: var(--text-strong); }
@@ -252,11 +261,7 @@ export const panelStyles = `${badgeStyles}
 .grq-details dd[data-tone="success"] { color: var(--icon-success-base); }
 .grq-details dd[data-tone="error"] { color: var(--icon-critical-base); }
 .grq-details dd[data-tone="warning"] { color: var(--icon-warning-base); }
-.grq-row-actions { flex-shrink: 0; margin-top: -3px; opacity: 0; transition: opacity 120ms; }
-.grq-row:hover .grq-row-actions,
-.grq-row:focus-within .grq-row-actions,
-.grq-row-actions:has([aria-expanded="true"]) { opacity: 1; }
-@media (hover: none) { .grq-row-actions { opacity: 1; } }
+.grq-row-actions { flex-shrink: 0; margin-top: -3px; }
 
 .grq-empty {
   flex: 1;

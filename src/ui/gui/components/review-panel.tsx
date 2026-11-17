@@ -2,7 +2,7 @@ import type { Context } from "@opencode/plugin/gui"
 import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js"
 import type { Store } from "solid-js/store"
 import type { QueueSnapshot } from "../../../domain/review-queue.js"
-import { filterItems, type QueueFilter } from "../../../shared/presentation.js"
+import { filterItems, groupByRepository, type QueueFilter } from "../../../shared/presentation.js"
 import { hideSnoozed, watchClock } from "../../../shared/review/snooze.js"
 import { type LocalReviews, ReviewQueue } from "../../../shared/rpc.js"
 import { createReviewActions } from "../actions/review-actions.js"
@@ -71,9 +71,47 @@ export function ReviewPanel(props: ReviewPanelProps) {
         }
         return next
       }),
+    setAll: (keys: readonly string[], open: boolean) =>
+      setExpanded((current) => {
+        const next = new Set(current)
+        for (const key of keys) {
+          if (open) {
+            next.add(key)
+          } else {
+            next.delete(key)
+          }
+        }
+        return next
+      }),
   }
-  const anyExpanded = () => view().items.some((item) => expanded().has(item.key))
-  const toggleAll = () => setExpanded(anyExpanded() ? new Set<string>() : new Set(view().items.map((item) => item.key)))
+  const grouped = () => filter() !== "current"
+  const repositories = () => groupByRepository(view().items).map((group) => group.repository)
+  const anyRepositoryOpen = () => repositories().some((name) => !props.local.collapsed.includes(name.toLowerCase()))
+  const anyDetails = () => view().items.some((item) => expanded().has(item.key))
+  // With repository headers the button folds repositories; without them (one repository) it folds row details.
+  const expandAll = () => {
+    if (view().items.length === 0) {
+      return undefined
+    }
+    if (!grouped()) {
+      const open = anyDetails()
+      return {
+        expanded: open,
+        label: open ? "Hide all details" : "Show all details",
+        toggle: () =>
+          details.setAll(
+            view().items.map((item) => item.key),
+            !open,
+          ),
+      }
+    }
+    const open = anyRepositoryOpen()
+    return {
+      expanded: open,
+      label: open ? "Collapse all repositories" : "Expand all repositories",
+      toggle: () => void actions.collapseAll(repositories(), open),
+    }
+  }
   const refresh = () => {
     void rpc()
       .refresh({})
@@ -99,7 +137,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
         repository={repository()}
         setFilter={setFilter}
         refresh={refresh}
-        expandAll={view().items.length > 0 ? { expanded: anyExpanded(), toggle: toggleAll } : undefined}
+        expandAll={expandAll()}
       />
       <Show when={props.state.error}>{(error) => <ErrorBanner message={error().message} />}</Show>
       <Show
@@ -113,7 +151,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
           local={props.local}
           now={now()}
           actions={actions}
-          grouped={filter() !== "current"}
+          grouped={grouped()}
           details={details}
           copy={copy}
         />

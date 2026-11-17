@@ -19,6 +19,7 @@ export type ReviewActions = {
   snoozeRepository(item: ReviewRequest): Promise<void>
   wake(item: ReviewRequest, snooze: Snooze): Promise<void>
   collapse(repository: string, collapsed: boolean): Promise<void>
+  collapseAll(repositories: readonly string[], collapsed: boolean): Promise<void>
   summarize(item: ReviewRequest): Promise<void>
   address(item: ReviewRequest): Promise<void>
 }
@@ -109,6 +110,13 @@ export function createReviewActions(input: {
       attempt(async () => {
         input.updateLocal(await context.client.rpc(ReviewQueue).collapse({ repository, collapsed }))
       }, "Could not collapse the repository"),
+    collapseAll: (repositories, collapsed) =>
+      attempt(async () => {
+        const rpc = context.client.rpc(ReviewQueue)
+        for (const repository of repositories) {
+          input.updateLocal(await rpc.collapse({ repository, collapsed }))
+        }
+      }, "Could not collapse the repositories"),
     summarize: (item) => attempt(() => summaryFlow(host, item), "Could not summarize the pull request"),
   }
 }

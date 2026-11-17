@@ -20,6 +20,7 @@ import { RowMeta } from "./row-meta.js"
 export type DetailsState = {
   isOpen(key: string): boolean
   toggle(key: string): void
+  setAll(keys: readonly string[], open: boolean): void
 }
 
 export type ReviewRowProps = {
@@ -92,6 +93,16 @@ export function ReviewRow(props: ReviewRowProps) {
             onSelect: review,
           },
         ]
+  const addressItem = () =>
+    canAddress(props.item)
+      ? [
+          {
+            label: "Address review…",
+            icon: "outline-code-brackets" as const,
+            onSelect: () => void props.actions.address(props.item),
+          },
+        ]
+      : []
   const snoozeItem = () => {
     const current = snooze()
     return current
@@ -161,11 +172,9 @@ export function ReviewRow(props: ReviewRowProps) {
           label="Pull request actions"
           items={[
             ...reviewItem(),
-            {
-              label: detailsLabel(),
-              icon: "info",
-              onSelect: () => toggleDetails(),
-            },
+            ...addressItem(),
+            { label: "Summarize", icon: "file-document", onSelect: () => void props.actions.summarize(props.item) },
+            { type: "separator" },
             { label: "Open on GitHub", icon: "github", onSelect: open },
             {
               label: "Copy reference",
@@ -173,16 +182,7 @@ export function ReviewRow(props: ReviewRowProps) {
               onSelect: () => props.copy(fullReference(props.item), "Reference"),
             },
             { label: "Copy link", icon: "link", onSelect: () => props.copy(props.item.url, "Link") },
-            { label: "Summarize", icon: "file-document", onSelect: () => void props.actions.summarize(props.item) },
-            ...(canAddress(props.item)
-              ? [
-                  {
-                    label: "Address review…",
-                    icon: "outline-code-brackets" as const,
-                    onSelect: () => void props.actions.address(props.item),
-                  },
-                ]
-              : []),
+            { type: "separator" },
             snoozeItem(),
             ...snoozeRepositoryItem(),
             ...draftItems(),
