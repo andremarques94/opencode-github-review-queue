@@ -5,13 +5,14 @@ import { canAddress } from "../../../domain/my-pull-request.js"
 import type { ReviewDraft } from "../../../domain/review-draft.js"
 import { reviewedFor } from "../../../domain/review-history.js"
 import type { QueueSnapshot } from "../../../domain/review-queue.js"
-import type { ReviewRequest } from "../../../domain/review-request.js"
+import { qualifiedRepository, type ReviewRequest } from "../../../domain/review-request.js"
+import { isRepositorySnooze } from "../../../domain/snooze.js"
 import { parseOptions } from "../../../shared/options.js"
 import { adjacentFilter, fullReference, nextFilter, type QueueFilter } from "../../../shared/presentation.js"
 import { addressReviewFlow } from "../../../shared/review/address.js"
 import { draftFor, opensOnGitHub, resumable } from "../../../shared/review/draft-status.js"
 import { postReviewFlow, type ReviewFlowHost, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
-import { activeSnooze, snoozeFlow } from "../../../shared/review/snooze.js"
+import { activeSnooze, snoozeFlow, snoozeRepositoryFlow } from "../../../shared/review/snooze.js"
 import { summaryFlow } from "../../../shared/review/summary.js"
 import { errorMessage, type LocalReviews, ReviewQueue } from "../../../shared/rpc.js"
 import { createFlowHost } from "./flow-host.js"
@@ -32,6 +33,9 @@ export type ReviewActions = {
   reset(): Promise<void>
   copy(kind: CopyKind): void
   snooze(): Promise<void>
+  snoozeRepository(): Promise<void>
+  collapse(): Promise<void>
+  expand(repository: string): Promise<void>
   toggleSnoozed(): void
   toggleDetails(): void
   summarize(): Promise<void>
@@ -85,6 +89,8 @@ export function useReviewActions(input: {
   setShowSnoozed: Setter<boolean>
   showDetails: Accessor<boolean>
   setShowDetails: Setter<boolean>
+  /** Collapsed repositories in the current view, as group names. */
+  collapsed: Accessor<string[]>
 }): ReviewActions {
   const context = usePlugin()
   const rpc = context.client.rpc(ReviewQueue)
@@ -166,9 +172,11 @@ export function useReviewActions(input: {
         if (!item) {
           return
         }
-        if (activeSnooze(input.local().snoozes, item, input.now())) {
-          input.updateLocal(await rpc.wake({ key: item.key }))
-          context.ui.toast.show({ message: `${fullReference(item)} is back in the queue`, variant: "success" })
+        const current = activeSnooze(input.local().snoozes, item, input.now())
+        if (current) {
+          input.updateLocal(await rpc.wake({ key: current.key }))
+          const name = isRepositorySnooze(current) ? qualifiedRepository(item) : fullReference(item)
+          context.ui.toast.show({ message: `${name} is back in the queue`, variant: "success" })
           return
         }
         const local = await snoozeFlow(host, item)
@@ -176,6 +184,31 @@ export function useReviewActions(input: {
           input.updateLocal(local)
         }
       }, "Could not snooze the pull request"),
+    snoozeRepository: () =>
+      attempt(async () => {
+        const item = input.current()
+        if (!item) {
+          return
+        }
+        const local = await snoozeRepositoryFlow(host, item)
+        if (local) {
+          input.updateLocal(local)
+          input.setSelected(0)
+        }
+      }, "Could not snooze the repository"),
+    collapse: () =>
+      attempt(async () => {
+        const item = input.current()
+        if (!item || input.filter() === "current") {
+          return
+        }
+        input.updateLocal(await rpc.collapse({ repository: qualifiedRepository(item), collapsed: true }))
+        input.setSelected(0)
+      }, "Could not collapse the repository"),
+    expand: (repository) =>
+      attempt(async () => {
+        input.updateLocal(await rpc.collapse({ repository, collapsed: false }))
+      }, "Could not expand the repository"),
     toggleSnoozed() {
       input.setShowSnoozed((shown) => !shown)
     },
@@ -219,6 +252,8 @@ export function useReviewActions(input: {
             nextFilter: nextFilter(input.filter(), parseOptions(context.options).myPullRequests),
             snoozed: input.snoozed(),
             showSnoozed: input.showSnoozed(),
+            collapsed: input.collapsed(),
+            grouped: input.filter() !== "current" && input.current() !== undefined,
             toggleFullscreen: input.panel.toggleFullscreen,
           }),
         ],
@@ -276,6 +311,18 @@ export function useReviewActions(input: {
         run: actions.address,
       },
       { id: "github-review-queue.snooze", title: "Snooze or wake pull request", bind: "s", run: actions.snooze },
+      {
+        id: "github-review-queue.snooze-repository",
+        title: "Snooze the pull request's repository",
+        bind: "shift+s",
+        run: actions.snoozeRepository,
+      },
+      {
+        id: "github-review-queue.collapse",
+        title: "Collapse the pull request's repository",
+        bind: "c",
+        run: actions.collapse,
+      },
       {
         id: "github-review-queue.show-snoozed",
         title: "Show or hide snoozed pull requests",

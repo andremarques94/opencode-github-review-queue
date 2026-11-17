@@ -18,7 +18,7 @@ export function PanelHeader(props: {
   setFilter(filter: QueueFilter): void
   refresh(): void
   /** Missing while there is nothing to expand. */
-  expandAll: { expanded: boolean; toggle(): void } | undefined
+  expandAll: { expanded: boolean; label: string; toggle(): void } | undefined
 }) {
   const status = () => {
     const scope = props.filter === "current" ? props.repository?.split("/").pop() : undefined
@@ -41,10 +41,10 @@ export function PanelHeader(props: {
           />
           <Show when={props.expandAll}>
             {(all) => (
-              <props.context.ui.Tooltip value={all().expanded ? "Collapse all details" : "Expand all details"}>
+              <props.context.ui.Tooltip value={all().label}>
                 <props.context.ui.IconButton
                   icon={all().expanded ? "collapse" : "expand"}
-                  label={all().expanded ? "Collapse all details" : "Expand all details"}
+                  label={all().label}
                   size="small"
                   onClick={all().toggle}
                 />

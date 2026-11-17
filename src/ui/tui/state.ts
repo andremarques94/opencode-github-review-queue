@@ -8,4 +8,5 @@ export type TuiState = QueueSnapshot & {
   drafts: ReviewDraft[]
   reviewed: ReviewedRecord[]
   snoozes: Snooze[]
+  collapsed: string[]
 }

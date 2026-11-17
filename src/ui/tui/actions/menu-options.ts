@@ -54,10 +54,23 @@ function addressOptions(actions: ReviewActions, item: ReviewRequest): MenuOption
   ]
 }
 
-function snoozeOption(actions: ReviewActions, snooze: Snooze | undefined): MenuOption {
+function snoozeOptions(actions: ReviewActions, snooze: Snooze | undefined): MenuOption[] {
   if (!snooze) {
-    return { title: "Snooze…", value: actions.snooze, footer: "s", category: PULL_REQUEST }
+    return [
+      { title: "Snooze…", value: actions.snooze, footer: "s", category: PULL_REQUEST },
+      {
+        title: "Snooze repository…",
+        value: actions.snoozeRepository,
+        description: "Every pull request in it, new ones too",
+        footer: "shift+s",
+        category: PULL_REQUEST,
+      },
+    ]
   }
+  return [wakeOption(actions, snooze)]
+}
+
+function wakeOption(actions: ReviewActions, snooze: Snooze): MenuOption {
   return {
     title: "Wake up",
     value: actions.snooze,
@@ -107,14 +120,21 @@ export function pullRequestOptions(
       category: PULL_REQUEST,
     },
     ...addressOptions(actions, item),
-    snoozeOption(actions, snooze),
+    ...snoozeOptions(actions, snooze),
     ...draftActions(draft).map((action) => draftOption(actions, action)),
   ]
 }
 
 export function queueOptions(
   actions: ReviewActions,
-  queue: { nextFilter: QueueFilter; snoozed: number; showSnoozed: boolean; toggleFullscreen: () => void },
+  queue: {
+    nextFilter: QueueFilter
+    snoozed: number
+    showSnoozed: boolean
+    collapsed: string[]
+    grouped: boolean
+    toggleFullscreen: () => void
+  },
 ): MenuOption[] {
   return [
     {
@@ -133,6 +153,14 @@ export function queueOptions(
           },
         ]
       : []),
+    ...(queue.grouped
+      ? [{ title: "Collapse this repository", value: actions.collapse, footer: "c", category: QUEUE }]
+      : []),
+    ...queue.collapsed.map((repository) => ({
+      title: `Expand ${repository}`,
+      value: () => actions.expand(repository),
+      category: QUEUE,
+    })),
     { title: "Refresh", value: actions.refresh, footer: "r", category: QUEUE },
     { title: "Toggle full screen", value: queue.toggleFullscreen, footer: "shift+f", category: QUEUE },
   ]

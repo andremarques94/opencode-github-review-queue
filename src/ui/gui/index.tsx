@@ -20,6 +20,7 @@ import {
 } from "../../shared/notifications/notification-text.js"
 import { parseOptions } from "../../shared/options.js"
 import { draftForSession, pillStatus, replaceDraft, reviewProgress } from "../../shared/review/draft-status.js"
+import { awake } from "../../shared/review/snooze.js"
 import { type LocalReviews, ReviewQueue } from "../../shared/rpc.js"
 import { createFindingActions, FINDINGS_PANEL } from "./actions/finding-actions.js"
 import { FindingsPanel } from "./components/findings/findings-panel.js"
@@ -39,7 +40,7 @@ export default Plugin.define({
   setup(ctx) {
     const options = parseOptions(ctx.options)
     const [state, setState] = createStore<QueueSnapshot>(emptySnapshot())
-    const [drafts, setDrafts] = createStore<LocalReviews>({ drafts: [], reviewed: [], snoozes: [] })
+    const [drafts, setDrafts] = createStore<LocalReviews>({ drafts: [], reviewed: [], snoozes: [], collapsed: [] })
     const repositories = new Map<string, string | undefined>()
     const rpc = () => ctx.client.rpc(ReviewQueue)
     const update = (snapshot: QueueSnapshot) => setState(produce((draft) => replaceSnapshot(draft, snapshot)))
@@ -104,7 +105,9 @@ export default Plugin.define({
     const keysOf = (entries: readonly { key: string }[]) => entries.map((entry) => entry.key)
     const batcher = createDiscoveryBatcher((items: ReviewRequest[]) => announce(notificationText(items), keysOf(items)))
     const stopDiscovered = rpc().events.on("discovered", (event) => {
-      batcher.push(event.data.item)
+      if (awake(drafts.snoozes, event.data.item)) {
+        batcher.push(event.data.item)
+      }
     })
     const updates = createDiscoveryBatcher((entries: MyUpdate[]) => announce(myUpdateText(entries), keysOf(entries)))
     const stopNotices = rpc().events.on("notice", (event) => {

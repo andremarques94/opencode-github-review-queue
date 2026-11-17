@@ -1,6 +1,6 @@
 import * as v from "valibot"
 import { parseDuration } from "./duration.js"
-import type { ReviewRequest } from "./review-request.js"
+import { qualifiedRepository, type RepositoryRef, type ReviewRequest } from "./review-request.js"
 
 export const SnoozeUntil = v.variant("kind", [
   v.object({ kind: v.literal("checks") }),
@@ -18,6 +18,24 @@ export const Snooze = v.object({
 export type Snooze = v.InferOutput<typeof Snooze>
 
 export const snoozeFor = (snoozes: readonly Snooze[], key: string) => snoozes.find((snooze) => snooze.key === key)
+
+const REPOSITORY_PREFIX = "repo:"
+
+/** Pull request keys always hold a `#`, so this key never matches one. */
+export const repositorySnoozeKey = (ref: RepositoryRef) =>
+  `${REPOSITORY_PREFIX}${qualifiedRepository(ref).toLowerCase()}`
+
+export const isRepositorySnooze = (snooze: Snooze) => snooze.key.startsWith(REPOSITORY_PREFIX)
+
+/** A repository snooze only ends with time, so it covers pull requests that arrive while it lasts. */
+export function snoozeOf(snoozes: readonly Snooze[], item: ReviewRequest, now: number): Snooze | undefined {
+  const own = snoozeFor(snoozes, item.key)
+  if (snoozing(own, item, now)) {
+    return own
+  }
+  const repository = snoozeFor(snoozes, repositorySnoozeKey(item))
+  return snoozing(repository, item, now) ? repository : undefined
+}
 
 export function snoozing(snooze: Snooze | undefined, item: ReviewRequest, now: number): snooze is Snooze {
   if (!snooze) {

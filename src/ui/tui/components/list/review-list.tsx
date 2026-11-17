@@ -11,6 +11,7 @@ import { rowID } from "./review-row.js"
 export function ReviewList(props: {
   groups: RepositoryGroup[]
   grouped: boolean
+  collapsed: readonly string[]
   selectedKey: string | undefined
   newKeys: readonly string[]
   label(item: ReviewRequest): string | undefined
@@ -40,6 +41,7 @@ export function ReviewList(props: {
           <ReviewGroup
             group={group}
             showHeader={props.grouped}
+            collapsed={props.collapsed.includes(group.repository)}
             selectedKey={props.selectedKey}
             newKeys={props.newKeys}
             label={props.label}

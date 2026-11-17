@@ -14,6 +14,8 @@ const drafts = v.strictObject({
   drafts: v.array(ReviewDraft),
   reviewed: v.array(ReviewedRecord),
   snoozes: v.array(Snooze),
+  /** Repositories the user collapsed, as lowercase `qualifiedRepository` names. */
+  collapsed: v.array(v.string()),
 })
 export type LocalReviews = v.InferOutput<typeof drafts>
 const draft = v.strictObject({ draft: ReviewDraft })
@@ -118,7 +120,10 @@ export const ReviewQueue = Rpc.define({
       errors,
     },
     snooze: { input: v.strictObject({ key: v.string(), until: SnoozeUntil }), output: drafts, errors },
+    snoozeRepository: { input: v.strictObject({ key: v.string(), at: v.string() }), output: drafts, errors },
+    /** `key` is the snooze's key: a pull request's, or its repository's. */
     wake: { input: byKey, output: drafts, errors },
+    collapse: { input: v.strictObject({ repository: v.string(), collapsed: v.boolean() }), output: drafts, errors },
   },
   events: {
     state: { schema: QueueSnapshot },
