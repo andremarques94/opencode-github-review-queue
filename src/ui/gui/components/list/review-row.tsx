@@ -1,5 +1,5 @@
 import type { Context } from "@opencode/plugin/gui"
-import { createUniqueId, Show } from "solid-js"
+import { createUniqueId, onCleanup, Show } from "solid-js"
 import { canAddress } from "../../../../domain/my-pull-request.js"
 import { reviewedFor } from "../../../../domain/review-history.js"
 import type { ReviewRequest } from "../../../../domain/review-request.js"
@@ -34,6 +34,8 @@ export type ReviewRowProps = {
 }
 
 // The host's menu has no programmatic open, so right-click replays a real mouse click on its trigger.
+// Under most systems' double-click interval, so a double click never also opens the details.
+const DOUBLE_CLICK_MS = 250
 const mouse = { bubbles: true, cancelable: true, button: 0 }
 const pointer = { ...mouse, pointerType: "mouse", isPrimary: true }
 const CLICK_SEQUENCE = [
@@ -69,6 +71,27 @@ export function ReviewRow(props: ReviewRowProps) {
     opensOnGitHub(props.item, draft())
       ? open()
       : void props.actions.review(props.item, resumable(draft()), reviewedFor(props.local.reviewed, props.item.key))
+  // A double click also fires its first click, so the first click waits to see whether a second one follows.
+  let pendingToggle: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => clearTimeout(pendingToggle))
+  const clickRow = (event: MouseEvent) => {
+    clearTimeout(pendingToggle)
+    if (event.detail >= 2) {
+      review()
+      return
+    }
+    pendingToggle = setTimeout(toggleDetails, DOUBLE_CLICK_MS)
+  }
+  const reviewItem = () =>
+    opensOnGitHub(props.item, draft())
+      ? []
+      : [
+          {
+            label: resumable(draft()) ? "Resume review" : "Start review",
+            icon: "outline-code-brackets" as const,
+            onSelect: review,
+          },
+        ]
   const snoozeItem = () => {
     const current = snooze()
     return current
@@ -109,7 +132,7 @@ export function ReviewRow(props: ReviewRowProps) {
     <article class="grq-row" onContextMenu={openMenu}>
       <span class="grq-dot" data-hidden={props.isNew ? undefined : ""} title={props.isNew ? "New" : undefined} />
       <div class="grq-row-body">
-        <button type="button" class="grq-row-main" title={props.item.title} onClick={review}>
+        <button type="button" class="grq-row-main" title={props.item.title} onClick={clickRow}>
           <div class="grq-row-title">{props.item.title}</div>
           <RowMeta context={props.context} item={props.item} local={props.local} now={props.now} />
         </button>
@@ -137,6 +160,7 @@ export function ReviewRow(props: ReviewRowProps) {
         <props.context.ui.Menu
           label="Pull request actions"
           items={[
+            ...reviewItem(),
             {
               label: detailsLabel(),
               icon: "info",
