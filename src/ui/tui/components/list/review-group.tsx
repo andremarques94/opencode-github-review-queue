@@ -10,6 +10,7 @@ import { ReviewRow } from "./review-row.js"
 export function ReviewGroup(props: {
   group: RepositoryGroup
   showHeader: boolean
+  collapsed: boolean
   selectedKey: string | undefined
   newKeys: readonly string[]
   label(item: ReviewRequest): string | undefined
@@ -24,6 +25,7 @@ export function ReviewGroup(props: {
       <Show when={props.showHeader}>
         <box flexDirection="row" justifyContent="space-between">
           <text wrapMode="none" truncate>
+            <span style={{ fg: theme.text.faint }}>{props.collapsed ? "▸ " : ""}</span>
             <span style={{ fg: theme.text.faint }}>{props.group.owner ? `${props.group.owner}/` : ""}</span>
             <span style={{ fg: theme.text.muted }}>
               <b>{props.group.name}</b>
@@ -32,7 +34,7 @@ export function ReviewGroup(props: {
           <text fg={theme.text.faint}>{props.group.items.length}</text>
         </box>
       </Show>
-      <For each={props.group.items}>
+      <For each={props.collapsed ? [] : props.group.items}>
         {(item, index) => (
           <ReviewRow
             item={item}

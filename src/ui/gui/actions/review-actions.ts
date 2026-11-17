@@ -1,11 +1,12 @@
 import type { Context } from "@opencode/plugin/gui"
 import type { ReviewDraft } from "../../../domain/review-draft.js"
 import type { ReviewedRecord } from "../../../domain/review-history.js"
-import type { ReviewRequest } from "../../../domain/review-request.js"
+import { qualifiedRepository, type ReviewRequest } from "../../../domain/review-request.js"
+import { isRepositorySnooze, type Snooze } from "../../../domain/snooze.js"
 import { fullReference } from "../../../shared/presentation.js"
 import { addressReviewFlow } from "../../../shared/review/address.js"
 import { postReviewFlow, resetReviewFlow, startReviewFlow } from "../../../shared/review/flows.js"
-import { snoozeFlow } from "../../../shared/review/snooze.js"
+import { snoozeFlow, snoozeRepositoryFlow } from "../../../shared/review/snooze.js"
 import { summaryFlow } from "../../../shared/review/summary.js"
 import { errorMessage, type LocalReviews, ReviewQueue } from "../../../shared/rpc.js"
 import { createFlowHost } from "./flow-host.js"
@@ -15,7 +16,9 @@ export type ReviewActions = {
   post(draft: ReviewDraft): Promise<void>
   reset(draft: ReviewDraft): Promise<void>
   snooze(item: ReviewRequest): Promise<void>
-  wake(item: ReviewRequest): Promise<void>
+  snoozeRepository(item: ReviewRequest): Promise<void>
+  wake(item: ReviewRequest, snooze: Snooze): Promise<void>
+  collapse(repository: string, collapsed: boolean): Promise<void>
   summarize(item: ReviewRequest): Promise<void>
   address(item: ReviewRequest): Promise<void>
 }
@@ -89,11 +92,23 @@ export function createReviewActions(input: {
           input.updateLocal(local)
         }
       }, "Could not snooze the pull request"),
-    wake: (item) =>
+    snoozeRepository: (item) =>
       attempt(async () => {
-        input.updateLocal(await context.client.rpc(ReviewQueue).wake({ key: item.key }))
-        context.toast.show({ variant: "success", title: `${fullReference(item)} is back in the queue` })
+        const local = await snoozeRepositoryFlow(host, item)
+        if (local) {
+          input.updateLocal(local)
+        }
+      }, "Could not snooze the repository"),
+    wake: (item, snooze) =>
+      attempt(async () => {
+        input.updateLocal(await context.client.rpc(ReviewQueue).wake({ key: snooze.key }))
+        const name = isRepositorySnooze(snooze) ? qualifiedRepository(item) : fullReference(item)
+        context.toast.show({ variant: "success", title: `${name} is back in the queue` })
       }, "Could not wake the pull request"),
+    collapse: (repository, collapsed) =>
+      attempt(async () => {
+        input.updateLocal(await context.client.rpc(ReviewQueue).collapse({ repository, collapsed }))
+      }, "Could not collapse the repository"),
     summarize: (item) => attempt(() => summaryFlow(host, item), "Could not summarize the pull request"),
   }
 }

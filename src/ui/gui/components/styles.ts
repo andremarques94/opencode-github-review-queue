@@ -124,12 +124,22 @@ export const panelStyles = `${badgeStyles}
   top: 0;
   z-index: 1;
   display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 10px 12px 4px;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px 4px 6px;
+  border: 0;
   background: var(--background-base);
+  color: inherit;
+  font: inherit;
   font-size: 12px;
+  text-align: left;
+  cursor: pointer;
 }
+.grq-group svg { flex-shrink: 0; color: var(--icon-weak-base); transition: transform 120ms; }
+.grq-group[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.grq-group:hover .grq-group-name { color: var(--text-strong); }
+.grq-group:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
 .grq-group-name {
   min-width: 0;
   overflow: hidden;

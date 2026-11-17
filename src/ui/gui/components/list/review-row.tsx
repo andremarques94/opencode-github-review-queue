@@ -75,10 +75,20 @@ export function ReviewRow(props: ReviewRowProps) {
       ? {
           label: `Wake up (snoozed ${snoozeLabel(current, props.now)})`,
           icon: "outline-eye" as const,
-          onSelect: () => void props.actions.wake(props.item),
+          onSelect: () => void props.actions.wake(props.item, current),
         }
       : { label: "Snooze…", icon: "outline-eye-slash" as const, onSelect: () => void props.actions.snooze(props.item) }
   }
+  const snoozeRepositoryItem = () =>
+    snooze()
+      ? []
+      : [
+          {
+            label: "Snooze repository…",
+            icon: "outline-eye-slash" as const,
+            onSelect: () => void props.actions.snoozeRepository(props.item),
+          },
+        ]
   const draftItem = (action: DraftAction) => {
     if (action.kind === "reset") {
       return { label: action.label, icon: "trash" as const, onSelect: () => void props.actions.reset(action.draft) }
@@ -150,6 +160,7 @@ export function ReviewRow(props: ReviewRowProps) {
                 ]
               : []),
             snoozeItem(),
+            ...snoozeRepositoryItem(),
             ...draftItems(),
           ]}
         />

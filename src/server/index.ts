@@ -1,10 +1,11 @@
 import { Plugin } from "@opencode/plugin"
+import * as v from "valibot"
 import { AddressSession } from "../domain/my-pull-request.js"
 import { nextFinding, questionHeader } from "../domain/review-draft.js"
 import { ReviewedRecord } from "../domain/review-history.js"
 import { everyPullRequest } from "../domain/review-queue.js"
 import { qualifiedRepository } from "../domain/review-request.js"
-import { Snooze } from "../domain/snooze.js"
+import { repositorySnoozeKey, Snooze } from "../domain/snooze.js"
 import { type PluginOptions, parseOptions } from "../shared/options.js"
 import { type LocalReviews, ReviewQueue } from "../shared/rpc.js"
 import { openReview, repositoryForDirectory } from "./github/repository.js"
@@ -30,6 +31,8 @@ const SUMMARY_TIMEOUT_MS = 5 * 60_000
 const DRAFT_PREFIX = "draft/"
 const REVIEWED_PREFIX = "reviewed/"
 const SNOOZE_PREFIX = "snooze/"
+const COLLAPSED_PREFIX = "collapsed/"
+const Collapsed = v.object({ version: v.literal(1), key: v.string() })
 const ADDRESS_PREFIX = "address/"
 // Missing a few renewals, such as while the machine sleeps, should not hand the lease over.
 const LEASE_INTERVALS = 3
@@ -39,6 +42,7 @@ type Shared = {
   drafts: DraftStore
   reviewed: KeyedStore<ReviewedRecord>
   snoozes: KeyedStore<Snooze>
+  collapsed: KeyedStore<v.InferOutput<typeof Collapsed>>
   reviews: ReviewSessions
   addressing: AddressSessions
   findings: Findings
@@ -71,12 +75,13 @@ async function reported<T, E>(
 }
 
 async function localReviews(current: Shared): Promise<LocalReviews> {
-  const [drafts, reviewed, snoozes] = await Promise.all([
+  const [drafts, reviewed, snoozes, collapsed] = await Promise.all([
     current.drafts.list(),
     current.reviewed.list(),
     current.snoozes.list(),
+    current.collapsed.list(),
   ])
-  return { drafts, reviewed, snoozes }
+  return { drafts, reviewed, snoozes, collapsed: collapsed.map((entry) => entry.key) }
 }
 
 function createShared(storage: Plugin.Context["storage"], options: PluginOptions): Shared {
@@ -132,6 +137,7 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
     drafts,
     reviewed,
     snoozes,
+    collapsed: new KeyedStore(Collapsed, prefixed(storage, COLLAPSED_PREFIX)),
     reviews,
     addressing,
     findings: new Findings(drafts, options.timeoutMs),
@@ -228,6 +234,30 @@ export default Plugin.define({
             until: input.until,
             createdAt: new Date().toISOString(),
           })
+          return localReviews(current)
+        }),
+      snoozeRepository: (input, rpcContext) =>
+        reported(rpcContext, async () => {
+          if (!(Date.parse(input.at) > Date.now())) {
+            throw new Error("Pick a time in the future.")
+          }
+          const item = await queued(input.key)
+          await current.snoozes.put({
+            version: 1,
+            key: repositorySnoozeKey(item),
+            until: { kind: "time", at: input.at },
+            createdAt: new Date().toISOString(),
+          })
+          return localReviews(current)
+        }),
+      collapse: (input, rpcContext) =>
+        reported(rpcContext, async () => {
+          const key = input.repository.toLowerCase()
+          if (input.collapsed) {
+            await current.collapsed.put({ version: 1, key })
+          } else {
+            await current.collapsed.remove(key)
+          }
           return localReviews(current)
         }),
       wake: (input, rpcContext) =>

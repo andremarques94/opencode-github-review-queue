@@ -47,6 +47,7 @@ export function createFlowHost(
     resetReview: (request) => rpc.resetReview(request),
     prompt: (options) => context.ui.dialog.prompt(options),
     snooze: (request) => rpc.snooze(request),
+    snoozeRepository: (request) => rpc.snoozeRepository(request),
     summarize: (request) => rpc.summarize(request),
     openSummary: (input) => openSummary(context, input),
   }

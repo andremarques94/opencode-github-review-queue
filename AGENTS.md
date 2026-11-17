@@ -32,7 +32,8 @@ resolver that honours neither `tsconfig.json` paths nor `package.json` imports, 
 load time even when TypeScript, Vite and Vitest accept it. Adding an alias means adding a build step first.
 
 Plugin storage keys: `baseline` (the queue, the user's own pull requests, and the last poll's notices), `lease`
-(which instance polls), `draft/<key>`, `reviewed/<key>`, `snooze/<key>`, and `address/<key>` (the session
+(which instance polls), `draft/<key>`, `reviewed/<key>`, `snooze/<key>` (`snooze/repo:<repository>` for a whole
+repository), `collapsed/<repository>` (a collapsed repository group), and `address/<key>` (the session
 addressing a review of the user's own pull request). Only the lease holder fetches from GitHub and prunes; the
 others re-read `baseline` each interval.
 

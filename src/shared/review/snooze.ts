@@ -1,10 +1,13 @@
 import type { ReviewRequest } from "../../domain/review-request.js"
+import { qualifiedRepository } from "../../domain/review-request.js"
 import {
+  isRepositorySnooze,
   parseSnoozeTime,
+  repositorySnoozeKey,
   type Snooze,
   type SnoozeUntil,
   snoozeFor,
-  snoozing,
+  snoozeOf,
   tomorrowMorning,
 } from "../../domain/snooze.js"
 import { fullReference } from "../presentation.js"
@@ -16,6 +19,7 @@ export type SnoozeFlowHost = {
   prompt(input: { title: string; description: string; placeholder: string }): Promise<string | undefined>
   notify(message: string): void
   snooze(input: RpcInput<"snooze">): Promise<LocalReviews>
+  snoozeRepository(input: RpcInput<"snoozeRepository">): Promise<LocalReviews>
 }
 
 const HOUR = 60 * 60_000
@@ -32,6 +36,11 @@ const timeLabel = (at: string | Date, now: number) => {
 }
 
 export function snoozeLabel(snooze: Snooze, now = Date.now()): string {
+  const label = untilLabel(snooze, now)
+  return isRepositorySnooze(snooze) ? `with its repository ${label}` : label
+}
+
+function untilLabel(snooze: Snooze, now: number): string {
   switch (snooze.until.kind) {
     case "checks":
       return "until checks finish"
@@ -42,18 +51,24 @@ export function snoozeLabel(snooze: Snooze, now = Date.now()): string {
   }
 }
 
-/** Only conditions GitHub can report: waiting on checks needs running checks, waiting on a push needs the head. */
-function snoozeOptions(item: ReviewRequest, now: number): SelectOption<SnoozeUntil | typeof CUSTOM>[] {
+function timeOptions(now: number): SelectOption<SnoozeUntil | typeof CUSTOM>[] {
   const time = (at: Date) => ({ kind: "time" as const, at: at.toISOString() })
   const tomorrow = tomorrowMorning(now)
+  return [
+    { title: "For 1 hour", value: time(new Date(now + HOUR)), description: timeLabel(new Date(now + HOUR), now) },
+    { title: "Until tomorrow", value: time(tomorrow), description: timeLabel(tomorrow, now) },
+    { title: "Until…", value: CUSTOM, description: "A duration, a time, or a date" },
+  ]
+}
+
+/** Only conditions GitHub can report: waiting on checks needs running checks, waiting on a push needs the head. */
+function snoozeOptions(item: ReviewRequest, now: number): SelectOption<SnoozeUntil | typeof CUSTOM>[] {
   return [
     ...(item.checks === "pending" ? [{ title: "Until checks finish", value: { kind: "checks" as const } }] : []),
     ...(item.headSha
       ? [{ title: "Until the author pushes", value: { kind: "push" as const, headSha: item.headSha } }]
       : []),
-    { title: "For 1 hour", value: time(new Date(now + HOUR)), description: timeLabel(new Date(now + HOUR), now) },
-    { title: "Until tomorrow", value: time(tomorrow), description: timeLabel(tomorrow, now) },
-    { title: "Until…", value: CUSTOM, description: "A duration, a time, or a date" },
+    ...timeOptions(now),
   ]
 }
 
@@ -89,6 +104,24 @@ export async function snoozeFlow(
   return local
 }
 
+/** Only time: checks and pushes belong to one pull request. New requests in the repository stay snoozed too. */
+export async function snoozeRepositoryFlow(
+  host: SnoozeFlowHost,
+  item: ReviewRequest,
+  now: () => number = Date.now,
+): Promise<LocalReviews | undefined> {
+  const repository = qualifiedRepository(item)
+  const choice = await host.select({ title: `Snooze every pull request in ${repository}`, options: timeOptions(now()) })
+  const until = choice === CUSTOM ? await customTime(host, now) : choice
+  if (until?.kind !== "time") {
+    return undefined
+  }
+  const local = await host.snoozeRepository({ key: item.key, at: until.at })
+  const snooze = snoozeFor(local.snoozes, repositorySnoozeKey(item))
+  host.notify(snooze ? `Snoozed ${repository} ${untilLabel(snooze, now())}` : "Snoozed")
+  return local
+}
+
 // Timed snoozes wake between queue updates, which may be minutes apart.
 const CLOCK_MS = 30_000
 
@@ -105,14 +138,15 @@ export function hideSnoozed(
   show: boolean,
   now: number,
 ): QueueView {
-  const asleep = items.filter((item) => snoozing(snoozeFor(snoozes, item.key), item, now))
+  const asleep = items.filter((item) => snoozeOf(snoozes, item, now))
   return { items: show ? [...items] : items.filter((item) => !asleep.includes(item)), snoozed: asleep.length }
 }
 
-export const activeSnooze = (snoozes: readonly Snooze[], item: ReviewRequest, now: number) => {
-  const snooze = snoozeFor(snoozes, item.key)
-  return snoozing(snooze, item, now) ? snooze : undefined
-}
+export const activeSnooze = snoozeOf
+
+/** Whether a pull request that just arrived should notify: not while its repository is snoozed. */
+export const awake = (snoozes: readonly Snooze[], item: ReviewRequest, now = Date.now()) =>
+  snoozeOf(snoozes, item, now) === undefined
 
 export const snoozedToggleLabel = (view: QueueView, shown: boolean) =>
   shown ? `${view.snoozed} snoozed, shown` : `${view.snoozed} snoozed`

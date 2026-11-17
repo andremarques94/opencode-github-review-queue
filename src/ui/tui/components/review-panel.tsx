@@ -40,7 +40,15 @@ export function ReviewPanel(props: ReviewPanelProps) {
     hideSnoozed(filterItems(props.state, filter(), props.state.repository), props.state.snoozes, showSnoozed(), now()),
   )
   const groups = createMemo(() => groupByRepository(view().items))
-  const ordered = createMemo(() => groups().flatMap((group) => group.items))
+  // The "current" scope shows no repository headers, so nothing there can stay collapsed.
+  const isCollapsed = (repository: string) =>
+    filter() !== "current" && props.state.collapsed.includes(repository.toLowerCase())
+  const collapsed = createMemo(() =>
+    groups()
+      .map((group) => group.repository)
+      .filter(isCollapsed),
+  )
+  const ordered = createMemo(() => groups().flatMap((group) => (isCollapsed(group.repository) ? [] : group.items)))
   const current = () => ordered()[Math.min(selected(), Math.max(0, ordered().length - 1))]
   const actions = useReviewActions({
     panel: props.panel,
@@ -58,6 +66,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
     setShowSnoozed,
     showDetails,
     setShowDetails,
+    collapsed,
   })
   const label = (item: ReviewRequest) => rowLabel(item, props.state, now())
   const details = () => {
@@ -72,19 +81,20 @@ export function ReviewPanel(props: ReviewPanelProps) {
       <PanelHeader
         state={props.state}
         filter={filter()}
-        count={ordered().length}
+        count={view().items.length}
         view={view()}
         showSnoozed={showSnoozed()}
         actions={actions}
       />
       <Show when={props.state.error}>{(error) => <ErrorLine message={error().message} />}</Show>
       <Show
-        when={ordered().length > 0}
+        when={groups().length > 0}
         fallback={<EmptyState state={props.state} filter={filter()} snoozed={view().snoozed} />}
       >
         <ReviewList
           groups={groups()}
           grouped={filter() !== "current"}
+          collapsed={collapsed()}
           selectedKey={current()?.key}
           newKeys={props.state.newKeys}
           label={label}

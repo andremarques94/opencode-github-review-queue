@@ -17,12 +17,22 @@ export function ReviewGroup(props: {
   copy(text: string, name: string): void
 }) {
   const items = createMemo(() => new Map(props.group.items.map((item) => [item.key, item])))
-  const keys = createMemo(() => [...items().keys()])
+  const collapsed = () => props.showHeader && props.local.collapsed.includes(props.group.repository.toLowerCase())
+  const keys = createMemo(() => (collapsed() ? [] : [...items().keys()]))
+  const toggleLabel = () => `${collapsed() ? "Expand" : "Collapse"} ${props.group.repository}`
 
   return (
     <section>
       <Show when={props.showHeader}>
-        <div class="grq-group" title={props.group.repository}>
+        <button
+          type="button"
+          class="grq-group"
+          title={toggleLabel()}
+          aria-label={toggleLabel()}
+          aria-expanded={!collapsed()}
+          onClick={() => void props.actions.collapse(props.group.repository, !collapsed())}
+        >
+          <props.context.ui.Icon name="outline-chevron-down" size="small" />
           <span class="grq-group-name">
             <Show when={props.group.owner}>
               <span class="grq-group-owner">{props.group.owner} / </span>
@@ -30,7 +40,7 @@ export function ReviewGroup(props: {
             {props.group.name}
           </span>
           <span class="grq-group-count">{props.group.items.length}</span>
-        </div>
+        </button>
       </Show>
       {/* Keyed by pull request, so a refresh updates a row in place: its open details and menu stay open. */}
       <For each={keys()}>

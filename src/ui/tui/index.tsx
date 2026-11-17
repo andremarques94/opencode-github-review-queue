@@ -13,6 +13,7 @@ import {
 } from "../../shared/notifications/notification-text.js"
 import { parseOptions } from "../../shared/options.js"
 import { draftForSession, replaceDraft } from "../../shared/review/draft-status.js"
+import { awake } from "../../shared/review/snooze.js"
 import { type LocalReviews, ReviewQueue } from "../../shared/rpc.js"
 import { FINDINGS_PANEL, FindingsPanel } from "./components/findings/findings-panel.js"
 import { ReviewStatus } from "./components/findings/review-status.js"
@@ -24,7 +25,7 @@ export default Plugin.define({
   async setup(context) {
     const options = parseOptions(context.options)
     const rpc = context.client.rpc(ReviewQueue)
-    const initial: TuiState = { ...emptySnapshot(), drafts: [], reviewed: [], snoozes: [] }
+    const initial: TuiState = { ...emptySnapshot(), drafts: [], reviewed: [], snoozes: [], collapsed: [] }
     const [state, updateState] = context.storage.memory<TuiState>("queue", { initial })
     const update = (snapshot: QueueSnapshot) => updateState((draft) => replaceSnapshot(draft, snapshot))
 
@@ -42,6 +43,7 @@ export default Plugin.define({
         store.drafts = local.drafts
         store.reviewed = local.reviewed
         store.snoozes = local.snoozes
+        store.collapsed = local.collapsed
       })
     void rpc.snapshot({}).then((snapshot) => update(snapshot))
     // Another location (the review session's) may write a draft, so re-read drafts with every queue update too.
@@ -65,7 +67,9 @@ export default Plugin.define({
     }
     const batcher = createDiscoveryBatcher((items: ReviewRequest[]) => announce(notificationText(items)))
     const stopDiscovered = rpc.events.on("discovered", (event) => {
-      batcher.push(event.data.item)
+      if (awake(state.snoozes, event.data.item)) {
+        batcher.push(event.data.item)
+      }
     })
     const updates = createDiscoveryBatcher((entries: MyUpdate[]) => announce(myUpdateText(entries)))
     const stopNotices = rpc.events.on("notice", (event) => {
