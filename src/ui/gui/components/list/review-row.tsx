@@ -31,6 +31,8 @@ export type ReviewRowProps = {
   now: number
   actions: ReviewActions
   details: DetailsState
+  /** Under a repository header, which has its own snooze button. */
+  grouped: boolean
   copy(text: string, name: string): void
 }
 
@@ -103,7 +105,7 @@ export function ReviewRow(props: ReviewRowProps) {
       : { label: "Snooze…", icon: "outline-eye-slash" as const, onSelect: () => void props.actions.snooze(props.item) }
   }
   const snoozeRepositoryItem = () =>
-    snooze()
+    snooze() || props.grouped
       ? []
       : [
           {

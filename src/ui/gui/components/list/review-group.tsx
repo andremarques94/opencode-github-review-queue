@@ -103,6 +103,7 @@ export function ReviewGroup(props: {
                 now={props.now}
                 actions={props.actions}
                 details={props.details}
+                grouped={props.showHeader}
                 copy={props.copy}
               />
             )}
