@@ -190,5 +190,6 @@ describe("reviewLabel", () => {
   it("says nothing new when the head did not move or is unknown", () => {
     expect(reviewLabel({ ...item, headSha: "a".repeat(40) }, undefined, previous)).toBeUndefined()
     expect(reviewLabel(item, undefined, previous)).toBeUndefined()
+    expect(reviewLabel({ ...item, headSha: "b".repeat(40), reviewedHead: true }, undefined, previous)).toBeUndefined()
   })
 })
