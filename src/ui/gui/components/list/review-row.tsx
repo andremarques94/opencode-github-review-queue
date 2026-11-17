@@ -70,13 +70,8 @@ export function ReviewRow(props: ReviewRowProps) {
     opensOnGitHub(props.item, draft())
       ? open()
       : void props.actions.review(props.item, resumable(draft()), reviewedFor(props.local.reviewed, props.item.key))
-  // A double click's first click already toggled the details, so the second one undoes that before reviewing.
-  const clickRow = (event: MouseEvent) => {
-    toggleDetails()
-    if (event.detail === 2) {
-      review()
-    }
-  }
+  const primaryLabel = () =>
+    opensOnGitHub(props.item, draft()) ? "Open on GitHub" : resumable(draft()) ? "Resume review" : "Start review"
   const reviewItem = () =>
     opensOnGitHub(props.item, draft())
       ? []
@@ -137,12 +132,22 @@ export function ReviewRow(props: ReviewRowProps) {
     <article class="grq-row" onContextMenu={openMenu}>
       <span class="grq-dot" data-hidden={props.isNew ? undefined : ""} title={props.isNew ? "New" : undefined} />
       <div class="grq-row-body">
-        <button type="button" class="grq-row-main" title={props.item.title} onClick={clickRow}>
+        <button type="button" class="grq-row-main" title={props.item.title} onClick={() => toggleDetails()}>
           <div class="grq-row-title">{props.item.title}</div>
           <RowMeta context={props.context} item={props.item} local={props.local} now={props.now} />
         </button>
         <Show when={expanded()}>
           <RowDetails id={detailsID} details={detailRows()} />
+          <div class="grq-row-primary">
+            <props.context.ui.Button
+              size="small"
+              variant="neutral"
+              icon={opensOnGitHub(props.item, draft()) ? "github" : "outline-code-brackets"}
+              onClick={review}
+            >
+              {primaryLabel()}
+            </props.context.ui.Button>
+          </div>
         </Show>
       </div>
       <button
