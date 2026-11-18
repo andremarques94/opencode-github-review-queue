@@ -23,6 +23,7 @@ import { draftForSession, pillStatus, replaceDraft, reviewProgress } from "../..
 import { awake } from "../../shared/review/snooze.js"
 import { type LocalReviews, ReviewQueue } from "../../shared/rpc.js"
 import { createFindingActions, FINDINGS_PANEL } from "./actions/finding-actions.js"
+import { serveSkillPickers } from "./actions/skill-picker.js"
 import { FindingsPanel } from "./components/findings/findings-panel.js"
 import { ProgressMenu } from "./components/findings/progress-menu.js"
 import { ReviewPanel } from "./components/review-panel.js"
@@ -38,6 +39,7 @@ export default Plugin.define({
     },
   },
   setup(ctx) {
+    const stopSkillPickers = serveSkillPickers(ctx)
     const options = parseOptions(ctx.options)
     const [state, setState] = createStore<QueueSnapshot>(emptySnapshot())
     const [drafts, setDrafts] = createStore<LocalReviews>({ drafts: [], reviewed: [], snoozes: [], collapsed: [] })
@@ -249,6 +251,7 @@ export default Plugin.define({
     })
 
     return () => {
+      stopSkillPickers()
       stopState()
       stopDrafts()
       stopDiscovered()

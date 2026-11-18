@@ -15,6 +15,7 @@ import { parseOptions } from "../../shared/options.js"
 import { draftForSession, replaceDraft } from "../../shared/review/draft-status.js"
 import { awake } from "../../shared/review/snooze.js"
 import { type LocalReviews, ReviewQueue } from "../../shared/rpc.js"
+import { serveSkillPickers } from "./actions/skill-picker.js"
 import { FINDINGS_PANEL, FindingsPanel } from "./components/findings/findings-panel.js"
 import { ReviewStatus } from "./components/findings/review-status.js"
 import { ReviewPanel } from "./components/review-panel.js"
@@ -23,6 +24,7 @@ import type { TuiState } from "./state.js"
 export default Plugin.define({
   id: "github-review-queue.tui",
   async setup(context) {
+    const stopSkillPickers = serveSkillPickers(context)
     const options = parseOptions(context.options)
     const rpc = context.client.rpc(ReviewQueue)
     const initial: TuiState = { ...emptySnapshot(), drafts: [], reviewed: [], snoozes: [], collapsed: [] }
@@ -149,6 +151,7 @@ export default Plugin.define({
     })
 
     return () => {
+      stopSkillPickers()
       stopState()
       stopDrafts()
       stopDiscovered()

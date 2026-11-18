@@ -43,11 +43,12 @@ describe("myStatus", () => {
 })
 
 describe("myStatusLabel", () => {
-  it("names who requested changes, or who it waits on", () => {
+  it("names who requested changes and counts the reviewers it waits on", () => {
     expect(myStatusLabel(mine(1, { reviewDecision: "CHANGES_REQUESTED", changesRequestedBy: ["alice"] }))).toBe(
       "changes requested by @alice",
     )
-    expect(myStatusLabel(mine(1, { waitingOn: ["bob", "acme/web"] }))).toBe("waiting on @bob, @acme/web")
+    expect(myStatusLabel(mine(1, { waitingOn: ["bob"] }))).toBe("waiting on 1 reviewer")
+    expect(myStatusLabel(mine(1, { waitingOn: ["bob", "acme/web"] }))).toBe("waiting on 2 reviewers")
     expect(myStatusLabel(mine(1))).toBe("no reviewers requested")
     expect(myStatusLabel(mine(1, {}, { draft: true }))).toBeUndefined()
   })

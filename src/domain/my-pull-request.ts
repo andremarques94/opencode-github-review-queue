@@ -56,7 +56,7 @@ export function myStatusLabel(item: ReviewRequest): string | undefined {
       return "approved"
     case "waiting": {
       const on = item.authored?.waitingOn ?? []
-      return on.length > 0 ? `waiting on ${names(on)}` : "no reviewers requested"
+      return on.length > 0 ? `waiting on ${on.length} reviewer${on.length === 1 ? "" : "s"}` : "no reviewers requested"
     }
   }
 }

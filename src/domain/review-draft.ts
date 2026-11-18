@@ -56,6 +56,8 @@ export const ReviewDraft = v.object({
   checkout: v.string(),
   worktree: v.string(),
   sessionID: v.string(),
+  /** Confirmed skill IDs; missing until the user submits the skill picker. Empty means no skills. */
+  skillIDs: v.exactOptional(v.array(v.string())),
   status: DraftStatus,
   verdict: v.exactOptional(Verdict),
   summary: v.exactOptional(v.string()),

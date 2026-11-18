@@ -14,12 +14,14 @@ import { StorageLease } from "./queue-lease.js"
 import { queueSource } from "./queue-source.js"
 import { AddressSessions } from "./review/address.js"
 import { decisionPrompt, EARLY_QUESTION, findingQuestionId, nextStep } from "./review/agent/instructions.js"
+import { addSkillTools, waitForSkillSelection } from "./review/agent/skill-tools.js"
 import { addReviewTools, hideReviewTools } from "./review/agent/tools.js"
 import { defaultCacheDirectory, expandHome } from "./review/checkout.js"
 import { DraftStore } from "./review/draft-store.js"
 import { Findings } from "./review/findings.js"
 import { rememberModel, reviewModels } from "./review/models.js"
 import { ReviewSessions } from "./review/sessions.js"
+import { ReviewSkills } from "./review/skills.js"
 import { summarize } from "./review/summary.js"
 import { triage } from "./review/triage.js"
 import { type PollerEvent, ReviewQueuePoller } from "./review-queue-poller.js"
@@ -46,6 +48,7 @@ type Shared = {
   reviews: ReviewSessions
   addressing: AddressSessions
   findings: Findings
+  skills: ReviewSkills
   refs: number
   started?: Promise<void>
 }
@@ -141,6 +144,7 @@ function createShared(storage: Plugin.Context["storage"], options: PluginOptions
     reviews,
     addressing,
     findings: new Findings(drafts, options.timeoutMs),
+    skills: new ReviewSkills(drafts),
     refs: 0,
   }
 }
@@ -176,6 +180,12 @@ export default Plugin.define({
         }),
       drafts: () => localReviews(current),
       models: () => reviewModels(ctx),
+      skillPickers: async () => ({ requests: current.skills.requests() }),
+      claimSkillPicker: async (input) => ({ claimed: current.skills.claim(input.id) }),
+      failSkillPicker: async (input) => {
+        current.skills.fail(input.id, input.message)
+        return {}
+      },
       startReview: (input, rpcContext) =>
         reported(rpcContext, async () => {
           const result = await current.reviews.start({
@@ -266,13 +276,53 @@ export default Plugin.define({
           return localReviews(current)
         }),
     })
-    const tools = await ctx.tool.transform((editor) => addReviewTools(editor, current.findings))
+    // The plugin's server context does not expose form.create; a connected UI creates the native form.
+    // Its answer is observed here, not supplied by the model through another tool.
+    const forms = new AbortController()
+    void (async () => {
+      for await (const event of ctx.event.subscribe({
+        types: ["form.created", "form.replied", "form.cancelled"],
+        signal: forms.signal,
+      })) {
+        switch (event.type) {
+          case "form.created":
+            current.skills.created(event.data.form)
+            break
+          case "form.replied":
+            current.skills.answered(event.data.id, event.data.sessionID, event.data.answer.skills)
+            break
+          case "form.cancelled":
+            current.skills.cancelled(event.data.id, event.data.sessionID)
+            break
+        }
+      }
+    })().catch(() => {
+      if (!forms.signal.aborted) {
+        for (const request of current.skills.requests()) {
+          current.skills.fail(request.id, "The connection to review skill forms was lost. Try again.")
+        }
+      }
+    })
+    const tools = await ctx.tool.transform((editor) => {
+      addReviewTools(editor, current.findings)
+      addSkillTools(
+        editor,
+        current.skills,
+        ctx,
+        {
+          open: (request) => registration.events.emit("skillPicker", request),
+          close: (request) => registration.events.emit("closeSkillPicker", request),
+        },
+        forms.signal,
+      )
+    })
     const reminder = await ctx.session.hook("context", async (event) => {
       const draft = await current.drafts.bySession(event.sessionID)
       if (!draft) {
         hideReviewTools(event.tools)
         return
       }
+      waitForSkillSelection(event.tools, draft)
       const step = nextStep(draft)
       if (step) {
         event.system.push({ type: "text", text: step })
@@ -326,6 +376,7 @@ export default Plugin.define({
     await current.started
 
     return async () => {
+      forms.abort()
       unsubscribe()
       unsubscribeDrafts()
       await tools.dispose()

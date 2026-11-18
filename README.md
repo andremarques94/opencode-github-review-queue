@@ -20,6 +20,8 @@ the background, and lets you review them with an agent without leaving your edit
   threads, size, and how long each has waited.
 - **Agent-assisted reviews.** Each review runs in its own worktree. The agent drafts findings, you keep or drop each
   one, and only you can post.
+- **Choose review skills.** The agent discovers available skills and opens a toggle list with relevant skills
+  preselected. Deselect any recommendation, add other skills, or select none; only your confirmed choices are loaded.
 - **Follow-ups.** A pull request you reviewed comes back when the author pushes, and the next review covers only the
   new commits.
 - **Your own pull requests** under **Mine**, with a notification when one gets changes requested or is ready to merge.

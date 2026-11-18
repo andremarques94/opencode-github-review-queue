@@ -32,6 +32,15 @@ export const LineComment = v.strictObject({
 export type LineComment = v.InferOutput<typeof LineComment>
 export const ModelRef = v.object({ providerID: v.string(), id: v.string() })
 export type ModelRef = v.InferOutput<typeof ModelRef>
+export const SkillPicker = v.object({
+  id: v.string(),
+  sessionID: v.string(),
+  tool: v.object({ messageID: v.string(), id: v.string() }),
+  skills: v.array(
+    v.object({ id: v.string(), name: v.string(), description: v.exactOptional(v.string()), recommended: v.boolean() }),
+  ),
+})
+export type SkillPicker = v.InferOutput<typeof SkillPicker>
 
 export const ReviewQueue = Rpc.define({
   id: "github-review-queue",
@@ -54,6 +63,12 @@ export const ReviewQueue = Rpc.define({
         models: v.array(v.object({ ...ModelRef.entries, name: v.string(), provider: v.string() })),
         preferred: v.nullable(ModelRef),
       }),
+    },
+    skillPickers: { input: empty, output: v.object({ requests: v.array(SkillPicker) }) },
+    claimSkillPicker: { input: v.strictObject({ id: v.string() }), output: v.object({ claimed: v.boolean() }) },
+    failSkillPicker: {
+      input: v.strictObject({ id: v.string(), message: v.string() }),
+      output: empty,
     },
     startReview: {
       input: v.strictObject({
@@ -130,6 +145,8 @@ export const ReviewQueue = Rpc.define({
     discovered: { schema: v.object({ item: ReviewRequest, eventID: v.string() }) },
     notice: { schema: v.object({ notice: MyNotice, item: ReviewRequest, eventID: v.string() }) },
     drafts: { schema: drafts },
+    skillPicker: { schema: SkillPicker },
+    closeSkillPicker: { schema: v.object({ id: v.string(), sessionID: v.string() }) },
   },
 } satisfies Rpc.PortableDefinition)
 
