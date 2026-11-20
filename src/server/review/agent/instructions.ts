@@ -99,15 +99,25 @@ You cannot post the review. The user triages your findings and posts from the re
 
 ${guidelines}${followUp ? followUpInstructions(draft, followUp) : ""}
 
+## Choose skills with the user
+- Read the repository's instructions and inspect the diff to understand the scope, but do not load skills or record
+  findings yet.
+- Call \`review_list_skills\` to discover all skills available in this review's location. Match their descriptions to
+  the actual changes (language, framework, infrastructure, security), and briefly explain your recommendations.
+- Call \`review_select_skills\` with the recommended IDs (or an empty array if none match). It shows every available
+  skill in a toggle list with your recommendations already selected, waits for the user's confirmation, and loads
+  only the confirmed skills as context. The user can deselect recommendations, add other skills, or select none.
+- Do not substitute a plain-text question or load skills before confirmation. Cancellation is not consent: wait for
+  the user rather than continuing or automatically reopening the picker. Once confirmed, do not ask again on resume.
+- Use the confirmed skills as review criteria. Do not load unselected skills unless the user explicitly asks.
+
 ## Investigate
 Do a complete, deep review; never a quick or partial pass, whatever the size of the pull request. The user decides
 which findings to keep, so do not filter for them.
 - Read the repository's instructions, then every changed file in full, not just the hunks. Do not skip files because
   they look routine: moved or renamed files, DTOs, contracts, configuration, and tests all count.
-- Before reading the code, load with the skill tool every available skill whose description matches the scope of the
-  changes (language, framework, infrastructure, security), and review against each one alongside the quality bar.
-  Naming a skill is not loading it: if a skill fits, load it; never skip one that fits. Tell the user which skills you
-  loaded and why.
+- Review against every user-confirmed skill alongside the quality bar. Their contents are loaded by
+  \`review_select_skills\`; naming a skill is not loading it. Do not load skills the user left unselected.
 - Grep for callers of anything the PR changes, moves, renames, or removes, including imports of old paths, and check
   they still work.
 - Look for existing helpers or patterns the PR duplicates or ignores, and for tests covering the touched code.
@@ -158,10 +168,14 @@ export function nextStep(draft: ReviewDraft): string | undefined {
     return undefined
   }
   if (draft.status === "investigating") {
+    const skills =
+      draft.skillIDs === undefined
+        ? " Before investigating findings, inspect the diff and call review_list_skills, then review_select_skills with your recommended IDs. Wait for the user's confirmed selection; never load skills on their behalf. If selection was cancelled, stop and wait for the user instead of reopening the picker or continuing."
+        : ` User-confirmed skills: ${JSON.stringify(draft.skillIDs)}. Do not load unselected skills unless the user explicitly asks.`
     const scope = draft.sinceSha
       ? ` This is a follow-up: review only the changes since ${draft.sinceSha}, and say in the summary which earlier comments they address or leave unresolved.`
       : ""
-    return `Review status: investigating. Do a complete, deep review: load every skill that fits the changes with the skill tool, read every changed file in full and record every issue that meets the quality bar, nits included, with review_add_finding without presenting them to the user. Call review_set_verdict only once every changed file is read.${scope}`
+    return `Review status: investigating.${skills} Do a complete, deep review: read every changed file in full and record every issue that meets the quality bar, nits included, with review_add_finding without presenting them to the user. Call review_set_verdict only once every changed file is read.${scope}`
   }
   const pending = pendingFindings(draft).length
   if (pending === 0) {

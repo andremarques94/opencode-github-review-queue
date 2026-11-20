@@ -39,7 +39,7 @@ const draft: ReviewDraft = {
 function host(overrides: Partial<ReviewFlowHost> = {}): ReviewFlowHost {
   return {
     confirm: vi.fn(async () => true),
-    confirmPost: vi.fn(async () => true),
+    confirmPost: vi.fn(async (preview) => ({ verdict: preview.event, summary: preview.summary })),
     select: vi.fn(async ({ options }) => options[0]?.value),
     models: vi.fn(async () => ({ models: [model], preferred: null })),
     notify: vi.fn(),
@@ -137,6 +137,35 @@ describe("startReviewFlow", () => {
 })
 
 describe("postReviewFlow", () => {
+  it("posts the user's edited comment and state without starting another model turn", async () => {
+    const review = { verdict: "APPROVE" as const, summary: "My final comment.\n\nLooks good ✅" }
+    const flow = host({ confirmPost: vi.fn(async () => review) })
+
+    await postReviewFlow(flow, draft)
+
+    expect(flow.postReview).toHaveBeenCalledWith({ key: draft.key, allowStale: false, review })
+    expect(flow.startReview).not.toHaveBeenCalled()
+    expect(flow.models).not.toHaveBeenCalled()
+  })
+
+  it("does not post or change the draft when the final editor is cancelled", async () => {
+    const flow = host({ confirmPost: vi.fn(async () => undefined) })
+    expect(await postReviewFlow(flow, draft)).toBeUndefined()
+    expect(flow.postReview).not.toHaveBeenCalled()
+    expect(draft.summary).toBe("One nit.")
+  })
+
+  it("retains the edited comment and state when confirming a stale review", async () => {
+    const review = { verdict: "REQUEST_CHANGES" as const, summary: "Please fix this first." }
+    const postReview = vi
+      .fn<ReviewFlowHost["postReview"]>()
+      .mockResolvedValueOnce({ status: "stale", reason: "New commits were pushed." })
+      .mockResolvedValueOnce({ status: "posted", url: "https://github.com/review" })
+    await postReviewFlow(host({ confirmPost: vi.fn(async () => review), postReview }), draft)
+    expect(postReview).toHaveBeenNthCalledWith(1, { key: draft.key, allowStale: false, review })
+    expect(postReview).toHaveBeenNthCalledWith(2, { key: draft.key, allowStale: true, review })
+  })
+
   it("posts after the preview is confirmed", async () => {
     expect(await postReviewFlow(host(), draft)).toEqual({ status: "posted", url: "https://github.com/review" })
   })
@@ -152,7 +181,11 @@ describe("postReviewFlow", () => {
       .mockResolvedValueOnce({ status: "posted", url: "https://github.com/review" })
 
     expect(await postReviewFlow(host({ postReview }), draft)).toMatchObject({ url: "https://github.com/review" })
-    expect(postReview).toHaveBeenLastCalledWith({ key: draft.key, allowStale: true })
+    expect(postReview).toHaveBeenLastCalledWith({
+      key: draft.key,
+      allowStale: true,
+      review: { verdict: draft.verdict, summary: draft.summary },
+    })
 
     const declined = host({
       postReview: vi.fn(async () => ({ status: "stale" as const, reason: "New commits were pushed." })),

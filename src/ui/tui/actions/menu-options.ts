@@ -113,6 +113,13 @@ export function pullRequestOptions(
     },
     { title: "Copy link", value: () => actions.copy("link"), footer: "u", category: PULL_REQUEST },
     {
+      title: "Copy branch name",
+      value: () => actions.copy("branch"),
+      description: item.headRefName ?? "Refresh the queue to fetch the branch name",
+      footer: "b",
+      category: PULL_REQUEST,
+    },
+    {
       title: "Summarize",
       value: actions.summarize,
       description: "Intent, main changes, and what to inspect",

@@ -34,6 +34,38 @@ beforeEach(() => {
 })
 
 describe("fetchReviewRequests", () => {
+  it.each([
+    ["requested", fetchReviewRequests],
+    ["reviewed", fetchReviewedPullRequests],
+    ["authored", fetchAuthoredPullRequests],
+  ] as const)("fetches the source branch for %s PRs, including Enterprise and forks", async (_kind, fetch) => {
+    respond([
+      page([
+        {
+          ...node(1, "2026-01-01T00:00:00Z"),
+          headRefName: "feature/orion-123/修正",
+          baseRefName: "main",
+          isCrossRepository: true,
+        },
+      ]),
+    ])
+    const result = await fetch("ghe.acme.com", signal)
+    expect(result.items[0]).toMatchObject({ host: "ghe.acme.com", headRefName: "feature/orion-123/修正" })
+    const args: string[] = runGh.mock.calls[0]?.[0] ?? []
+    expect(args).toContain("--hostname")
+    expect(args.find((arg) => arg.startsWith("query="))).toContain("headRefName")
+  })
+
+  it.each([undefined, null, "", 123])(
+    "leaves an unavailable branch out without dropping the PR (%s)",
+    async (branch) => {
+      respond([page([{ ...node(1, "2026-01-01T00:00:00Z"), headRefName: branch }])])
+      const result = await fetchReviewRequests("github.com", signal)
+      expect(result.items).toHaveLength(1)
+      expect(result.items[0]).not.toHaveProperty("headRefName")
+    },
+  )
+
   it("collects every page sorted by creation time", async () => {
     respond([page([node(2, "2026-01-02T00:00:00Z")]), page([node(1, "2026-01-01T00:00:00Z")])])
 

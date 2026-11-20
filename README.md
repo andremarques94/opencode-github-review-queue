@@ -20,6 +20,10 @@ the background, and lets you review them with an agent without leaving your edit
   threads, size, and how long each has waited.
 - **Agent-assisted reviews.** Each review runs in its own worktree. The agent drafts findings, you keep or drop each
   one, and only you can post.
+- **Choose review skills.** The agent discovers available skills and opens a toggle list with relevant skills
+  preselected. Deselect any recommendation, add other skills, or select none; only your confirmed choices are loaded.
+  The Desktop shows it as a scrollable form; the TUI as a scrollable dialog (`space` toggles, `n` clears, `enter`
+  continues).
 - **Follow-ups.** A pull request you reviewed comes back when the author pushes, and the next review covers only the
   new commits.
 - **Your own pull requests** under **Mine**, with a notification when one gets changes requested or is ready to merge.
@@ -52,7 +56,8 @@ Open the queue with `/reviews`, or **Review requests** in the Desktop side panel
 | `Enter`   | Start or resume a review                     |
 | `d`       | Show details: size, checks, reviewers        |
 | `o`       | Open on GitHub                               |
-| `p`       | Post the review, after a preview             |
+| `b`       | Copy the PR's source branch name             |
+| `p`       | Edit the final comment/state and post the review |
 | `i`       | Summarize                                    |
 | `a`       | Address the review of your own pull request  |
 | `s` / `z` | Snooze or wake, show snoozed                 |
@@ -63,7 +68,14 @@ Open the queue with `/reviews`, or **Review requests** in the Desktop side panel
 On the Desktop, click a row to start its review, its chevron to show its details, or right-click it for the other
 actions.
 
+The expanded Desktop details show the source branch with a **Copy** button. **Copy branch name** is also available
+in the PR's actions menu.
+
 Inside a review session, `/findings` (TUI) or the **Review** pill (Desktop) lists the findings and posts the review.
+Finding decisions use a compact scrollable picker in both UIs; the TUI also preserves the free-text answer option.
+Before posting, edit the **Final comment** and choose **Approve**, **Request changes**, or **Comment** directly—no
+extra model turn is needed. In the TUI's post preview, `e` edits the comment (`ctrl+s` saves), `s` changes the review
+state, and `Enter` posts. Cancelling leaves the saved draft unchanged. Your own PRs only allow **Comment**.
 On the Desktop, **Open in** opens the review's worktree in your editor, so you can run the changes.
 
 ## Configuration

@@ -9,7 +9,7 @@ const SAVE_BINDING = [{ name: "s", ctrl: true, action: "submit" as const }]
 /** `dialog.prompt` takes one line, and a review comment is Markdown that often spans several. */
 export function editFindingBody(
   context: ReturnType<typeof usePlugin>,
-  input: { title: string; body: string },
+  input: { title: string; body: string; allowEmpty?: boolean; saveLabel?: string },
 ): Promise<string | undefined> {
   return new Promise((resolve) => {
     let textarea: TextareaRenderable | undefined
@@ -22,7 +22,7 @@ export function editFindingBody(
     }
     const save = () => {
       const body = textarea?.plainText ?? ""
-      if (!body.trim()) {
+      if (!input.allowEmpty && !body.trim()) {
         return
       }
       finish(body)
@@ -44,7 +44,7 @@ export function editFindingBody(
             keyBindings={SAVE_BINDING}
             onSubmit={save}
           />
-          <text fg={context.theme.text.faint}>ctrl+s save and keep · esc cancel</text>
+          <text fg={context.theme.text.faint}>ctrl+s {input.saveLabel ?? "save and keep"} · esc cancel</text>
         </box>
       ),
       () => finish(undefined),

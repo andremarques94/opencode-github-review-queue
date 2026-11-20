@@ -1,4 +1,4 @@
-import { postBlocker, type ReviewDraft } from "../../domain/review-draft.js"
+import { postBlocker, type ReviewDraft, type ReviewSubmission } from "../../domain/review-draft.js"
 import { followUpOf, type ReviewedRecord } from "../../domain/review-history.js"
 import type { ReviewRequest } from "../../domain/review-request.js"
 import { fullReference } from "../presentation.js"
@@ -9,7 +9,7 @@ export type SelectOption<T> = { title: string; value: T; description?: string; g
 
 export type ReviewFlowHost = {
   confirm(input: { title: string; message: string; confirm: string; danger?: boolean }): Promise<boolean>
-  confirmPost(preview: ReviewPreview): Promise<boolean>
+  confirmPost(preview: ReviewPreview): Promise<ReviewSubmission | undefined>
   select<T>(input: { title: string; options: SelectOption<T>[]; current?: T }): Promise<T | undefined>
   models(): Promise<RpcOutput<"models">>
   notify(message: string): void
@@ -116,10 +116,11 @@ export async function postReviewFlow(host: ReviewFlowHost, draft: ReviewDraft): 
   if (blocker) {
     throw new Error(blocker)
   }
-  if (!(await host.confirmPost(reviewPreview(draft)))) {
+  const review = await host.confirmPost(reviewPreview(draft))
+  if (!review) {
     return undefined
   }
-  const first = await host.postReview({ key: draft.key, allowStale: false })
+  const first = await host.postReview({ key: draft.key, allowStale: false, review })
   if (first.status === "posted") {
     return first
   }
@@ -132,7 +133,7 @@ export async function postReviewFlow(host: ReviewFlowHost, draft: ReviewDraft): 
   if (!anyway) {
     return undefined
   }
-  const second = await host.postReview({ key: draft.key, allowStale: true })
+  const second = await host.postReview({ key: draft.key, allowStale: true, review })
   return second.status === "posted" ? second : undefined
 }
 

@@ -121,6 +121,7 @@ export function ReviewPanel(props: ReviewPanelProps) {
     void props.context.system
       .copy(text)
       .then(() => props.context.toast.show({ variant: "success", title: `${name} copied`, description: text }))
+      .catch(() => props.context.toast.show({ variant: "error", title: `Could not copy ${name.toLowerCase()}` }))
   }
 
   return (

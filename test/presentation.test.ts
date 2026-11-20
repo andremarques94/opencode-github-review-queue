@@ -58,6 +58,14 @@ describe("pullRequestDetails", () => {
   const now = Date.parse("2026-01-03T00:00:00.000Z")
   const rows = (details: ReturnType<typeof pullRequestDetails>) => details.map((detail) => [detail.label, detail.value])
 
+  it("shows the source branch verbatim so its copy button uses the full name", () => {
+    const branch = "feature/orion-123/修正"
+    expect(rows(pullRequestDetails({ ...item("acme/api", 1), headRefName: branch }, undefined, now))).toContainEqual([
+      "Branch",
+      branch,
+    ])
+  })
+
   it("spells out what the row's marks and tooltips say, and who reviewed", () => {
     const details = pullRequestDetails(
       {
