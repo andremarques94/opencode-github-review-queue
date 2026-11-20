@@ -21,6 +21,7 @@ import { DraftStore } from "./review/draft-store.js"
 import { Findings } from "./review/findings.js"
 import { rememberModel, reviewModels } from "./review/models.js"
 import { ReviewSessions } from "./review/sessions.js"
+import { watchSkillForms } from "./review/skill-events.js"
 import { ReviewSkills } from "./review/skills.js"
 import { summarize } from "./review/summary.js"
 import { triage } from "./review/triage.js"
@@ -186,6 +187,10 @@ export default Plugin.define({
         current.skills.fail(input.id, input.message)
         return {}
       },
+      answerSkillPicker: async (input) => {
+        current.skills.answer(input.id, input.skills)
+        return {}
+      },
       startReview: (input, rpcContext) =>
         reported(rpcContext, async () => {
           const result = await current.reviews.start({
@@ -223,7 +228,9 @@ export default Plugin.define({
           return {}
         }),
       postReview: (input, rpcContext) =>
-        reported(rpcContext, () => current.reviews.post(input.key, input.allowStale, timeout(rpcContext.signal))),
+        reported(rpcContext, () =>
+          current.reviews.post(input.key, input.allowStale, timeout(rpcContext.signal), input.review),
+        ),
       decideFinding: (input, rpcContext) => reported(rpcContext, () => panel.decide(input)),
       editFinding: (input, rpcContext) => reported(rpcContext, () => panel.edit(input)),
       askAboutFinding: (input, rpcContext) => reported(rpcContext, () => panel.ask(input)),
@@ -278,31 +285,8 @@ export default Plugin.define({
     })
     // The plugin's server context does not expose form.create; a connected UI creates the native form.
     // Its answer is observed here, not supplied by the model through another tool.
-    const forms = new AbortController()
-    void (async () => {
-      for await (const event of ctx.event.subscribe({
-        types: ["form.created", "form.replied", "form.cancelled"],
-        signal: forms.signal,
-      })) {
-        switch (event.type) {
-          case "form.created":
-            current.skills.created(event.data.form)
-            break
-          case "form.replied":
-            current.skills.answered(event.data.id, event.data.sessionID, event.data.answer.skills)
-            break
-          case "form.cancelled":
-            current.skills.cancelled(event.data.id, event.data.sessionID)
-            break
-        }
-      }
-    })().catch(() => {
-      if (!forms.signal.aborted) {
-        for (const request of current.skills.requests()) {
-          current.skills.fail(request.id, "The connection to review skill forms was lost. Try again.")
-        }
-      }
-    })
+    const formEvents = new AbortController()
+    void watchSkillForms(current.skills, ctx.event, formEvents.signal)
     const tools = await ctx.tool.transform((editor) => {
       addReviewTools(editor, current.findings)
       addSkillTools(
@@ -313,7 +297,7 @@ export default Plugin.define({
           open: (request) => registration.events.emit("skillPicker", request),
           close: (request) => registration.events.emit("closeSkillPicker", request),
         },
-        forms.signal,
+        formEvents.signal,
       )
     })
     const reminder = await ctx.session.hook("context", async (event) => {
@@ -376,7 +360,7 @@ export default Plugin.define({
     await current.started
 
     return async () => {
-      forms.abort()
+      formEvents.abort()
       unsubscribe()
       unsubscribeDrafts()
       await tools.dispose()

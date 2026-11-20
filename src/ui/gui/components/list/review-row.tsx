@@ -57,6 +57,11 @@ export function ReviewRow(props: ReviewRowProps) {
   const draft = () => draftFor(props.local.drafts, props.item.key)
   const snooze = () => activeSnooze(props.local.snoozes, props.item, props.now)
   const open = () => props.context.system.openExternal(props.item.url)
+  const copyBranch = () => {
+    if (props.item.headRefName) {
+      props.copy(props.item.headRefName, "Branch name")
+    }
+  }
   const openMenu = (event: MouseEvent) => {
     const trigger = actions?.querySelector("button")
     if (!trigger) {
@@ -145,7 +150,7 @@ export function ReviewRow(props: ReviewRowProps) {
           <RowMeta context={props.context} item={props.item} local={props.local} now={props.now} />
         </button>
         <Show when={expanded()}>
-          <RowDetails id={detailsID} details={detailRows()} />
+          <RowDetails id={detailsID} details={detailRows()} copy={props.copy} />
         </Show>
       </div>
       <div
@@ -168,6 +173,7 @@ export function ReviewRow(props: ReviewRowProps) {
               onSelect: () => props.copy(fullReference(props.item), "Reference"),
             },
             { label: "Copy link", icon: "link", onSelect: () => props.copy(props.item.url, "Link") },
+            { label: "Copy branch name", icon: "copy", disabled: !props.item.headRefName, onSelect: copyBranch },
             { type: "separator" },
             snoozeItem(),
             ...snoozeRepositoryItem(),

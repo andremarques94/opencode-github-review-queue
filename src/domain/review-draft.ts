@@ -3,6 +3,10 @@ import * as v from "valibot"
 export const Verdict = v.picklist(["REQUEST_CHANGES", "COMMENT", "APPROVE"])
 export type Verdict = v.InferOutput<typeof Verdict>
 
+/** The final comment and state confirmed by the user, without another model turn. */
+export const ReviewSubmission = v.strictObject({ verdict: Verdict, summary: v.string() })
+export type ReviewSubmission = v.InferOutput<typeof ReviewSubmission>
+
 const Side = v.picklist(["LEFT", "RIGHT"])
 const Severity = v.picklist(["blocker", "major", "minor", "nit"])
 const Confidence = v.picklist(["high", "medium", "low"])
@@ -150,6 +154,9 @@ export function postBlocker(draft: ReviewDraft, headSha?: string): string | unde
   }
   if (draft.status === "investigating" || !draft.verdict || draft.summary === undefined) {
     return "The review is still being investigated; no verdict has been proposed yet."
+  }
+  if (draft.ownPullRequest && draft.verdict !== "COMMENT") {
+    return "GitHub does not let you approve or request changes on your own pull request; use COMMENT."
   }
   const pending = pendingFindings(draft).length
   if (pending > 0) {

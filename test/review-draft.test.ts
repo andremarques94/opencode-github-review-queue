@@ -140,6 +140,8 @@ describe("posting rules", () => {
       title: "Post review on acme/api#7?",
       reference: "acme/api#7",
       verdict: "Request changes",
+      event: "REQUEST_CHANGES",
+      ownPullRequest: false,
       summary: "Constants need names.",
       comments: [
         { location: "src/app.ts:11", body: "Name this constant.\nIt is a magic number." },

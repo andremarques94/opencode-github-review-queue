@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises"
 import type { Location, Plugin } from "@opencode/plugin"
-import { postBlocker, type ReviewDraft, reviewPayload } from "../../domain/review-draft.js"
+import { postBlocker, type ReviewDraft, type ReviewSubmission, reviewPayload } from "../../domain/review-draft.js"
 import type { ReviewedRecord } from "../../domain/review-history.js"
 import { everyPullRequest, type QueueSnapshot } from "../../domain/review-queue.js"
 import { hostField, hostOf, qualifiedRepository, type ReviewRequest } from "../../domain/review-request.js"
@@ -207,11 +207,12 @@ export class ReviewSessions {
     await this.store.remove(key)
   }
 
-  async post(key: string, allowStale: boolean, signal: AbortSignal): Promise<PostResult> {
-    const draft = await this.store.get(key)
-    if (!draft) {
+  async post(key: string, allowStale: boolean, signal: AbortSignal, review?: ReviewSubmission): Promise<PostResult> {
+    const saved = await this.store.get(key)
+    if (!saved) {
       throw new Error("There is no review draft for this pull request.")
     }
+    const draft = { ...saved, ...review }
     const pullRequest = await fetchPullRequest(draft, signal)
     const blocker = postBlocker(draft)
     if (blocker) {
@@ -221,8 +222,11 @@ export class ReviewSessions {
     if (stale && !allowStale) {
       return { status: "stale", reason: stale }
     }
-    const url = await postReview(draft, reviewPayload(draft), signal)
+    const payload = reviewPayload(draft)
+    const url = await postReview(draft, payload, signal)
     await this.store.update(key, (saved) => {
+      saved.verdict = payload.event
+      saved.summary = payload.body
       saved.status = "posted"
       saved.postedUrl = url
     })

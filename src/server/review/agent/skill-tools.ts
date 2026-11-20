@@ -19,11 +19,10 @@ export function waitForSkillSelection(tools: Record<string, unknown>, draft: Rev
 export function addSkillTools(
   editor: ToolEditor,
   skills: ReviewSkills,
-  plugin: Pick<Plugin.Context, "skill" | "permission">,
+  plugin: Pick<Plugin.Context, "skill" | "permission" | "tool">,
   picker: Omit<SkillSelectionHost, "load">,
   lifetime: AbortSignal,
 ): void {
-  const loadSkill = editor.get("skill")
   editor.add({
     name: "list_skills",
     description: "Discover all skills available in this review's location, with IDs and descriptions.",
@@ -53,6 +52,8 @@ export function addSkillTools(
     execute: async (input, context) => {
       const signal = AbortSignal.any([context.signal, lifetime])
       const { recommended } = v.parse(Selection, input)
+      // Looked up per call: the registry is rebuilt on reload, and a captured definition could go stale.
+      const loadSkill = (await plugin.tool.list()).find((tool) => tool.id === "skill")
       if (!loadSkill) {
         throw new Error("OpenCode's skill tool is unavailable. Enable it before choosing review skills.")
       }
@@ -63,12 +64,12 @@ export function addSkillTools(
         agent: context.agent,
         source: { type: "tool", messageID: context.messageID, id: context.id },
       })
-      const selected = await skills.select(
-        context.sessionID,
+      const selected = await skills.select({
+        sessionID: context.sessionID,
         recommended,
-        { messageID: context.messageID, id: context.id },
-        plugin.skill,
-        {
+        tool: { messageID: context.messageID, id: context.id },
+        registry: plugin.skill,
+        host: {
           ...picker,
           load: async (id) => {
             const result = await loadSkill.execute({ id }, { ...context, signal })
@@ -76,7 +77,7 @@ export function addSkillTools(
           },
         },
         signal,
-      )
+      })
       return {
         content: [
           `User-confirmed skills: ${JSON.stringify(selected.ids)}. Do not load unselected skills. Continue investigating the review.`,

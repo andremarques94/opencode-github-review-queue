@@ -6,8 +6,9 @@ import {
   Panel,
   type PanelTab,
   Plugin,
+  Style,
 } from "@opencode/plugin/gui"
-import { createEffect, untrack } from "solid-js"
+import { createEffect, createMemo, on, untrack } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { emptySnapshot, type QueueSnapshot, replaceSnapshot } from "../../domain/review-queue.js"
 import type { ReviewRequest } from "../../domain/review-request.js"
@@ -23,10 +24,11 @@ import { draftForSession, pillStatus, replaceDraft, reviewProgress } from "../..
 import { awake } from "../../shared/review/snooze.js"
 import { type LocalReviews, ReviewQueue } from "../../shared/rpc.js"
 import { createFindingActions, FINDINGS_PANEL } from "./actions/finding-actions.js"
-import { serveSkillPickers } from "./actions/skill-picker.js"
+import { serveGuiSkillPickers } from "./actions/skill-picker.js"
 import { FindingsPanel } from "./components/findings/findings-panel.js"
 import { ProgressMenu } from "./components/findings/progress-menu.js"
 import { ReviewPanel } from "./components/review-panel.js"
+import { pickerStyles } from "./picker-styles.js"
 
 export default Plugin.define({
   i18n: {
@@ -39,7 +41,11 @@ export default Plugin.define({
     },
   },
   setup(ctx) {
-    const stopSkillPickers = serveSkillPickers(ctx)
+    const skillPickers = serveGuiSkillPickers(ctx)
+    ctx.add(Style, () => {
+      const session = ctx.sessions.current()
+      return session ? pickerStyles(session.server.data.session.form.list(session.id) ?? []) : undefined
+    })
     const options = parseOptions(ctx.options)
     const [state, setState] = createStore<QueueSnapshot>(emptySnapshot())
     const [drafts, setDrafts] = createStore<LocalReviews>({ drafts: [], reviewed: [], snoozes: [], collapsed: [] })
@@ -59,6 +65,18 @@ export default Plugin.define({
     })
     const stopDrafts = rpc().events.on("drafts", (event) => setDrafts(event.data))
     const reviewDraft = (session: MountedSession) => draftForSession(drafts.drafts, session.id)
+    // Only when the routed session or the connection changes: a missed request is recovered from the review's location.
+    const pickerLocation = createMemo(() => {
+      const session = ctx.sessions.current()
+      return session?.server.connected ? session.location?.directory : undefined
+    })
+    createEffect(
+      on(pickerLocation, (directory) => {
+        if (directory) {
+          void skillPickers.sync(directory)
+        }
+      }),
+    )
     // The agent records decisions in the review session's own plugin instance, whose events may not reach this
     // window, so re-read drafts whenever that session's state, messages, or open questions change.
     createEffect(() => {
@@ -251,7 +269,7 @@ export default Plugin.define({
     })
 
     return () => {
-      stopSkillPickers()
+      skillPickers.dispose()
       stopState()
       stopDrafts()
       stopDiscovered()

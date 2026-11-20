@@ -207,7 +207,8 @@ export function teamRequest(item: ReviewRequest): { label: string; detail: strin
   }
 }
 
-export type Detail = { label: string; value: string; tone?: ReadinessMark["tone"] }
+/** `copy` names the value in a copy button's confirmation; details without it have no copy button. */
+export type Detail = { label: string; value: string; tone?: ReadinessMark["tone"]; copy?: string }
 
 const handles = (logins: readonly string[]) => logins.map((login) => `@${login}`).join(", ")
 
@@ -285,7 +286,10 @@ export function pullRequestDetails(
   reviewed: { verdict: Verdict; postedAt: string } | undefined,
   now = Date.now(),
 ): Detail[] {
-  const details: Detail[] = [{ label: "Author", value: `@${item.author}, opened ${ago(item.createdAt, now)}` }]
+  const details: Detail[] = [
+    { label: "Author", value: `@${item.author}, opened ${ago(item.createdAt, now)}` },
+    ...branchDetails(item),
+  ]
   if (item.host) {
     details.push({ label: "Host", value: item.host })
   }
@@ -324,6 +328,9 @@ export function pullRequestDetails(
   }
   return details
 }
+
+const branchDetails = (item: ReviewRequest): Detail[] =>
+  item.headRefName ? [{ label: "Branch", value: item.headRefName, copy: "Branch name" }] : []
 
 export function readinessSummary(item: ReviewRequest): string | undefined {
   const details = readinessMarks(item).map((mark) => mark.detail)

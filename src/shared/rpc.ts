@@ -1,7 +1,7 @@
 import { Rpc } from "@opencode/plugin/rpc"
 import * as v from "valibot"
 import { MyNotice } from "../domain/my-pull-request.js"
-import { FindingFields, ReviewDraft } from "../domain/review-draft.js"
+import { FindingFields, ReviewDraft, ReviewSubmission } from "../domain/review-draft.js"
 import { ReviewedRecord } from "../domain/review-history.js"
 import { QueueSnapshot } from "../domain/review-queue.js"
 import { ReviewRequest } from "../domain/review-request.js"
@@ -32,9 +32,14 @@ export const LineComment = v.strictObject({
 export type LineComment = v.InferOutput<typeof LineComment>
 export const ModelRef = v.object({ providerID: v.string(), id: v.string() })
 export type ModelRef = v.InferOutput<typeof ModelRef>
-export const SkillPicker = v.object({
+const SkillPickerTarget = v.object({
   id: v.string(),
   sessionID: v.string(),
+  directory: v.string(),
+})
+export type SkillPickerTarget = v.InferOutput<typeof SkillPickerTarget>
+export const SkillPicker = v.object({
+  ...SkillPickerTarget.entries,
   tool: v.object({ messageID: v.string(), id: v.string() }),
   skills: v.array(
     v.object({ id: v.string(), name: v.string(), description: v.exactOptional(v.string()), recommended: v.boolean() }),
@@ -70,6 +75,11 @@ export const ReviewQueue = Rpc.define({
       input: v.strictObject({ id: v.string(), message: v.string() }),
       output: empty,
     },
+    /** For a UI that shows its own picker instead of a native form; `null` means the user dismissed it. */
+    answerSkillPicker: {
+      input: v.strictObject({ id: v.string(), skills: v.nullable(v.array(v.string())) }),
+      output: empty,
+    },
     startReview: {
       input: v.strictObject({
         key: v.string(),
@@ -86,7 +96,7 @@ export const ReviewQueue = Rpc.define({
     },
     resetReview: { input: byKey, output: empty, errors },
     postReview: {
-      input: v.strictObject({ key: v.string(), allowStale: v.boolean() }),
+      input: v.strictObject({ key: v.string(), allowStale: v.boolean(), review: v.exactOptional(ReviewSubmission) }),
       output: v.variant("status", [
         v.object({ status: v.literal("posted"), url: v.string(), cleanupWarning: v.exactOptional(v.string()) }),
         v.object({ status: v.literal("stale"), reason: v.string() }),
@@ -146,7 +156,7 @@ export const ReviewQueue = Rpc.define({
     notice: { schema: v.object({ notice: MyNotice, item: ReviewRequest, eventID: v.string() }) },
     drafts: { schema: drafts },
     skillPicker: { schema: SkillPicker },
-    closeSkillPicker: { schema: v.object({ id: v.string(), sessionID: v.string() }) },
+    closeSkillPicker: { schema: SkillPickerTarget },
   },
 } satisfies Rpc.PortableDefinition)
 

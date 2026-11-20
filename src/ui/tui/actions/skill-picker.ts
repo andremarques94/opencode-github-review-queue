@@ -1,19 +1,12 @@
 import type { usePlugin } from "@opencode/plugin/tui"
-import { connectSkillPickers } from "../../../shared/review/skill-picker.js"
+import { connectSkillPickers, dismissForms } from "../../../shared/review/skill-picker.js"
 import { ReviewQueue } from "../../../shared/rpc.js"
+import { openSkillPicker } from "../components/skill-picker-dialog.js"
 
-export function serveSkillPickers(context: ReturnType<typeof usePlugin>): () => void {
-  const rpc = context.client.rpc(ReviewQueue)
-  const forms = context.client.session.form
-  return connectSkillPickers({
-    requests: () => rpc.skillPickers({}),
-    claim: (id) => rpc.claimSkillPicker({ id }),
-    fail: (id, message) => rpc.failSkillPicker({ id, message }),
-    onRequest: (callback) => rpc.events.on("skillPicker", (event) => callback(event.data)),
-    onClose: (callback) => rpc.events.on("closeSkillPicker", (event) => callback(event.data)),
-    create: (input) => forms.create(input),
-    forms: (sessionID) => forms.list({ sessionID }),
-    cancel: (sessionID, formID) => forms.cancel({ sessionID, formID }),
+/** The TUI shows its own scrollable dialog; the host's form cannot scroll a long skill list. */
+export const serveTuiSkillPickers = (context: ReturnType<typeof usePlugin>) =>
+  connectSkillPickers(() => context.client.rpc(ReviewQueue), {
+    show: async (request, answer) => openSkillPicker(context, request, answer),
+    dismiss: (request) => dismissForms(context.client.session.form, request),
     notify: (message) => context.ui.toast.show({ message, variant: "error" }),
   })
-}

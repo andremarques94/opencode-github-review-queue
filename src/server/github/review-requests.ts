@@ -20,7 +20,7 @@ const QUERY = `query($search: String!, $endCursor: String) {
     pageInfo { hasNextPage endCursor }
     nodes {
       ... on PullRequest {
-        number title url createdAt isDraft headRefOid baseRefOid mergeable additions deletions changedFiles
+        number title url createdAt isDraft headRefName headRefOid baseRefOid mergeable additions deletions changedFiles
         reviewDecision mergeStateStatus
         author { login }
         repository { nameWithOwner }
@@ -180,6 +180,7 @@ const PullRequest = v.pipe(
     isDraft: v.boolean(),
     author: v.fallback(v.object({ login: v.string() }), { login: "ghost" }),
     repository: v.object({ nameWithOwner: v.string() }),
+    headRefName: optional(v.pipe(v.string(), v.nonEmpty())),
     headRefOid: optional(v.string()),
     baseRefOid: optional(v.string()),
     mergeable: optional(v.string()),
@@ -212,6 +213,7 @@ const PullRequest = v.pipe(
         createdAt: node.createdAt,
         draft: node.isDraft,
         author: node.author.login,
+        ...known("headRefName", node.headRefName),
         ...known("headSha", node.headRefOid),
         ...known("baseSha", node.baseRefOid),
         ...mergeState(node),

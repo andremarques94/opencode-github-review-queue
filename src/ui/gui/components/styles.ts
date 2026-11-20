@@ -1,4 +1,45 @@
 // GUI bundles cannot ship CSS, and the host only compiles the Tailwind utilities it uses itself.
+// The host has no styling hook for its question docks, so these selectors follow its markup: recheck them after
+// OpenCode updates. Applied only while a review picker is open (see picker-styles.ts).
+export const reviewPickerStyles = `
+[data-component="session-elicitation-dock"] > [data-component="dock-prompt"][data-kind="question"],
+[data-component="session-question-dock"] > [data-component="dock-prompt"][data-kind="question"] {
+  --question-prompt-max-height: min(42dvh, 380px);
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  max-block-size: min(42dvh, 380px);
+}
+[data-component="session-elicitation-dock"] [data-slot="elicitation-fields"],
+[data-component="session-question-dock"] [data-slot="question-options"] {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  max-block-size: min(24dvh, 220px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+}
+[data-component="session-question-dock"] [data-slot="question-details"],
+[data-component="session-question-dock"] [data-slot="question-details-frame"] {
+  max-block-size: min(12dvh, 96px);
+  overscroll-behavior: contain;
+}
+[data-component="session-question-dock"] [data-slot="question-options"]::-webkit-scrollbar {
+  display: block;
+  width: 8px;
+}
+[data-component="session-elicitation-dock"] [data-slot="elicitation-field"] {
+  flex-shrink: 0;
+}
+[data-component="session-question-dock"] [data-slot="question-options"] {
+  gap: 2px;
+}
+[data-component="session-question-dock"] [data-slot="question-option"] {
+  padding-block: 6px;
+}
+`
+
 const badgeStyles = `
 .grq-badge {
   flex-shrink: 0;
@@ -264,6 +305,20 @@ export const panelStyles = `${badgeStyles}
 .grq-details dd[data-tone="success"] { color: var(--icon-success-base); }
 .grq-details dd[data-tone="error"] { color: var(--icon-critical-base); }
 .grq-details dd[data-tone="warning"] { color: var(--icon-warning-base); }
+.grq-details dd[data-copyable] { display: flex; align-items: flex-start; gap: 8px; }
+.grq-details dd[data-copyable] > span { flex: 1; min-width: 0; }
+.grq-detail-copy {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: 1px solid var(--border-weak-base);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-weak);
+  font: inherit;
+  cursor: pointer;
+}
+.grq-detail-copy:hover { color: var(--text-strong); background: var(--surface-raised-base); }
+.grq-detail-copy:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
 .grq-row-actions { flex-shrink: 0; margin-top: -3px; }
 
 .grq-empty {
@@ -320,6 +375,18 @@ export const dialogStyles = `${badgeStyles}
   resize: vertical;
 }
 .grq-textarea:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+.grq-review-state {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-weak-base);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset-base);
+  color: var(--text-strong);
+  font: inherit;
+}
+.grq-review-state:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+.grq-preview-help { color: var(--text-weak); font-size: 12px; line-height: 18px; }
 `
 
 const actionStyles = `

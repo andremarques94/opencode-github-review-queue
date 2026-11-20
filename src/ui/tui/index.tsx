@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { Plugin } from "@opencode/plugin/tui"
-import { Show } from "solid-js"
+import { createEffect, createMemo, on, Show } from "solid-js"
 import type { ReviewDraft } from "../../domain/review-draft.js"
 import { emptySnapshot, type QueueSnapshot, replaceSnapshot } from "../../domain/review-queue.js"
 import type { ReviewRequest } from "../../domain/review-request.js"
@@ -15,7 +15,8 @@ import { parseOptions } from "../../shared/options.js"
 import { draftForSession, replaceDraft } from "../../shared/review/draft-status.js"
 import { awake } from "../../shared/review/snooze.js"
 import { type LocalReviews, ReviewQueue } from "../../shared/rpc.js"
-import { serveSkillPickers } from "./actions/skill-picker.js"
+import { serveFindingQuestions } from "./actions/finding-questions.js"
+import { serveTuiSkillPickers } from "./actions/skill-picker.js"
 import { FINDINGS_PANEL, FindingsPanel } from "./components/findings/findings-panel.js"
 import { ReviewStatus } from "./components/findings/review-status.js"
 import { ReviewPanel } from "./components/review-panel.js"
@@ -24,7 +25,20 @@ import type { TuiState } from "./state.js"
 export default Plugin.define({
   id: "github-review-queue.tui",
   async setup(context) {
-    const stopSkillPickers = serveSkillPickers(context)
+    const skillPickers = serveTuiSkillPickers(context)
+    serveFindingQuestions(context)
+    // Only when the routed session changes: a missed request is recovered from the review's location.
+    const pickerLocation = createMemo(() => {
+      const route = context.ui.router.current()
+      return route.type === "session" ? context.data.session.get(route.sessionID)?.location.directory : undefined
+    })
+    createEffect(
+      on(pickerLocation, (directory) => {
+        if (directory) {
+          void skillPickers.sync(directory)
+        }
+      }),
+    )
     const options = parseOptions(context.options)
     const rpc = context.client.rpc(ReviewQueue)
     const initial: TuiState = { ...emptySnapshot(), drafts: [], reviewed: [], snoozes: [], collapsed: [] }
@@ -151,7 +165,7 @@ export default Plugin.define({
     })
 
     return () => {
-      stopSkillPickers()
+      skillPickers.dispose()
       stopState()
       stopDrafts()
       stopDiscovered()

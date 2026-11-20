@@ -18,11 +18,12 @@ import { errorMessage, type LocalReviews, ReviewQueue } from "../../../shared/rp
 import { createFlowHost } from "./flow-host.js"
 import { pullRequestOptions, queueOptions } from "./menu-options.js"
 
-export type CopyKind = "reference" | "link"
+export type CopyKind = "reference" | "link" | "branch"
 
-const copyTargets: Record<CopyKind, { label: string; value(item: ReviewRequest): string }> = {
+const copyTargets: Record<CopyKind, { label: string; value(item: ReviewRequest): string | undefined }> = {
   reference: { label: "Reference", value: fullReference },
   link: { label: "Link", value: (item) => item.url },
+  branch: { label: "Branch name", value: (item) => item.headRefName },
 }
 
 export type ReviewActions = {
@@ -160,11 +161,20 @@ export function useReviewActions(input: {
         return
       }
       const target = copyTargets[kind]
-      const copied = context.renderer.copyToClipboardOSC52(target.value(item))
-      context.ui.toast.show({
-        message: copied ? `${target.label} copied` : "Terminal clipboard is unavailable",
-        variant: copied ? "success" : "warning",
-      })
+      const text = target.value(item)
+      if (!text) {
+        context.ui.toast.show({
+          message: `${target.label} is unavailable. Refresh the queue and try again.`,
+          variant: "warning",
+        })
+        return
+      }
+      const copied = context.renderer.copyToClipboardOSC52(text)
+      if (!copied) {
+        context.ui.toast.show({ message: "Terminal clipboard is unavailable", variant: "warning" })
+        return
+      }
+      context.ui.toast.show({ message: `${target.label} copied`, variant: "success" })
     },
     snooze: () =>
       attempt(async () => {
@@ -336,6 +346,12 @@ export function useReviewActions(input: {
         run: () => actions.copy("reference"),
       },
       { id: "github-review-queue.copy-url", title: "Copy PR URL", bind: "u", run: () => actions.copy("link") },
+      {
+        id: "github-review-queue.copy-branch",
+        title: "Copy PR branch name",
+        bind: "b",
+        run: () => actions.copy("branch"),
+      },
       { id: "github-review-queue.filter", title: "Cycle the queue's scope", bind: "f", run: actions.toggleFilter },
       {
         id: "github-review-queue.filter-left",

@@ -30,6 +30,8 @@ export const ReviewRequest = v.object({
   draft: v.boolean(),
   createdAt: v.string(),
   url: v.string(),
+  /** The source branch, including for forked PRs. Missing from older saved queues. */
+  headRefName: v.exactOptional(v.string()),
   headSha: v.exactOptional(v.string()),
   baseSha: v.exactOptional(v.string()),
   checks: v.exactOptional(Checks),

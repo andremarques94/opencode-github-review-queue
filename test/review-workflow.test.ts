@@ -210,6 +210,55 @@ describe("review workflow", () => {
     expect(await sessions.post(base.key, true, signal)).toMatchObject({ status: "posted" })
   })
 
+  it.each(["APPROVE", "REQUEST_CHANGES", "COMMENT"] as const)(
+    "posts and records the user-selected %s state and exact comment",
+    async (verdict) => {
+      await findings.add("ses_1", finding)
+      await findings.decide("ses_1", 1, "keep")
+      await findings.setVerdict("ses_1", "COMMENT", "Model's proposed comment.")
+      const review = { verdict, summary: "  My final comment.\n\n`$(not a command)` <script>text</script> ✅\n" }
+
+      await sessions.post(base.key, false, signal, review)
+
+      expect(github.postReview.mock.calls[0]?.[1]).toMatchObject({
+        event: verdict,
+        body: review.summary,
+        comments: [{ body: finding.body }],
+      })
+      expect(await store.get(base.key)).toMatchObject({ ...review, status: "posted" })
+      expect(await reviewed.get(base.key)).toMatchObject({ verdict })
+    },
+  )
+
+  it.each(["APPROVE", "REQUEST_CHANGES"] as const)(
+    "refuses a manual %s on the user's own pull request",
+    async (verdict) => {
+      await store.put({ ...base, ownPullRequest: true, status: "ready", verdict: "COMMENT", summary: "Comment." })
+      await expect(sessions.post(base.key, false, signal, { verdict, summary: "Manual edit." })).rejects.toThrow(
+        /own pull request/,
+      )
+      expect(github.postReview).not.toHaveBeenCalled()
+    },
+  )
+
+  it("does not let manual edits bypass pending findings or an unfinished investigation", async () => {
+    const review = { verdict: "APPROVE" as const, summary: "Manual edit." }
+    await expect(sessions.post(base.key, false, signal, review)).rejects.toThrow(/investigated/)
+    await findings.add("ses_1", finding)
+    await findings.setVerdict("ses_1", "COMMENT", "Original.")
+    await expect(sessions.post(base.key, false, signal, review)).rejects.toThrow(/waiting for your decision/)
+    expect(github.postReview).not.toHaveBeenCalled()
+  })
+
+  it("does not overwrite the draft when posting fails", async () => {
+    await findings.setVerdict("ses_1", "COMMENT", "Original.")
+    github.postReview.mockRejectedValue(new Error("GitHub unavailable"))
+    await expect(sessions.post(base.key, false, signal, { verdict: "APPROVE", summary: "Edited." })).rejects.toThrow(
+      /unavailable/,
+    )
+    expect(await store.get(base.key)).toMatchObject({ verdict: "COMMENT", summary: "Original.", status: "ready" })
+  })
+
   it("posts what another location recorded in shared storage", async () => {
     // The review session's location records findings; the panel's location, with its own store, posts.
     const panel = new ReviewSessions(new DraftStore(storage(saved)), reviewed, {
