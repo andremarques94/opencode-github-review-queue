@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.0](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v1.0.1...opencode-github-review-queue-v1.1.0) (2026-11-20)
+
+
+### Features
+
+* add review skill selection and editable final reviews ([#53](https://github.com/andremarques94/opencode-github-review-queue/issues/53)) ([2a8df4c](https://github.com/andremarques94/opencode-github-review-queue/commit/2a8df4c2d9a287bbcb14999e8c248ebf50a95ba6))
+* snooze and collapse a whole repository in the queue ([#49](https://github.com/andremarques94/opencode-github-review-queue/issues/49)) ([dc09d46](https://github.com/andremarques94/opencode-github-review-queue/commit/dc09d46345b63c7e00e591a34cb584b0a8a4f0e2))
+
+
+### Bug Fixes
+
+* drop the follow-up once you review the current head on GitHub ([#51](https://github.com/andremarques94/opencode-github-review-queue/issues/51)) ([b9c4926](https://github.com/andremarques94/opencode-github-review-queue/commit/b9c492628494b0157093f93ce8bab068d9736def))
+* reject a finding question until the finding is in the chat ([#50](https://github.com/andremarques94/opencode-github-review-queue/issues/50)) ([bc7e1a6](https://github.com/andremarques94/opencode-github-review-queue/commit/bc7e1a6046ffc5f6b079dd25f90445c954f54f86))
+
 ## [1.0.1](https://github.com/andremarques94/opencode-github-review-queue/compare/opencode-github-review-queue-v1.0.0...opencode-github-review-queue-v1.0.1) (2026-11-16)
 
 

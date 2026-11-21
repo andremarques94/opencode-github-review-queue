@@ -1,6 +1,6 @@
 {
   "name": "opencode-github-review-queue",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Pending GitHub review requests for OpenCode TUI and Desktop",
   "type": "module",
   "license": "MIT",
