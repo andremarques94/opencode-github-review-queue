@@ -73,13 +73,13 @@
     "@opentui/core": "0.8.4",
     "@opentui/solid": "0.8.4",
     "@types/node": "24.19.2",
-    "fallow": "3.42.0",
+    "fallow": "3.43.0",
     "husky": "9.1.7",
     "lint-staged": "17.6.0",
     "solid-js": "1.9.19",
     "typescript": "5.9.3",
     "vite": "7.2.2",
-    "vite-plugin-solid": "2.11.15",
+    "vite-plugin-solid": "2.11.16",
     "vitest": "5.1.0"
   }
 }
